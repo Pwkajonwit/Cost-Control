@@ -6,7 +6,7 @@ import { PRIMARY_VIEWS, TABLE_KEYS, TABLES, VIEW_COLUMNS } from "@/lib/config";
 import { uploadTableImage } from "@/lib/drive";
 import { applyBillFormulas, applyContractFormulas, applyProjectFormulas } from "@/lib/formulas";
 import { getFormSchema } from "@/lib/schemas";
-import { appendAuditLog, appendRow, deleteRows, getRows, updateRow } from "@/lib/db";
+import { appendAuditLog, appendRow, bulkAppendRows, deleteRows, getRows, updateRow } from "@/lib/db";
 import type { SheetRow } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
@@ -47,6 +47,22 @@ export async function POST(request: NextRequest) {
     const body = await readPostBody(request);
     const tableName = String(body.tableName || "");
     if (!canManageTable(tableName)) return NextResponse.json({ error: "Table is not manageable" }, { status: 403 });
+
+    // High performance bulk batch insertion
+    if (Array.isArray(body.rows) && body.rows.length > 0) {
+      const rows = body.rows as SheetRow[];
+      const inserted = await bulkAppendRows(tableName, rows);
+      await appendAuditLog({
+        action: "BULK_CREATE",
+        tableName,
+        key: `count:${rows.length}`,
+        actor: actorFromRequest(request),
+        details: { count: rows.length }
+      }).catch(() => undefined);
+      clearCache("rows:");
+      clearCache("headers:");
+      return NextResponse.json({ ok: true, count: inserted?.length || rows.length });
+    }
 
     const row = body.row && typeof body.row === "object" ? body.row as SheetRow : {};
     sanitizeBySchema(row, tableName);
