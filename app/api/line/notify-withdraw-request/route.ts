@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
       const requesterKey = firstBill["ผู้เบิก"] || firstBill.requester || "";
       const targetUserId = await getLineUserIdByRequester(requesterKey);
       const fallbackGroup = await getLineTargetGroup("finance");
-      const sendTo = targetUserId || fallbackGroup;
+      const validGroup = fallbackGroup && fallbackGroup.startsWith("C") ? fallbackGroup : "";
+      const sendTo = targetUserId || validGroup;
 
       if (!sendTo) {
         return NextResponse.json({ error: "No LINE User ID or Group target found for requester" }, { status: 400 });
@@ -81,6 +82,18 @@ export async function POST(req: NextRequest) {
         : `🎉 รายการเบิกเงินสำเร็จเรียบร้อย ${bills.length} รายการ (รวม ฿${amountStr})`;
 
       const result = await sendFlexMessageDetailed(sendTo, altText, flex);
+
+      // Also notify the bill creator (if different from requester)
+      const creatorKey = String(firstBill["ผู้สร้างบิล"] || firstBill.created_by || firstBill["ผู้บันทึก"] || "").trim();
+      if (creatorKey && creatorKey !== requesterKey) {
+        const creatorUserId = await getLineUserIdByRequester(creatorKey);
+        if (creatorUserId && creatorUserId !== targetUserId) {
+          sendFlexMessageDetailed(creatorUserId, altText, flex).catch((e) =>
+            console.warn("Failed notifying bill creator:", e)
+          );
+        }
+      }
+
       return NextResponse.json({ success: result.success, error: result.error, target: sendTo });
     }
 
@@ -90,10 +103,12 @@ export async function POST(req: NextRequest) {
     const targetUserId = await getLineUserIdByRequester(requesterKey);
     const fallbackGroup = await getLineTargetGroup("finance");
 
-    const sendTo = targetUserId || fallbackGroup;
+    // Only send to fallbackGroup if it is an actual LINE Group ID starting with "C"
+    const validGroup = fallbackGroup && fallbackGroup.startsWith("C") ? fallbackGroup : "";
+    const sendTo = targetUserId || validGroup;
 
     if (!sendTo) {
-      return NextResponse.json({ error: "No LINE User ID or Group target found for requester" }, { status: 400 });
+      return NextResponse.json({ error: `No LINE User ID found for requester "${requesterKey}"` }, { status: 400 });
     }
 
     const flex = createWithdrawRequesterFlex(bills, peopleMap);
