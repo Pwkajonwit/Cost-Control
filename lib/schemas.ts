@@ -36,6 +36,7 @@ export const FORM_SCHEMAS: Record<string, FieldSchema[]> = {
     { name: "เครดิต", type: "Enum", values: ["30", "45", "60", "ระบุเอง"], inputMode: "buttons", dynamicValues: "fieldOptions", showIf: { column: "vat", notBlank: true } },
     { name: "วันจ่าย", type: "Date", showIf: { column: "เครดิต", notBlank: true } },
     { name: "ผู้เบิก", type: "Ref", refTable: TABLES.PEOPLE, refKey: "รหัสพนักงาน", refLabel: "ชื่อเล่น", required: true },
+    { name: "ผู้สร้างบิล", type: "Text", description: "ผู้บันทึก/สร้างบิลแทนพนักงาน" },
     { name: "ว/ด/ป", type: "Date", initialValue: "today" },
     { name: "สถานะ", type: "Hidden" },
     { name: "ยอดเงิน", type: "Hidden" },

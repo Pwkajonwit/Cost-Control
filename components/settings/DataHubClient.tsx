@@ -27,9 +27,26 @@ import {
   X,
   AlertCircle,
   FolderUp,
-  Layers
+  ShieldCheck,
+  FileJson,
+  Sparkles,
+  Database,
+  Calendar,
+  Clock,
+  Settings,
+  History,
+  RotateCcw,
+  Shield,
+  Bell,
+  Check,
+  AlertTriangle,
+  Play
 } from "lucide-react";
 import { showToast } from "@/components/ToastProvider";
+import type { BackupConfig, BackupSnapshotSummary } from "@/lib/backup-service";
+import { DEFAULT_BACKUP_CONFIG } from "@/lib/backup-service";
+import { BackupScheduleModal } from "./BackupScheduleModal";
+import { BackupRestoreConfirmModal } from "./BackupRestoreConfirmModal";
 
 export type TableConfig = {
   id: string;
@@ -347,15 +364,31 @@ type ImportResultItem = {
 };
 
 type ImportSummaryData = {
+  title: string;
   totalFiles: number;
   successFiles: number;
   totalRows: number;
   details: ImportResultItem[];
 };
 
+const DAY_NAMES = ["วันอาทิตย์", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์"];
+
 export function DataHubClient() {
+  // Navigation View Tab
+  const [activeMainTab, setActiveMainTab] = useState<"standard_backup" | "table_csv">("standard_backup");
+
+  // Backup Engine States
+  const [backupConfig, setBackupConfig] = useState<BackupConfig>(DEFAULT_BACKUP_CONFIG);
+  const [backupHistory, setBackupHistory] = useState<BackupSnapshotSummary[]>([]);
+  const [loadingBackupMeta, setLoadingBackupMeta] = useState<boolean>(true);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
+  const [selectedRestoreSnapshot, setSelectedRestoreSnapshot] = useState<BackupSnapshotSummary | null>(null);
+
+  // Table row counts
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loadingCounts, setLoadingCounts] = useState<boolean>(true);
+
+  // CSV Tab States
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<"all" | "master" | "transaction">("all");
   const [activeImportTable, setActiveImportTable] = useState<TableConfig | null>(null);
@@ -363,13 +396,32 @@ export function DataHubClient() {
   const [exportingTableId, setExportingTableId] = useState<string | null>(null);
   const [exportingAll, setExportingAll] = useState<boolean>(false);
   const [importingAll, setImportingAll] = useState<boolean>(false);
+  const [backingUpFull, setBackingUpFull] = useState<boolean>(false);
+  const [restoringFull, setRestoringFull] = useState<boolean>(false);
   const [importSummary, setImportSummary] = useState<ImportSummaryData | null>(null);
+
+  // Load Backup Config & History from API
+  async function loadBackupMetadata() {
+    setLoadingBackupMeta(true);
+    try {
+      const res = await fetch("/api/backup/config");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config) setBackupConfig(data.config);
+        if (data.history) setBackupHistory(data.history);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch backup meta:", e);
+    } finally {
+      setLoadingBackupMeta(false);
+    }
+  }
 
   // Load live row counts for all tables
   async function loadTableCounts() {
     setLoadingCounts(true);
     const newCounts: Record<string, number> = {};
-    
+
     await Promise.all(
       TABLES_REGISTRY.map(async (table) => {
         try {
@@ -389,22 +441,187 @@ export function DataHubClient() {
   }
 
   useEffect(() => {
+    loadBackupMetadata();
     loadTableCounts();
   }, []);
 
-  const filteredTables = useMemo(() => {
-    return TABLES_REGISTRY.filter((t) => {
-      const matchCat = selectedCategory === "all" || t.category === selectedCategory;
-      const matchSearch =
-        !searchQuery ||
-        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.tableName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCat && matchSearch;
-    });
-  }, [searchQuery, selectedCategory]);
+  const totalRowCount = useMemo(() => {
+    return Object.values(counts).reduce((sum, n) => sum + (n || 0), 0);
+  }, [counts]);
 
-  // 📥 1. Download Blank CSV Template
+  // 🌟 1. Trigger Immediate Backup & Save Snapshot
+  async function handleTriggerBackupNow() {
+    setBackingUpFull(true);
+    try {
+      showToast("info", "กำลังรวบรวมข้อมูลทั้ง 12 ตาราง และบันทึกจุดสำรองข้อมูล...");
+      const res = await fetch("/api/backup/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backupType: "manual" })
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "สำรองข้อมูลไม่สำเร็จ");
+
+      if (json.config) setBackupConfig(json.config);
+      if (json.history) setBackupHistory(json.history);
+
+      showToast("success", `สำรองข้อมูลสำเร็จ ${json.snapshot.totalRows.toLocaleString()} รายการ (บันทึกลงระบบประวัติเรียบร้อย)`);
+    } catch (err: any) {
+      showToast("error", err instanceof Error ? err.message : "สำรองข้อมูลไม่สำเร็จ");
+    } finally {
+      setBackingUpFull(false);
+    }
+  }
+
+  // 🌟 2. Single-File Full System Backup Download
+  async function handleDownloadFullBackup() {
+    setBackingUpFull(true);
+    try {
+      showToast("info", "กำลังรวบรวมข้อมูลทุกตารางและสร้างไฟล์สำรอง...");
+      const res = await fetch("/api/backup");
+      if (!res.ok) throw new Error("ไม่สามารถดาวน์โหลดไฟล์สำรองข้อมูลทั้งระบบได้");
+      const backupData = await res.json();
+
+      const jsonStr = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `CostLab_Backup_Full_${dateStr}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      const totalRows = backupData.summary?.totalRows || 0;
+      showToast("success", `สำรองข้อมูลทั้งระบบสำเร็จ (1 ไฟล์ ครบทั้ง 12 ตาราง รวม ${totalRows.toLocaleString()} แถว)`);
+    } catch (err: any) {
+      showToast("error", err instanceof Error ? err.message : "สำรองข้อมูลไม่สำเร็จ");
+    } finally {
+      setBackingUpFull(false);
+    }
+  }
+
+  // 🌟 3. Single-File Full System Restore Upload
+  function handleRestoreFullBackup(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setRestoringFull(true);
+    setImportProgress({
+      current: 0,
+      total: 100,
+      message: "กำลังอ่านและตรวจสอบไฟล์สำรอง .json...",
+      subMessage: file.name
+    });
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        if (!text) throw new Error("ไฟล์สำรองไม่มีข้อมูล");
+
+        const parsedJson = JSON.parse(text);
+        if (!parsedJson || typeof parsedJson !== "object") {
+          throw new Error("โครงสร้างไฟล์ JSON ไม่ถูกต้อง");
+        }
+
+        setImportProgress({
+          current: 50,
+          total: 100,
+          message: "กำลังกู้คืนข้อมูลทั้ง 12 ตารางและตัวเลือกระบบลง Supabase...",
+          subMessage: "ระบบกำลังตรวจสอบข้อมูลซ้ำและบันทึกอัตโนมัติ"
+        });
+
+        const res = await fetch("/api/backup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parsedJson)
+        });
+
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "กู้คืนข้อมูลไม่สำเร็จ");
+
+        setImportProgress({
+          current: 100,
+          total: 100,
+          message: "กู้คืนข้อมูลทั้งระบบเสร็จสมบูรณ์!",
+          subMessage: `รวม ${result.totalRestored?.toLocaleString() || 0} รายการ`
+        });
+
+        const details = (result.details || []).map((d: any) => ({
+          filename: file.name,
+          tableName: d.tableName,
+          count: d.count || 0,
+          success: d.success,
+          error: d.error
+        }));
+
+        setImportSummary({
+          title: "ผลการกู้คืนข้อมูลทั้งระบบ (Full System Restore)",
+          totalFiles: 1,
+          successFiles: 1,
+          totalRows: result.totalRestored || 0,
+          details
+        });
+
+        showToast("success", `กู้คืนข้อมูลทั้งระบบสำเร็จ ${result.totalRestored?.toLocaleString() || 0} รายการ`);
+        await loadTableCounts();
+        await loadBackupMetadata();
+      } catch (err: any) {
+        showToast("error", err instanceof Error ? err.message : "กู้คืนข้อมูลไม่สำเร็จ");
+      } finally {
+        setImportProgress(null);
+        setRestoringFull(false);
+        event.target.value = "";
+      }
+    };
+    reader.readAsText(file, "UTF-8");
+  }
+
+  // 🌟 4. Execute 1-Click Restore Point from Snapshot History
+  async function handleConfirmRestoreFromSnapshot(snapshot: BackupSnapshotSummary) {
+    setRestoringFull(true);
+    setImportProgress({
+      current: 30,
+      total: 100,
+      message: `กำลังกู้คืนข้อมูลจากจุดสำรอง ${snapshot.id}...`,
+      subMessage: "กำลังดึงข้อมูลและบันทึกลงฐานข้อมูล Supabase"
+    });
+
+    try {
+      const res = await fetch("/api/backup/restore-point", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshotId: snapshot.id })
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "กู้คืนข้อมูลจากจุดสำรองไม่สำเร็จ");
+
+      setImportProgress({
+        current: 100,
+        total: 100,
+        message: "กู้คืนข้อมูลจากจุดสำรองเสร็จสมบูรณ์!",
+        subMessage: `รวม ${json.totalRestored?.toLocaleString() || 0} รายการ`
+      });
+
+      if (json.history) setBackupHistory(json.history);
+
+      showToast("success", `กู้คืนข้อมูลจากจุดสำรองสำเร็จ รวม ${json.totalRestored?.toLocaleString() || 0} รายการ`);
+      await loadTableCounts();
+    } catch (err: any) {
+      showToast("error", err instanceof Error ? err.message : "กู้คืนข้อมูลไม่สำเร็จ");
+    } finally {
+      setImportProgress(null);
+      setRestoringFull(false);
+    }
+  }
+
+  // 📥 5. Download Blank CSV Template
   function downloadTemplateCSV(table: TableConfig) {
     const headers = table.columns;
     const sampleVals = headers.map((col) => {
@@ -430,7 +647,7 @@ export function DataHubClient() {
     showToast("success", `ดาวน์โหลดตัวอย่างเทมเพลต ${table.name} สำเร็จแล้ว`);
   }
 
-  // 📤 2. Export Actual Table Data to CSV
+  // 📤 6. Export Actual Table Data to CSV
   async function exportTableCSV(table: TableConfig) {
     setExportingTableId(table.id);
     try {
@@ -477,7 +694,7 @@ export function DataHubClient() {
     }
   }
 
-  // 📦 3. Export All Tables
+  // 📦 7. Export All Tables as Multiple CSVs
   async function exportAllTablesCSV() {
     setExportingAll(true);
     let totalExported = 0;
@@ -538,7 +755,7 @@ export function DataHubClient() {
     });
   }
 
-  // 📥 4. Import Single Table CSV
+  // 📥 8. Import Single Table CSV
   function handleImportCSV(table: TableConfig, event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -593,7 +810,7 @@ export function DataHubClient() {
     reader.readAsText(file, "UTF-8");
   }
 
-  // 📥 5. Bulk Import Multiple CSV Files at Once ("นำเข้าทั้งหมด")
+  // 📥 9. Bulk Import Multiple CSV Files
   async function handleImportAllFiles(event: React.ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -683,6 +900,7 @@ export function DataHubClient() {
     const totalRowsImported = results.filter((r) => r.success).reduce((sum, r) => sum + r.count, 0);
 
     setImportSummary({
+      title: "ผลการนำเข้าหลายไฟล์ (Multi-CSV Import Summary)",
       totalFiles: fileList.length,
       successFiles: successCount,
       totalRows: totalRowsImported,
@@ -691,7 +909,7 @@ export function DataHubClient() {
 
     showToast(
       successCount > 0 ? "success" : "error",
-      `นำเข้าทั้งหมดเสร็จสิ้น: สำเร็จ ${successCount}/${fileList.length} ไฟล์ (${totalRowsImported.toLocaleString()} รายการ)`
+      `นำเข้าหลายไฟล์เสร็จสิ้น: สำเร็จ ${successCount}/${fileList.length} ไฟล์ (${totalRowsImported.toLocaleString()} รายการ)`
     );
 
     await loadTableCounts();
@@ -756,7 +974,6 @@ export function DataHubClient() {
 
     const rawHeaders = lines[0].map((h) => h.replace(/^"+|"+$/g, "").trim());
 
-    // Normalize headers against expected columns
     const headers = rawHeaders.map((h) => {
       const cleanH = h.trim();
       const matched = expectedColumns.find((c) => c.toLowerCase() === cleanH.toLowerCase() || c === cleanH);
@@ -785,297 +1002,623 @@ export function DataHubClient() {
     return dataRowsResult;
   }
 
-  const totalRowCount = useMemo(() => {
-    return Object.values(counts).reduce((sum, n) => sum + (n || 0), 0);
-  }, [counts]);
+  const filteredTables = useMemo(() => {
+    return TABLES_REGISTRY.filter((t) => {
+      const matchCat = selectedCategory === "all" || t.category === selectedCategory;
+      const matchSearch =
+        !searchQuery ||
+        t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.tableName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [searchQuery, selectedCategory]);
+
+  const scheduleDescription = useMemo(() => {
+    if (!backupConfig.enabled) return "ปิดการใช้งานสำรองอัตโนมัติ";
+    if (backupConfig.frequency === "weekly") {
+      const dayName = DAY_NAMES[backupConfig.dayOfWeek ?? 0] || "วันอาทิตย์";
+      return `ทุกสัปดาห์ (${dayName} เวลา ${backupConfig.time || "02:00"} น.)`;
+    }
+    if (backupConfig.frequency === "daily") {
+      return `ทุกวัน (เวลา ${backupConfig.time || "02:00"} น.)`;
+    }
+    return `ทุกเดือน (วันที่ 1 เวลา ${backupConfig.time || "02:00"} น.)`;
+  }, [backupConfig]);
 
   return (
-    <div className="p-3 sm:p-5 max-w-6xl mx-auto space-y-4 font-sans text-xs text-slate-800">
-      {/* 1. COMPACT PAGE HEADER */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-3 sm:p-5 max-w-6xl mx-auto space-y-5 font-sans text-xs text-slate-800">
+      {/* 1. PAGE HEADER & MAIN NAVIGATION TABS */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-800 text-white flex items-center justify-center shadow-sm shrink-0">
-            <ArrowDownUp size={20} />
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 text-white flex items-center justify-center shadow-sm shrink-0">
+            <Shield className="w-6 h-6" />
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-base font-semibold text-slate-900 tracking-tight">
-                ศูนย์นำเข้าและส่งออกข้อมูล (Data Import & Export Center)
+              <h1 className="text-base font-bold text-slate-900 tracking-tight">
+                ศูนย์จัดการข้อมูล & ระบบสำรองข้อมูลมาตรฐาน (Enterprise Data & Backup Center)
               </h1>
-              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 12 ตารางระบบ
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              นำเข้าไฟล์ CSV สำรองข้อมูล และดาวน์โหลดตัวอย่างเทมเพลตสำหรับทุกตาราง พร้อมระบบตรวจจับและป้องกันข้อมูลซ้ำ
+              ตั้งเวลาสำรองข้อมูลอัตโนมัติประจำสัปดาห์ เก็บประวัติ Snapshots พร้อมกู้คืน 1-คลิก และจัดการไฟล์ CSV
             </p>
           </div>
         </div>
 
-        {/* Global Action Buttons */}
+        {/* Global Action Toolbar */}
         <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             type="button"
-            onClick={loadTableCounts}
-            disabled={loadingCounts}
-            className="px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer"
-            title="รีเฟรชจำนวนแถว"
+            onClick={() => {
+              loadTableCounts();
+              loadBackupMetadata();
+            }}
+            disabled={loadingCounts || loadingBackupMeta}
+            className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+            title="รีเฟรชข้อมูล"
           >
             <RefreshCw size={13} className={loadingCounts ? "animate-spin text-emerald-600" : "text-slate-500"} />
             <span>{loadingCounts ? "กำลังนับ..." : "รีเฟรช"}</span>
           </button>
-
-          {/* 🌟 Bulk Import All Button */}
-          <label className="px-3.5 py-1.5 bg-[#d4f54e] hover:bg-[#c2e438] text-[#0b3531] rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-xs cursor-pointer">
-            {importingAll ? (
-              <Loader2 size={14} className="animate-spin text-[#0b3531]" />
-            ) : (
-              <FolderUp size={14} className="text-[#0b3531]" />
-            )}
-            <span>{importingAll ? "กำลังนำเข้าทั้งหมด..." : "นำเข้าทั้งหมด (Import All)"}</span>
-            <input
-              type="file"
-              accept=".csv"
-              multiple
-              className="hidden"
-              onChange={handleImportAllFiles}
-              disabled={importingAll || exportingAll}
-            />
-          </label>
-
-          {/* Export All Button */}
-          <button
-            type="button"
-            onClick={exportAllTablesCSV}
-            disabled={exportingAll || importingAll}
-            className="px-3.5 py-1.5 bg-[#0b3531] hover:bg-[#072724] text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition shadow-xs cursor-pointer"
-            title="ส่งออกข้อมูลทุกตารางเป็นไฟล์ CSV"
-          >
-            {exportingAll ? (
-              <Loader2 size={14} className="animate-spin text-[#d4f54e]" />
-            ) : (
-              <HardDriveDownload size={14} className="text-[#d4f54e]" />
-            )}
-            <span>{exportingAll ? "กำลังส่งออกทั้งหมด..." : "ส่งออกทุกตาราง (Export All)"}</span>
-          </button>
         </div>
       </div>
 
-      {/* 2. STATS & QUICK FILTER BAR */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="text-xs text-slate-500">ตารางข้อมูลทั้งหมด</span>
-            <div className="text-sm font-semibold text-slate-900">12 ตาราง</div>
-          </div>
-          <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
-            <HardDrive size={16} />
-          </div>
-        </div>
+      {/* 2. TOP-LEVEL SUB-TABS NAVIGATION */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("standard_backup")}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer ${
+            activeMainTab === "standard_backup"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200"
+          }`}
+        >
+          <Shield className="w-4 h-4 text-emerald-400" />
+          <span>ระบบสำรองข้อมูลมาตรฐาน (Standard Backup & Recovery)</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-mono">
+            {backupHistory.length}
+          </span>
+        </button>
 
-        <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="text-xs text-slate-500">จำนวนข้อมูลรวมทั้งระบบ</span>
-            <div className="text-sm font-semibold text-emerald-700 font-mono">
-              {loadingCounts ? "กำลังโหลด..." : `${totalRowCount.toLocaleString()} แถว`}
-            </div>
-          </div>
-          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-            <CheckCircle2 size={16} />
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="text-xs text-slate-500">ระบบป้องกันข้อมูลซ้ำ</span>
-            <div className="text-sm font-semibold text-indigo-700">เปิดใช้งาน (Active)</div>
-          </div>
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
-            <FileCheck size={16} />
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab("table_csv")}
+          className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer ${
+            activeMainTab === "table_csv"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200"
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4 text-teal-500" />
+          <span>นำเข้าและส่งออก CSV แยกตาราง (12 Tables)</span>
+        </button>
       </div>
 
-      {/* 3. SEARCH & CATEGORY FILTER TABS */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Category Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg shrink-0">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("all")}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
-              selectedCategory === "all"
-                ? "bg-white text-slate-900 shadow-2xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
+      {/* ========================================================================= */}
+      {/* TAB 1: STANDARD BACKUP & RECOVERY SYSTEM                                  */}
+      {/* ========================================================================= */}
+      {activeMainTab === "standard_backup" && (
+        <div className="space-y-4">
+          {/* 🌟 1. HERO BACKUP STATUS CARD */}
+          <div
+            style={{ backgroundColor: "#0b3531", borderColor: "#1b5e56" }}
+            className="text-white rounded-2xl p-5 sm:p-6 shadow-md border relative overflow-hidden"
           >
-            ทั้งหมด (12)
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("master")}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
-              selectedCategory === "master"
-                ? "bg-white text-slate-900 shadow-2xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            📁 ข้อมูลหลัก (8)
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("transaction")}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
-              selectedCategory === "transaction"
-                ? "bg-white text-slate-900 shadow-2xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            💼 โครงการ & บิล (4)
-          </button>
-        </div>
+            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              {/* Status Details */}
+              <div className="space-y-3 max-w-2xl">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span
+                    style={{ backgroundColor: "#d4f54e", color: "#0b3531" }}
+                    className="p-2 rounded-xl flex items-center justify-center font-bold shadow-sm"
+                  >
+                    <Database size={20} />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-white tracking-tight">
+                        ระบบสำรองและกู้คืนข้อมูลมาตรฐานทั้งระบบ
+                      </h2>
+                      {backupConfig.enabled ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          เปิดทำงานอัตโนมัติ
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-slate-300">
+                          ปิดอยู่
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ color: "#b8d9d4" }} className="text-xs mt-0.5">
+                      สำรองครบทั้ง 12 ตารางฐานข้อมูล ({totalRowCount.toLocaleString()} แถว) และการตั้งค่าระบบลง Supabase Cloud Storage
+                    </p>
+                  </div>
+                </div>
 
-        {/* Search Box */}
-        <div className="relative flex items-center flex-1 max-w-sm">
-          <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="ค้นหาตาราง (เช่น ธนาคาร, ร้านค้า, บิล)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 text-slate-800 text-xs pl-8 pr-7 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-slate-400 focus:bg-white placeholder:text-slate-400 transition"
-          />
-          {searchQuery && (
-            <X
-              size={14}
-              className="absolute right-2 text-slate-400 cursor-pointer hover:text-slate-600"
-              onClick={() => setSearchQuery("")}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* 4. TABLE CARDS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-        {filteredTables.map((table) => {
-          const IconComp = getIconComponent(table.iconName);
-          const rowCount = counts[table.id] ?? 0;
-          const isExporting = exportingTableId === table.id;
-
-          return (
-            <div
-              key={table.id}
-              className="bg-white rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-sm transition-all duration-200 flex flex-col justify-between overflow-hidden group"
-            >
-              {/* Card Header */}
-              <div className="p-3.5 space-y-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`w-8 h-8 rounded-lg bg-gradient-to-br ${table.color} text-white flex items-center justify-center shadow-xs shrink-0`}
-                    >
-                      <IconComp size={16} />
+                {/* Schedule Info Box */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="p-3 rounded-xl bg-black/20 border border-white/10 flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-300">
+                      <Calendar className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-slate-900 text-xs tracking-tight group-hover:text-emerald-700 transition">
-                        {table.name}
-                      </h3>
-                      <span className="text-[10px] font-mono text-slate-400">table: {table.tableName}</span>
+                      <div className="text-[10px] text-slate-400">รอบเวลาสำรองอัตโนมัติ</div>
+                      <div className="text-xs font-semibold text-white mt-0.5">{scheduleDescription}</div>
                     </div>
                   </div>
 
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                    {loadingCounts ? "..." : `${rowCount.toLocaleString()} แถว`}
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed min-h-[32px]">
-                  {table.description}
-                </p>
-
-                {/* Column Badges preview */}
-                <div className="flex items-center gap-1 flex-wrap pt-1">
-                  <span className="text-[10px] text-slate-400 font-medium mr-1">คอลัมน์:</span>
-                  {table.columns.slice(0, 4).map((col) => (
-                    <span
-                      key={col}
-                      className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-600 text-[10px] border border-slate-200/60 font-mono truncate max-w-[100px]"
-                    >
-                      {col}
-                    </span>
-                  ))}
-                  {table.columns.length > 4 && (
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      +{table.columns.length - 4}
-                    </span>
-                  )}
+                  <div className="p-3 rounded-xl bg-black/20 border border-white/10 flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-blue-500/10 text-blue-300">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400">สำรองล่าสุด (Last Backup)</div>
+                      <div className="text-xs font-semibold text-white mt-0.5">
+                        {backupConfig.lastBackupAt
+                          ? new Date(backupConfig.lastBackupAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })
+                          : "ยังไม่มีประวัติ"}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Card Action Buttons Toolbar */}
-              <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-1.5">
-                {/* 1. Download Template */}
+              {/* Action Buttons Toolbar */}
+              <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 shrink-0 justify-center">
+                {/* 1. Trigger Backup Now */}
                 <button
                   type="button"
-                  onClick={() => downloadTemplateCSV(table)}
-                  className="flex-1 py-1 px-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-[11px] font-medium flex items-center justify-center gap-1 transition cursor-pointer"
-                  title="ดาวน์โหลดตัวอย่างเทมเพลต CSV"
+                  onClick={handleTriggerBackupNow}
+                  disabled={backingUpFull || restoringFull}
+                  style={{ backgroundColor: "#d4f54e", color: "#0b3531" }}
+                  className="px-4 py-2.5 hover:opacity-90 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  <Download size={12} className="text-slate-500 shrink-0" />
-                  <span>เทมเพลต</span>
-                </button>
-
-                {/* 2. Export Actual Data */}
-                <button
-                  type="button"
-                  onClick={() => exportTableCSV(table)}
-                  disabled={isExporting}
-                  className="flex-1 py-1 px-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-[11px] font-medium flex items-center justify-center gap-1 transition cursor-pointer disabled:opacity-50"
-                  title="ส่งออกข้อมูลจริงเป็นไฟล์ CSV"
-                >
-                  {isExporting ? (
-                    <Loader2 size={12} className="animate-spin text-emerald-600 shrink-0" />
+                  {backingUpFull ? (
+                    <Loader2 size={15} className="animate-spin text-[#0b3531]" />
                   ) : (
-                    <HardDriveDownload size={12} className="text-emerald-600 shrink-0" />
+                    <Play size={15} className="text-[#0b3531] fill-[#0b3531]" />
                   )}
-                  <span>ส่งออก</span>
+                  <span>{backingUpFull ? "กำลังสำรองข้อมูล..." : "สำรองข้อมูลทันที (Backup Now)"}</span>
                 </button>
 
-                {/* 3. Import CSV */}
-                <label className="flex-1 py-1 px-2 bg-[#0b3531] hover:bg-[#072724] text-white rounded-md text-[11px] font-medium flex items-center justify-center gap-1 transition shadow-2xs cursor-pointer">
-                  <Upload size={12} className="text-[#d4f54e] shrink-0" />
-                  <span>นำเข้า</span>
+                {/* 2. Schedule Settings Modal Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsScheduleModalOpen(true)}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Settings size={15} className="text-emerald-300" />
+                  <span>ตั้งค่าตารางเวลาสำรอง (Schedule)</span>
+                </button>
+
+                {/* 3. Download Full JSON file */}
+                <button
+                  type="button"
+                  onClick={handleDownloadFullBackup}
+                  disabled={backingUpFull || restoringFull}
+                  className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <HardDriveDownload size={15} className="text-emerald-400" />
+                  <span>ดาวน์โหลดไฟล์ .json ลงเครื่อง</span>
+                </button>
+
+                {/* 4. Restore from JSON file upload */}
+                <label className="px-4 py-2 bg-slate-900/60 hover:bg-slate-900 border border-slate-700/60 text-slate-300 hover:text-white rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition cursor-pointer">
+                  <FolderUp size={14} className="text-amber-400" />
+                  <span>กู้คืนจากไฟล์ JSON นอกระบบ</span>
                   <input
                     type="file"
-                    accept=".csv"
+                    accept=".json"
                     className="hidden"
-                    onChange={(e) => handleImportCSV(table, e)}
+                    onChange={handleRestoreFullBackup}
+                    disabled={backingUpFull || restoringFull}
                   />
                 </label>
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
 
-      {filteredTables.length === 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-2">
-          <AlertCircle size={28} className="mx-auto text-slate-400" />
-          <h3 className="text-sm font-medium text-slate-700">ไม่พบตารางที่ตรงกับคำค้นหา</h3>
-          <p className="text-xs text-slate-400">ลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่ "ทั้งหมด"</p>
+          {/* 🌟 2. BACKUP SNAPSHOTS HISTORY TABLE */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-slate-100 text-slate-700">
+                  <History className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">ประวัติและจุดสำรองข้อมูล (Backup Snapshots History)</h3>
+                  <p className="text-xs text-slate-500">
+                    เก็บประวัติสำรองข้อมูลล่าสุด {backupHistory.length} จุด (สามารถดาวน์โหลด หรือกู้คืนข้อมูลได้ใน 1 คลิก)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-mono">
+                  หมุนเวียนเก็บสูงสุด {backupConfig.retentionSnapshots || 12} จุด
+                </span>
+              </div>
+            </div>
+
+            {backupHistory.length === 0 ? (
+              <div className="py-12 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold text-slate-800">ยังไม่มีประวัติการสำรองข้อมูลในระบบ</h4>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    กดปุ่ม <b>"สำรองข้อมูลทันที"</b> ด้านบน เพื่อสร้างจุดสำรองข้อมูลแรกของระบบ
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTriggerBackupNow}
+                  disabled={backingUpFull}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition inline-flex items-center gap-2 shadow-sm"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  <span>สร้างจุดสำรองข้อมูลตอนนี้</span>
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50/50">
+                      <th className="py-2.5 px-3 rounded-l-lg">วันที่ & เวลาสำรอง</th>
+                      <th className="py-2.5 px-3">ประเภท</th>
+                      <th className="py-2.5 px-3">จำนวนตาราง & แถว</th>
+                      <th className="py-2.5 px-3">ขนาดไฟล์</th>
+                      <th className="py-2.5 px-3">สถานะ</th>
+                      <th className="py-2.5 px-3 text-right rounded-r-lg">การจัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {backupHistory.map((snap) => {
+                      const dateFormatted = new Date(snap.createdAt).toLocaleString("th-TH", {
+                        timeZone: "Asia/Bangkok"
+                      });
+                      const typeBadge =
+                        snap.type === "weekly_auto"
+                          ? { label: "อัตโนมัติประจำสัปดาห์", color: "bg-blue-50 text-blue-700 border-blue-200" }
+                          : snap.type === "daily_auto"
+                          ? { label: "อัตโนมัติประจำวัน", color: "bg-cyan-50 text-cyan-700 border-cyan-200" }
+                          : { label: "สำรองด้วยตนเอง", color: "bg-purple-50 text-purple-700 border-purple-200" };
+
+                      const sizeKb = (snap.sizeBytes / 1024).toFixed(1);
+
+                      return (
+                        <tr key={snap.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-slate-900">{dateFormatted}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{snap.id}</div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium border ${typeBadge.color}`}>
+                              {typeBadge.label}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-mono">
+                            <span className="font-semibold text-emerald-700">
+                              {snap.totalRows.toLocaleString()} รายการ
+                            </span>
+                            <span className="text-slate-400 text-[10px] ml-1">
+                              ({snap.totalTables || 12} ตาราง)
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-600">{sizeKb} KB</td>
+                          <td className="py-3 px-3">
+                            <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>สมบูรณ์</span>
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="inline-flex items-center gap-2">
+                              {/* Restore Button */}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRestoreSnapshot(snap)}
+                                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                                title="กู้คืนข้อมูลระบบจากจุดสำรองนี้"
+                              >
+                                <RotateCcw className="w-3 h-3 text-amber-700" />
+                                <span>กู้คืนจุดนี้</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* 5. IMPORT PROGRESS MODAL OVERLAY */}
+      {/* ========================================================================= */}
+      {/* TAB 2: TABLE CSV IMPORT & EXPORT CENTER                                   */}
+      {/* ========================================================================= */}
+      {activeMainTab === "table_csv" && (
+        <div className="space-y-4">
+          {/* STATS & QUICK FILTER BAR */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs text-slate-500">ตารางข้อมูลทั้งหมด</span>
+                <div className="text-sm font-semibold text-slate-900">12 ตาราง</div>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
+                <HardDrive size={16} />
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs text-slate-500">จำนวนข้อมูลรวมทั้งระบบ</span>
+                <div className="text-sm font-semibold text-emerald-700 font-mono">
+                  {loadingCounts ? "กำลังโหลด..." : `${totalRowCount.toLocaleString()} แถว`}
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <CheckCircle2 size={16} />
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs text-slate-500">ระบบป้องกันข้อมูลซ้ำ</span>
+                <div className="text-sm font-semibold text-indigo-700">เปิดใช้งาน (Active)</div>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                <FileCheck size={16} />
+              </div>
+            </div>
+          </div>
+
+          {/* SEARCH & CATEGORY FILTER TABS + MULTI-CSV ACTIONS */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Category Tabs */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("all")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                  selectedCategory === "all"
+                    ? "bg-white text-slate-900 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                ทั้งหมด (12)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("master")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                  selectedCategory === "master"
+                    ? "bg-white text-slate-900 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                📁 ข้อมูลหลัก (8)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCategory("transaction")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                  selectedCategory === "transaction"
+                    ? "bg-white text-slate-900 shadow-2xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                💼 โครงการ & บิล (4)
+              </button>
+            </div>
+
+            {/* Search Box & Bulk CSV Buttons */}
+            <div className="flex items-center gap-2 flex-1 justify-end">
+              <div className="relative flex items-center flex-1 max-w-xs">
+                <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="ค้นหาตาราง..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 text-slate-800 text-xs pl-8 pr-7 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-slate-400 focus:bg-white placeholder:text-slate-400 transition"
+                />
+                {searchQuery && (
+                  <X
+                    size={14}
+                    className="absolute right-2 text-slate-400 cursor-pointer hover:text-slate-600"
+                    onClick={() => setSearchQuery("")}
+                  />
+                )}
+              </div>
+
+              {/* Multi-CSV Batch Import Button */}
+              <label className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shrink-0" title="เลือกไฟล์ CSV หลายๆ ไฟล์พร้อมกัน">
+                <Upload size={13} className="text-slate-600" />
+                <span>นำเข้าหลายไฟล์ CSV</span>
+                <input
+                  type="file"
+                  accept=".csv"
+                  multiple
+                  className="hidden"
+                  onChange={handleImportAllFiles}
+                  disabled={importingAll || exportingAll}
+                />
+              </label>
+
+              {/* Export All CSVs Button */}
+              <button
+                type="button"
+                onClick={exportAllTablesCSV}
+                disabled={exportingAll || importingAll}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                title="ส่งออกแยกแต่ละตารางเป็นไฟล์ CSV"
+              >
+                {exportingAll ? (
+                  <Loader2 size={13} className="animate-spin text-slate-600" />
+                ) : (
+                  <Download size={13} className="text-slate-600" />
+                )}
+                <span>ส่งออกทุก CSV</span>
+              </button>
+            </div>
+          </div>
+
+          {/* TABLE CARDS GRID */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {filteredTables.map((table) => {
+              const IconComp = getIconComponent(table.iconName);
+              const rowCount = counts[table.id] ?? 0;
+              const isExporting = exportingTableId === table.id;
+
+              return (
+                <div
+                  key={table.id}
+                  className="bg-white rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-sm transition-all duration-200 flex flex-col justify-between overflow-hidden group"
+                >
+                  {/* Card Header */}
+                  <div className="p-3.5 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`w-8 h-8 rounded-lg bg-gradient-to-br ${table.color} text-white flex items-center justify-center shadow-xs shrink-0`}
+                        >
+                          <IconComp size={16} />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-slate-900 text-xs tracking-tight group-hover:text-emerald-700 transition">
+                            {table.name}
+                          </h3>
+                          <span className="text-[10px] font-mono text-slate-400">table: {table.tableName}</span>
+                        </div>
+                      </div>
+
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                        {loadingCounts ? "..." : `${rowCount.toLocaleString()} แถว`}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed min-h-[32px]">
+                      {table.description}
+                    </p>
+
+                    {/* Column Badges preview */}
+                    <div className="flex items-center gap-1 flex-wrap pt-1">
+                      <span className="text-[10px] text-slate-400 font-medium mr-1">คอลัมน์:</span>
+                      {table.columns.slice(0, 4).map((col) => (
+                        <span
+                          key={col}
+                          className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-600 text-[10px] border border-slate-200/60 font-mono truncate max-w-[100px]"
+                        >
+                          {col}
+                        </span>
+                      ))}
+                      {table.columns.length > 4 && (
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          +{table.columns.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Action Buttons Toolbar */}
+                  <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                    {/* 1. Download Template */}
+                    <button
+                      type="button"
+                      onClick={() => downloadTemplateCSV(table)}
+                      className="flex-1 py-1 px-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-[11px] font-medium flex items-center justify-center gap-1 transition cursor-pointer"
+                      title="ดาวน์โหลดตัวอย่างเทมเพลต CSV"
+                    >
+                      <Download size={12} className="text-slate-500 shrink-0" />
+                      <span>เทมเพลต</span>
+                    </button>
+
+                    {/* 2. Export Actual Data */}
+                    <button
+                      type="button"
+                      onClick={() => exportTableCSV(table)}
+                      disabled={isExporting}
+                      className="flex-1 py-1 px-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-[11px] font-medium flex items-center justify-center gap-1 transition cursor-pointer disabled:opacity-50"
+                      title="ส่งออกข้อมูลจริงเป็นไฟล์ CSV"
+                    >
+                      {isExporting ? (
+                        <Loader2 size={12} className="animate-spin text-emerald-600 shrink-0" />
+                      ) : (
+                        <HardDriveDownload size={12} className="text-emerald-600 shrink-0" />
+                      )}
+                      <span>ส่งออก</span>
+                    </button>
+
+                    {/* 3. Import CSV */}
+                    <label className="flex-1 py-1 px-2 bg-[#0b3531] hover:bg-[#072724] text-white rounded-md text-[11px] font-medium flex items-center justify-center gap-1 transition shadow-2xs cursor-pointer">
+                      <Upload size={12} className="text-[#d4f54e] shrink-0" />
+                      <span>นำเข้า</span>
+                      <input
+                        type="file"
+                        accept=".csv"
+                        className="hidden"
+                        onChange={(e) => handleImportCSV(table, e)}
+                      />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {filteredTables.length === 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-2">
+              <AlertCircle size={28} className="mx-auto text-slate-400" />
+              <h3 className="text-sm font-medium text-slate-700">ไม่พบตารางที่ตรงกับคำค้นหา</h3>
+              <p className="text-xs text-slate-400">ลองเปลี่ยนคำค้นหา หรือเลือกหมวดหมู่ "ทั้งหมด"</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. MODALS (SCHEDULE, RESTORE CONFIRM, PROGRESS, SUMMARY)                 */}
+      {/* ========================================================================= */}
+
+      {/* A. Backup Schedule Configuration Modal */}
+      <BackupScheduleModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        config={backupConfig}
+        onSave={(updated) => setBackupConfig(updated)}
+      />
+
+      {/* B. 1-Click Restore Point Confirmation Modal */}
+      <BackupRestoreConfirmModal
+        isOpen={!!selectedRestoreSnapshot}
+        onClose={() => setSelectedRestoreSnapshot(null)}
+        snapshot={selectedRestoreSnapshot}
+        onConfirmRestore={handleConfirmRestoreFromSnapshot}
+      />
+
+      {/* C. Progress Modal Overlay */}
       {importProgress && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 max-w-sm w-full space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
             <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
               <Loader2 size={28} className="animate-spin" />
             </div>
             <div className="space-y-1.5">
               <h3 className="text-base font-semibold text-slate-900">
-                {importingAll ? "กำลังนำเข้าข้อมูลหลายไฟล์..." : activeImportTable ? `กำลังนำเข้า ${activeImportTable.name}` : "กำลังนำเข้าข้อมูล..."}
+                {restoringFull ? "กำลังกู้คืนข้อมูล..." : importingAll ? "กำลังนำเข้าหลายไฟล์..." : activeImportTable ? `กำลังนำเข้า ${activeImportTable.name}` : "กำลังดำเนินการ..."}
               </h3>
               <p className="text-xs text-slate-700 font-medium">{importProgress.message}</p>
               {importProgress.subMessage && (
@@ -1096,7 +1639,7 @@ export function DataHubClient() {
                 </div>
                 <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
                   <span>
-                    {importProgress.current} / {importProgress.total} {importingAll ? "ไฟล์" : "รายการ"}
+                    {importProgress.current} / {importProgress.total} {importingAll ? "ไฟล์" : "%"}
                   </span>
                   <span>
                     {Math.round((importProgress.current / Math.max(1, importProgress.total)) * 100)}%
@@ -1109,18 +1652,17 @@ export function DataHubClient() {
         </div>
       )}
 
-      {/* 6. IMPORT SUMMARY REPORT MODAL */}
+      {/* D. Multi-CSV Import Summary Modal */}
       {importSummary && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Header */}
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
                   <CheckCircle2 size={16} />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-900 text-xs">สรุปผลการนำเข้าข้อมูล (Import Summary)</h3>
+                  <h3 className="font-semibold text-slate-900 text-xs">{importSummary.title}</h3>
                   <span className="text-[11px] text-slate-500">
                     สำเร็จ {importSummary.successFiles} จาก {importSummary.totalFiles} ไฟล์ ({importSummary.totalRows.toLocaleString()} แถว)
                   </span>
@@ -1135,7 +1677,6 @@ export function DataHubClient() {
               </button>
             </div>
 
-            {/* Result Table List */}
             <div className="p-4 max-h-72 overflow-y-auto divide-y divide-slate-100">
               {importSummary.details.map((item, idx) => (
                 <div key={idx} className="py-2 flex items-center justify-between gap-2 text-xs">
@@ -1165,7 +1706,6 @@ export function DataHubClient() {
               ))}
             </div>
 
-            {/* Modal Footer */}
             <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
               <button
                 type="button"

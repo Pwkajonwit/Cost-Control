@@ -1478,36 +1478,82 @@ function normalizeUri(uri?: string): string {
 export async function getLineUserIdByRequester(requesterKey: string): Promise<string> {
   if (!requesterKey) return "";
   try {
-    const trimmed = String(requesterKey).trim();
-    // 1. Query master_members
+    const trimmed = String(requesterKey).trim().toLowerCase();
+
+    // 1. Query users_list in system_options (Primary source from User Management)
+    const { data: usersRow } = await supabaseAdmin
+      .from("system_options")
+      .select("data")
+      .eq("id", "users_list")
+      .maybeSingle();
+
+    if (usersRow?.data && Array.isArray(usersRow.data)) {
+      const match = usersRow.data.find((u: any) => {
+        const dName = String(u.displayName || "").trim().toLowerCase();
+        const uName = String(u.username || "").trim().toLowerCase();
+        const uId = String(u.id || "").trim().toLowerCase();
+        const phone = String(u.phone || "").replace(/[^0-9]/g, "");
+        const cleanReq = trimmed.replace(/[^0-9]/g, "");
+
+        return (
+          dName === trimmed ||
+          uName === trimmed ||
+          uId === trimmed ||
+          (cleanReq && phone && phone === cleanReq) ||
+          dName.includes(trimmed) ||
+          trimmed.includes(dName)
+        );
+      });
+
+      const lineId = String(match?.lineUserId || match?.line_user_id || "").trim();
+      if (lineId) return lineId;
+    }
+
+    // 2. Query master_members
     const { data: members } = await supabaseAdmin
       .from("master_members")
       .select("*");
     
     if (members && members.length > 0) {
-      const match = members.find(m => 
-        String(m.id || "").trim() === trimmed ||
-        String(m["รหัสพนักงาน"] || "").trim() === trimmed ||
-        String(m["ชื่อเล่น"] || "").trim() === trimmed ||
-        String(m["ชื่อ-นามสกุล"] || "").trim() === trimmed ||
-        String(m.name || "").trim() === trimmed
-      );
+      const match = members.find(m => {
+        const id = String(m.id || "").trim().toLowerCase();
+        const empId = String(m["รหัสพนักงาน"] || "").trim().toLowerCase();
+        const nickname = String(m["ชื่อเล่น"] || "").trim().toLowerCase();
+        const fullname = String(m["ชื่อ-นามสกุล"] || "").trim().toLowerCase();
+        const name = String(m.name || "").trim().toLowerCase();
+
+        return (
+          id === trimmed ||
+          empId === trimmed ||
+          nickname === trimmed ||
+          fullname === trimmed ||
+          name === trimmed ||
+          fullname.includes(trimmed) ||
+          trimmed.includes(nickname)
+        );
+      });
       if (match?.line_user_id) return String(match.line_user_id).trim();
       if (match?.["LINE User ID"]) return String(match["LINE User ID"]).trim();
     }
 
-    // 2. Query users
+    // 3. Query users table
     const { data: users } = await supabaseAdmin
       .from("users")
       .select("*");
     if (users && users.length > 0) {
-      const match = users.find(u => 
-        String(u.id || "").trim() === trimmed ||
-        String(u.username || "").trim() === trimmed ||
-        String(u.employee_id || "").trim() === trimmed ||
-        String(u.name || "").trim() === trimmed ||
-        String(u.nickname || "").trim() === trimmed
-      );
+      const match = users.find(u => {
+        const id = String(u.id || "").trim().toLowerCase();
+        const username = String(u.username || "").trim().toLowerCase();
+        const name = String(u.name || "").trim().toLowerCase();
+        const nickname = String(u.nickname || "").trim().toLowerCase();
+
+        return (
+          id === trimmed ||
+          username === trimmed ||
+          name === trimmed ||
+          nickname === trimmed
+        );
+      });
       if (match?.line_user_id) return String(match.line_user_id).trim();
     }
   } catch (e) {
@@ -1516,8 +1562,58 @@ export async function getLineUserIdByRequester(requesterKey: string): Promise<st
   return "";
 }
 
-export async function getLineConfigIds(): Promise<{ ownerId: string; approverIds: string[] }> {
+export async function getLineTargetIds(): Promise<{ ownerId: string; approverIds: string[]; closerIds: string[] }> {
   try {
+    let ownerId = "";
+    const approverSet = new Set<string>();
+    const closerSet = new Set<string>();
+
+    // 1. Try reading dynamically from users_list in system_options
+    const { data: usersRow } = await supabaseAdmin
+      .from("system_options")
+      .select("data")
+      .eq("id", "users_list")
+      .maybeSingle();
+
+    if (usersRow?.data && Array.isArray(usersRow.data)) {
+      for (const u of usersRow.data) {
+        if (u.status === "Inactive") continue;
+        const lineId = String(u.lineUserId || u.line_user_id || "").trim();
+        if (!lineId) continue;
+
+        if (u.isOwner || (!ownerId && (u.role === "Admin" || u.role === "Owner"))) {
+          ownerId = lineId;
+        }
+
+        // 🟢 Admin (อนุมัติ) / canApprove
+        if (Boolean(u.canApprove) || u.role === "Admin_Approver" || u.role === "Approver") {
+          approverSet.add(lineId);
+        }
+
+        // 🔵 Admin (Approve / ปิดบิล) / canCloseBill
+        if (Boolean(u.canCloseBill) || u.role === "Admin_Closer") {
+          closerSet.add(lineId);
+        }
+      }
+    }
+
+    // 2. Also check master_members table if sets are empty
+    if (approverSet.size === 0) {
+      const { data: members } = await supabaseAdmin.from("master_members").select("*");
+      for (const m of members || []) {
+        const lineId = String(m.line_user_id || "").trim();
+        if (!lineId) continue;
+        const role = String(m.role || m["สิทธิ์การใช้งาน"] || "");
+        if (role === "Admin_Approver" || role === "Approver" || role === "Manager") {
+          approverSet.add(lineId);
+        }
+        if (role === "Admin_Closer") {
+          closerSet.add(lineId);
+        }
+      }
+    }
+
+    // 3. Fallback to line_config in system_options or env
     const { data: configRow } = await supabaseAdmin
       .from("system_options")
       .select("data")
@@ -1525,17 +1621,27 @@ export async function getLineConfigIds(): Promise<{ ownerId: string; approverIds
       .maybeSingle();
 
     const cfg = configRow?.data || {};
-    const ownerId = String(cfg.LINE_USER_ID_OWN || process.env.LINE_USER_ID_OWN || LINE_CONFIG.USER_ID_OWN || "").trim();
-    
+    if (!ownerId) {
+      ownerId = String(cfg.LINE_USER_ID_OWN || process.env.LINE_USER_ID_OWN || LINE_CONFIG.USER_ID_OWN || "").trim();
+    }
     const rawApprovers = String(cfg.LINE_USER_ID_APPROVER || process.env.LINE_USER_ID_APPROVER || LINE_CONFIG.USER_ID_APPROVER || "").trim();
-    const approverIds = rawApprovers.split(",").map(id => id.trim()).filter(Boolean);
+    if (rawApprovers) {
+      rawApprovers.split(",").forEach(id => {
+        const clean = id.trim();
+        if (clean) approverSet.add(clean);
+      });
+    }
 
-    return { ownerId, approverIds };
+    const approverIds = Array.from(approverSet);
+    const closerIds = Array.from(closerSet);
+    return { ownerId, approverIds, closerIds };
   } catch (e) {
-    console.error("Failed fetching LINE config IDs:", e);
-    return { ownerId: "", approverIds: [] };
+    console.error("Failed fetching LINE target IDs:", e);
+    return { ownerId: "", approverIds: [], closerIds: [] };
   }
 }
+
+export const getLineConfigIds = getLineTargetIds;
 
 export type MultiBillFlexOptions = {
   title: string;
@@ -1742,6 +1848,12 @@ export function createMultiBillFlex(
     return resolveRequesterNameFromMap(raw, peopleMap);
   }
 
+  function getCreatorDisplayName(b: Record<string, any>): string {
+    const raw = String(b["ผู้สร้างบิล"] || b.created_by || b["ผู้บันทึก"] || "").trim();
+    if (!raw) return "";
+    return resolveRequesterNameFromMap(raw, peopleMap);
+  }
+
   const mode = options.mode || "search";
 
   const totalAmount = bills.reduce((sum, b) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
@@ -1749,6 +1861,7 @@ export function createMultiBillFlex(
 
   const firstBill = bills[0];
   const firstReq = getRequesterDisplayName(firstBill);
+  const firstCreator = getCreatorDisplayName(firstBill);
   const sheetRowIds = bills.map(b => String(b._sheetRow || b.id || b["ลำดับ"] || "").trim()).filter(Boolean);
   const sheetRowStr = sheetRowIds.join(",");
 
@@ -1782,7 +1895,7 @@ export function createMultiBillFlex(
       },
       {
         type: "text",
-        text: `พบทั้งหมด ${bills.length} รายการ${firstReq && firstReq !== "-" ? ` | ผู้เบิก: ${firstReq}` : ""}`,
+        text: `พบทั้งหมด ${bills.length} รายการ${firstReq && firstReq !== "-" ? ` | ผู้เบิก: ${firstReq}` : ""}${firstCreator && firstCreator !== firstReq && firstCreator !== "-" ? ` (ผู้สร้าง: ${firstCreator})` : ""}`,
         color: "#047857",
         size: "xs",
         margin: "xs"
@@ -1795,6 +1908,7 @@ export function createMultiBillFlex(
     const bId = String(b._sheetRow || b.id || b["ลำดับ"] || idx + 1);
     const amt = Number(b["ยอดเงิน"] || b.amount || 0).toLocaleString("th-TH");
     const requesterName = getRequesterDisplayName(b);
+    const creatorName = getCreatorDisplayName(b);
     const vendorName = b["ร้าน/บุคคล"] || b.vendor_or_person || "-";
     const billType = b["บิล"] || b.bill || b.bill_type || "ทั่วไป";
     const projName = b["ชื่อ Project"] || b.project_name || "โครงการทั่วไป";
@@ -1948,6 +2062,18 @@ export function createMultiBillFlex(
             { type: "text", text: `${requesterName} / ${vendorName}`, size: "xxs", color: "#1E293B", flex: 7, wrap: true }
           ]
         },
+        // Creator Row (if different from requester)
+        ...(creatorName && creatorName !== requesterName && creatorName !== "-" ? [
+          {
+            type: "box",
+            layout: "baseline",
+            margin: "xs",
+            contents: [
+              { type: "text", text: "ผู้สร้างบิล:", size: "xxs", color: "#64748B", flex: 3 },
+              { type: "text", text: `${creatorName} (บันทึกแทน)`, size: "xxs", color: "#0284C7", flex: 7, wrap: true }
+            ]
+          }
+        ] : []),
         // Description Row
         {
           type: "box",
@@ -2122,19 +2248,8 @@ export function createMultiBillFlex(
       }
     ];
   } else if (mode === "completed") {
-    footerButtons = [
-      {
-        type: "button",
-        style: "primary",
-        color: "#059669",
-        height: "sm",
-        action: {
-          type: "message",
-          label: `🎉 รายการเบิกเงินสำเร็จเรียบร้อย (${bills.length} รายการ)`,
-          text: `เบิกสำเร็จ:${sheetRowStr}`
-        }
-      }
-    ];
+    // ไม่มีปุ่มด้านล่างสำหรับการ์ดที่เบิกเงินสำเร็จเรียบร้อยแล้ว
+    footerButtons = [];
   } else {
     // Mode search
     footerButtons = [

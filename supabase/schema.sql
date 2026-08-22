@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS public.stores (
   id TEXT PRIMARY KEY,                                      -- id_store
   name TEXT NOT NULL,                                       -- ชื่อร้านค้า
   full_name TEXT,                                           -- ชื่อเต็ม
+  bank_name TEXT,                                           -- ชื่อธนาคาร
   bank_account TEXT,                                        -- เลขบัญชี
   phone TEXT,                                               -- เบอร์โทร
   address TEXT,                                             -- ที่อยู่
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS public.contractors (
   id TEXT PRIMARY KEY,                                      -- id_Contractor
   nickname TEXT,                                            -- ชื่อเล่น
   full_name TEXT,                                           -- ชื่อ-นามสกุล
+  bank_name TEXT,                                           -- ชื่อธนาคาร
   bank_account TEXT,                                        -- เลขบัญชี
   id_card TEXT,                                             -- บัตรประจำตัวประชาชน
   phone TEXT,                                               -- เบอร์โทรศัพท์
@@ -139,6 +141,7 @@ CREATE TABLE IF NOT EXISTS public.master_members (
   id TEXT PRIMARY KEY,                                      -- รหัสพนักงาน (e.g. admin, PT101)
   nickname TEXT,                                            -- ชื่อเล่น
   full_name TEXT,                                           -- ชื่อ-นามสกุล
+  bank_name TEXT,                                           -- ชื่อธนาคาร
   bank_account TEXT,                                        -- เลขบัญชี
   phone TEXT,                                               -- เบอร์โทร
   address TEXT,                                             -- ที่อยู่
@@ -498,6 +501,14 @@ VALUES
   ('Ba106', 'ธนาคารกรุงศรีอยุธยา', 'https://raw.githubusercontent.com/manop/thai-banks-logo/master/bay.png'),
   ('Ba107', 'ธนาคารออมสิน', 'https://raw.githubusercontent.com/manop/thai-banks-logo/master/gsb.png')
 ON CONFLICT (id) DO NOTHING;
+
+-- 5.6 เพิ่มคอลัมน์อัตโนมัติ (Safety Column Migrations)
+ALTER TABLE public.stores ADD COLUMN IF NOT EXISTS bank_name TEXT;
+ALTER TABLE public.contractors ADD COLUMN IF NOT EXISTS bank_name TEXT;
+ALTER TABLE public.master_members ADD COLUMN IF NOT EXISTS bank_name TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS work_amount NUMERIC DEFAULT 0;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS start_date DATE;
 
 -- =========================================================================
 -- COMPLETION MESSAGE

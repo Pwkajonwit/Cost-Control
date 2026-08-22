@@ -22,7 +22,10 @@ import {
   Zap,
   Users,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  Crown,
+  ExternalLink,
+  CheckCheck
 } from "lucide-react";
 
 type LineConfig = {
@@ -130,6 +133,9 @@ export function LineSystemDashboardClient() {
   // Discovered Groups
   const [discoveredGroups, setDiscoveredGroups] = useState<DiscoveredGroup[]>([]);
 
+  // System Users for Approver & Owner Sync
+  const [systemUsers, setSystemUsers] = useState<any[]>([]);
+
   // Logs States
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -207,7 +213,21 @@ export function LineSystemDashboardClient() {
         setLoadingConfig(false);
       }
     }
+
+    async function fetchSystemUsers() {
+      try {
+        const res = await fetch("/api/users");
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.users)) {
+          setSystemUsers(data.users);
+        }
+      } catch (err) {
+        console.warn("Failed fetching users in line dashboard:", err);
+      }
+    }
+
     loadConfig();
+    fetchSystemUsers();
     fetchErrorLogs();
     fetchQuotaInfo();
   }, []);
@@ -375,6 +395,14 @@ export function LineSystemDashboardClient() {
       item.example.toLowerCase().includes(manualSearch.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+
+  const detectedApprovers = systemUsers.filter(
+    (u) => Boolean(u.canApprove) || u.role === "Admin_Approver" || u.role === "Approver"
+  );
+
+  const detectedClosers = systemUsers.filter(
+    (u) => Boolean(u.canCloseBill) || u.role === "Admin_Closer"
+  );
 
   return (
     <div className="space-y-3 font-sans text-xs text-slate-800 max-w-7xl mx-auto pb-8">
@@ -756,31 +784,95 @@ export function LineSystemDashboardClient() {
                 </div>
               </div>
 
-              {/* Target User IDs Section */}
-              <div className="sm:col-span-2 border-b border-slate-100 pb-1 mt-1">
-                <span className="text-xs text-slate-500 uppercase">👤 User IDs ผู้รับการแจ้งเตือนส่วนตัว</span>
-              </div>
+              {/* Dynamic Target User IDs Section from User Management */}
+              <div className="sm:col-span-2 space-y-2.5 p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 mt-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-[#0b3531] text-[#d4f54e] flex items-center justify-center">
+                      <Users size={13} />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-900">
+                      ผู้มีสิทธิ์อนุมัติตั้งเบิก & ปิดงานบิล (ซิงค์อัตโนมัติจากหน้า จัดการผู้ใช้)
+                    </span>
+                  </div>
+                  <a
+                    href="/settings/users"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0"
+                  >
+                    <span>⚙️ จัดการสิทธิ์ที่หน้า จัดการผู้ใช้</span>
+                    <ExternalLink size={11} />
+                  </a>
+                </div>
 
-              <div className="space-y-1">
-                <label className="text-slate-700 block text-xs">LINE User ID เจ้าของระบบ (OWN / Admin)</label>
-                <input
-                  type="text"
-                  value={formConfig.LINE_USER_ID_OWN || ""}
-                  onChange={(e) => setFormConfig({ ...formConfig, LINE_USER_ID_OWN: e.target.value })}
-                  placeholder="เช่น U1234567890abcdef..."
-                  className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono text-slate-900 text-xs focus:outline-none focus:border-slate-500"
-                />
-              </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  ระบบจะดึง LINE User ID ของ <strong>ผู้ที่อนุมัติตั้งเบิกได้</strong> และ <strong>ผู้ที่ปิดงานได้</strong> จากหน้าจัดการผู้ใช้ระบบโดยอัตโนมัติ
+                </p>
 
-              <div className="space-y-1">
-                <label className="text-slate-700 block text-xs">LINE User ID ผู้อนุมัติ (Approvers) (คั่นด้วย comma)</label>
-                <input
-                  type="text"
-                  value={formConfig.LINE_USER_ID_APPROVER || ""}
-                  onChange={(e) => setFormConfig({ ...formConfig, LINE_USER_ID_APPROVER: e.target.value })}
-                  placeholder="เช่น U111...,U222..."
-                  className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono text-slate-900 text-xs focus:outline-none focus:border-slate-500"
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  {/* 🟢 Box 1: Approvers (อนุมัติตั้งเบิก) */}
+                  <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-emerald-900 flex items-center gap-1">
+                        <Check size={12} className="text-emerald-600" />
+                        <span>1. ผู้ที่อนุมัติตั้งเบิกได้ (Approvers)</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-mono font-semibold">
+                        {detectedApprovers.length} ท่าน
+                      </span>
+                    </div>
+                    {detectedApprovers.length > 0 ? (
+                      <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                        {detectedApprovers.map((u, i) => (
+                          <div key={i} className="text-xs text-slate-800 flex items-center justify-between gap-1 p-1 bg-white/80 rounded border border-emerald-100">
+                            <span className="truncate font-medium">{u.displayName || u.username}</span>
+                            <span className={`text-[10px] font-mono shrink-0 ${u.lineUserId ? "text-emerald-700 font-semibold" : "text-slate-400"}`}>
+                              {u.lineUserId ? "✓ ผูก LINE แล้ว" : "✕ ยังไม่ผูก LINE"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 py-1">
+                        ยังไม่มีผู้ใช้ที่มีสิทธิ์อนุมัติตั้งเบิก (ไปที่หน้าจัดการผู้ใช้เพื่อเปิดสิทธิ์)
+                      </div>
+                    )}
+                    <p className="text-[10px] text-emerald-700/80 leading-tight">
+                      รับการ์ด Flex ขออนุมัติและกดอนุมัติตั้งเบิกผ่าน LINE
+                    </p>
+                  </div>
+
+                  {/* 🔵 Box 2: Closers (ปิดงาน / ปิดบิล) */}
+                  <div className="p-2.5 rounded-lg border border-blue-200 bg-blue-50/60 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-blue-900 flex items-center gap-1">
+                        <CheckCheck size={12} className="text-blue-600" />
+                        <span>2. ผู้ที่ปิดงาน / ปิดบิลได้ (Closers)</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-mono font-semibold">
+                        {detectedClosers.length} ท่าน
+                      </span>
+                    </div>
+                    {detectedClosers.length > 0 ? (
+                      <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                        {detectedClosers.map((u, i) => (
+                          <div key={i} className="text-xs text-slate-800 flex items-center justify-between gap-1 p-1 bg-white/80 rounded border border-blue-100">
+                            <span className="truncate font-medium">{u.displayName || u.username}</span>
+                            <span className={`text-[10px] font-mono shrink-0 ${u.lineUserId ? "text-blue-700 font-semibold" : "text-slate-400"}`}>
+                              {u.lineUserId ? "✓ ผูก LINE แล้ว" : "✕ ยังไม่ผูก LINE"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 py-1">
+                        ยังไม่มีผู้ใช้ที่มีสิทธิ์ปิดงานบิล (ไปที่หน้าจัดการผู้ใช้เพื่อเปิดสิทธิ์)
+                      </div>
+                    )}
+                    <p className="text-[10px] text-blue-700/80 leading-tight">
+                      รับการ์ด Flex แจ้งเตือนปิดงานและกดยืนยันจ่ายเงินสำเร็จผ่าน LINE
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Group IDs Section */}

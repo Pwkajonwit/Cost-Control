@@ -178,6 +178,8 @@ export function mapSupabaseRowToSheetRow(dbTable: string, row: Record<string, an
     res["หัก"] = row.withholding_tax ?? row["หัก"] ?? dataObj["หัก"];
     res["เครดิต"] = row.credit_days ?? row["เครดิต"] ?? dataObj["เครดิต"];
     res["ผู้เบิก"] = row.requester ?? row["ผู้เบิก"] ?? dataObj["ผู้เบิก"];
+    res["ผู้สร้างบิล"] = row.created_by ?? row["ผู้สร้างบิล"] ?? dataObj["ผู้สร้างบิล"] ?? dataObj["ผู้บันทึก"] ?? "";
+    res["created_by"] = res["ผู้สร้างบิล"];
     res["รูปถ่ายบิล"] = row.image_url ?? row["รูปถ่ายบิล"] ?? dataObj["รูปถ่ายบิล"];
     res["สถานะ"] = row.status ?? row["สถานะ"] ?? dataObj["สถานะ"];
     res["ว/ด/ป"] = row.bill_date ? String(row.bill_date) : row["ว/ด/ป"] ?? dataObj["ว/ด/ป"] ?? (row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : "");
@@ -361,6 +363,12 @@ export function mapSheetRowToSupabaseRow(tableName: string, row: Record<string, 
     const rawRequester = row["ผู้เบิก"] ?? row.requester;
     if (hasValue(rawRequester)) dbRow.requester = String(rawRequester).trim();
 
+    const rawCreatedBy = row["ผู้สร้างบิล"] ?? row.created_by ?? row["ผู้บันทึก"];
+    if (hasValue(rawCreatedBy)) {
+      dbRow.created_by = String(rawCreatedBy).trim();
+      dbRow["ผู้สร้างบิล"] = String(rawCreatedBy).trim();
+    }
+
     const rawImage = row["รูปถ่ายบิล"] ?? row.image_url;
     if (hasValue(rawImage)) dbRow.image_url = String(rawImage).trim();
 
@@ -523,7 +531,7 @@ export async function saveEntityBankOption(entityId: string, bankVal: string) {
   try {
     const { data } = await supabaseAdmin.from("system_options").select("*").eq("id", "entity_banks").maybeSingle();
     const existingMap = (data?.data && typeof data.data === "object") ? { ...data.data } : {};
-    existingMap[String(entityId)] = String(bankVal);
+    existingMap[String(entityId).trim()] = String(bankVal).trim();
     await supabaseAdmin.from("system_options").upsert({
       id: "entity_banks",
       data: existingMap,
@@ -533,6 +541,26 @@ export async function saveEntityBankOption(entityId: string, bankVal: string) {
     clearCache("sys_opt:all");
   } catch (e) {
     console.warn("Failed to persist entity bank in system_options:", e);
+  }
+}
+
+export async function saveEntityBanksBatch(bankMap: Record<string, string>) {
+  if (!isSupabaseConfigured() || !Object.keys(bankMap).length) return;
+  try {
+    const { data } = await supabaseAdmin.from("system_options").select("*").eq("id", "entity_banks").maybeSingle();
+    const existing = (data?.data && typeof data.data === "object") ? { ...data.data } : {};
+    for (const [k, v] of Object.entries(bankMap)) {
+      if (k && v) existing[String(k).trim()] = String(v).trim();
+    }
+    await supabaseAdmin.from("system_options").upsert({
+      id: "entity_banks",
+      data: existing,
+      updated_at: new Date().toISOString()
+    });
+    clearCache("sys_opt:entity_banks");
+    clearCache("sys_opt:all");
+  } catch (e) {
+    console.warn("Failed to persist entity banks batch in system_options:", e);
   }
 }
 
@@ -1223,6 +1251,22 @@ export async function bulkInsertRowsToSupabase(tableName: string, rowsData: Reco
     }
 
     const dedupedRows = Array.from(dedupedMap.values());
+
+    // Save entity banks in system_options for stores/contractors/master_members
+    if (dbTable === "stores" || dbTable === "contractors" || dbTable === "master_members") {
+      const bankEntries: Record<string, string> = {};
+      for (const r of dedupedRows) {
+        const eid = String(r.id || "").trim();
+        const bname = String(r.bank_name || r["ธนาคาร"] || "").trim();
+        if (eid && bname) {
+          bankEntries[eid] = bname;
+        }
+      }
+      if (Object.keys(bankEntries).length > 0) {
+        saveEntityBanksBatch(bankEntries).catch(() => {});
+      }
+    }
+
     const chunkSize = 200;
     const insertedResults: any[] = [];
 
@@ -1237,14 +1281,33 @@ export async function bulkInsertRowsToSupabase(tableName: string, rowsData: Reco
         return clean;
       });
 
-      let res = await supabaseAdmin.from(dbTable).upsert(sanitizedChunk, { onConflict: "id" }).select();
+      let currentChunk = sanitizedChunk;
+      let res = await supabaseAdmin.from(dbTable).upsert(currentChunk, { onConflict: "id" }).select();
 
-      if (res.error) {
-        res = await supabaseAdmin.from(dbTable).upsert(sanitizedChunk).select();
+      // Auto-retry if any column is missing in Postgres schema cache (e.g. bank_name)
+      let retries = 0;
+      while (res.error && retries < 6) {
+        retries++;
+        const match = res.error.message.match(/Could not find the '([^']+)' column/i);
+        if (match && match[1]) {
+          const missingCol = match[1];
+          currentChunk = currentChunk.map(item => {
+            const copy = { ...item };
+            delete copy[missingCol];
+            return copy;
+          });
+          res = await supabaseAdmin.from(dbTable).upsert(currentChunk, { onConflict: "id" }).select();
+          continue;
+        }
+        break;
       }
 
       if (res.error) {
-        res = await supabaseAdmin.from(dbTable).insert(sanitizedChunk).select();
+        res = await supabaseAdmin.from(dbTable).upsert(currentChunk).select();
+      }
+
+      if (res.error) {
+        res = await supabaseAdmin.from(dbTable).insert(currentChunk).select();
       }
 
       if (res.error) {
