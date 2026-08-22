@@ -1060,13 +1060,13 @@ export async function insertRowToSupabase(tableName: string, rowData: Record<str
 
     if (res.error) {
       console.warn(`Failed to insert into Supabase '${dbTable}': ${res.error.message}`);
-      return null;
+      throw new Error(`บันทึกลงตาราง '${dbTable}' ไม่สำเร็จ: ${res.error.message}`);
     }
 
     return res.data;
   } catch (err) {
     console.warn(`Exception inserting into Supabase '${dbTable}':`, err);
-    return null;
+    throw err;
   }
 }
 

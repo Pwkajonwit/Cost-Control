@@ -329,6 +329,7 @@ export function ManageTableClient({
 
         setBusy("add");
         let successCount = 0;
+        let lastError = "";
 
         for (const rowData of parsedRows) {
           try {
@@ -337,12 +338,17 @@ export function ManageTableClient({
               body: JSON.stringify({ tableName, row: rowData })
             });
             successCount++;
-          } catch (err) {
+          } catch (err: any) {
             console.error("CSV Row Import error:", err);
+            lastError = err instanceof Error ? err.message : String(err);
           }
         }
 
-        showToast("success", `นำเข้าข้อมูลสำเร็จ ${successCount} จาก ${parsedRows.length} รายการ`);
+        if (successCount > 0) {
+          showToast("success", `นำเข้าข้อมูลสำเร็จ ${successCount} จาก ${parsedRows.length} รายการ`);
+        } else {
+          showToast("error", `นำเข้าไม่สำเร็จ: ${lastError || "โปรดตรวจสอบคอลัมน์ของไฟล์ CSV"}`);
+        }
         await reloadRows();
       } catch (err) {
         showToast("error", err instanceof Error ? err.message : "นำเข้าไฟล์ CSV ไม่สำเร็จ");
@@ -354,8 +360,23 @@ export function ManageTableClient({
     reader.readAsText(file, "UTF-8");
   }
 
+  function detectDelimiter(firstLine: string): string {
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const semiCount = (firstLine.match(/;/g) || []).length;
+    const tabCount = (firstLine.match(/\t/g) || []).length;
+    if (tabCount > commaCount && tabCount > semiCount) return "\t";
+    if (semiCount > commaCount) return ";";
+    return ",";
+  }
+
   function parseCSVText(text: string): Record<string, string>[] {
-    const cleanText = text.replace(/^\uFEFF/, "");
+    const cleanText = text.replace(/^\uFEFF/, "").trim();
+    if (!cleanText) return [];
+
+    const firstLineEnd = cleanText.indexOf("\n");
+    const firstLine = firstLineEnd !== -1 ? cleanText.slice(0, firstLineEnd) : cleanText;
+    const delimiter = detectDelimiter(firstLine);
+
     const lines: string[][] = [];
     let currentLine: string[] = [];
     let currentCell = "";
@@ -372,7 +393,7 @@ export function ManageTableClient({
         } else {
           insideQuote = !insideQuote;
         }
-      } else if (char === ',' && !insideQuote) {
+      } else if (char === delimiter && !insideQuote) {
         currentLine.push(currentCell.trim());
         currentCell = "";
       } else if ((char === '\r' || char === '\n') && !insideQuote) {
@@ -396,20 +417,32 @@ export function ManageTableClient({
 
     if (lines.length < 2) return [];
 
-    const headers = lines[0].map(h => h.replace(/^"+|"+$/g, '').trim());
+    const rawHeaders = lines[0].map(h => h.replace(/^"+|"+$/g, '').trim());
+    
+    // Normalize headers to match table/view columns
+    const headers = rawHeaders.map(h => {
+      const cleanH = h.trim();
+      const matchedCol = columns.find(c => c.toLowerCase() === cleanH.toLowerCase() || c === cleanH);
+      return matchedCol || cleanH;
+    });
+
     const dataRowsResult: Record<string, string>[] = [];
 
     for (let r = 1; r < lines.length; r++) {
       const rowValues = lines[r];
       const rowObj: Record<string, string> = {};
+      let hasData = false;
       headers.forEach((h, colIdx) => {
         if (h) {
           let val = rowValues[colIdx] ?? "";
           val = val.replace(/^"+|"+$/g, '').trim();
           rowObj[h] = val;
+          if (val) hasData = true;
         }
       });
-      dataRowsResult.push(rowObj);
+      if (hasData) {
+        dataRowsResult.push(rowObj);
+      }
     }
 
     return dataRowsResult;

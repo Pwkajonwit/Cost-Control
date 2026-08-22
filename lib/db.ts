@@ -111,9 +111,11 @@ export async function appendRow(tableName: string, row: TableRow) {
     await insertRowToSupabase(tableName, row);
   } catch (e) {
     console.warn(`Supabase appendRow failed for ${tableName}:`, e);
+    throw e;
   }
   clearCache(`rows:${tableName}`);
   clearCache(`headers:${tableName}`);
+  clearCache("rows:");
 }
 
 export const createTableRow = appendRow;
