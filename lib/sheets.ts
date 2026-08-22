@@ -50,9 +50,19 @@ export async function listRefOptions(tableName: string, options: {
   validIf?: string;
   rowColumns?: string[];
 } = {}): Promise<RefOption[]> {
-  let rows = await getRows(tableName, 120_000);
+  let rows = await getRows(tableName, 0);
   if (options.validIf === "activeProjects") {
-    rows = rows.filter(row => row.color === "Red" || row.color === "Green");
+    rows = rows.filter(row => {
+      const color = String(row.color || row.COLOR || "").trim().toLowerCase();
+      const status = String(row["สถานะ"] || row.status || "").trim().toLowerCase();
+      if (status.includes("เสร็จ") || status.includes("ปิด") || status.includes("close") || status.includes("done")) {
+        return false;
+      }
+      if (color === "gray" || color === "grey" || color === "black" || color === "closed") {
+        return false;
+      }
+      return true;
+    });
   }
 
   const keyColumn = options.keyColumn || TABLE_KEYS[tableName] || "_RowNumber";

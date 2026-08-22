@@ -42,17 +42,29 @@ type FormPayload = {
 const formSchemaCache = new Map<string, FormPayload>();
 const formSchemaInFlight = new Map<string, Promise<FormPayload | null>>();
 
-export async function prefetchFormSchema(tableName: string): Promise<FormPayload | null> {
+export function clearFormSchemaCache(tableName?: string) {
+  if (tableName) {
+    const normalized = tableName.trim();
+    formSchemaCache.delete(normalized);
+  } else {
+    formSchemaCache.clear();
+  }
+}
+
+export async function prefetchFormSchema(tableName: string, forceRefresh = false): Promise<FormPayload | null> {
   if (!tableName) return null;
   const normalized = tableName.trim();
-  if (formSchemaCache.has(normalized)) {
+  if (!forceRefresh && formSchemaCache.has(normalized)) {
     return formSchemaCache.get(normalized)!;
   }
   if (formSchemaInFlight.has(normalized)) {
     return formSchemaInFlight.get(normalized)!;
   }
 
-  const promise = fetch(`/api/form-schema?tableName=${encodeURIComponent(normalized)}`)
+  const promise = fetch(`/api/form-schema?tableName=${encodeURIComponent(normalized)}&_t=${Date.now()}`, {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache" }
+  })
     .then(async (res) => {
       if (!res.ok) throw new Error("Failed to load form schema");
       const data = (await res.json()) as FormPayload;
@@ -180,7 +192,7 @@ export function FormModal({
 
   // Background prefetch schema on mount so form opens instantly with 0ms delay
   useEffect(() => {
-    if (!activeForm && resolvedTableName) {
+    if (resolvedTableName) {
       prefetchFormSchema(resolvedTableName).then(loaded => {
         if (loaded) {
           setActiveForm(loaded);
@@ -188,7 +200,23 @@ export function FormModal({
         }
       });
     }
-  }, [activeForm, resolvedTableName]);
+  }, [resolvedTableName]);
+
+  // Listen to global cache invalidation event (when projects, stores, contractors, staff are added)
+  useEffect(() => {
+    const handleInvalidate = () => {
+      clearFormSchemaCache();
+      if (resolvedTableName) {
+        prefetchFormSchema(resolvedTableName, true).then(loaded => {
+          if (loaded) {
+            setActiveForm(loaded);
+          }
+        });
+      }
+    };
+    window.addEventListener("schema-cache-invalidated", handleInvalidate);
+    return () => window.removeEventListener("schema-cache-invalidated", handleInvalidate);
+  }, [resolvedTableName]);
 
   function populateFormValues(targetForm: FormPayload, detail?: OpenFormDetail) {
     const nextValues = detail?.row
@@ -229,16 +257,23 @@ export function FormModal({
   }
 
   async function handleOpen(detail?: OpenFormDetail) {
+    // If activeForm is already cached, show modal immediately for 0ms delay
     if (activeForm) {
       populateFormValues(activeForm, detail);
       setOpen(true);
+      // Fetch fresh reference options in background so newly created projects/stores appear
+      prefetchFormSchema(resolvedTableName, true).then(fresh => {
+        if (fresh) {
+          setActiveForm(fresh);
+        }
+      });
       return;
     }
 
     setOpen(true);
     setLoadingSchema(true);
     try {
-      const loaded = await prefetchFormSchema(resolvedTableName);
+      const loaded = await prefetchFormSchema(resolvedTableName, true);
       if (loaded) {
         setActiveForm(loaded);
         populateFormValues(loaded, detail);
@@ -342,6 +377,11 @@ export function FormModal({
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "บันทึกไม่สำเร็จ");
       
+      clearFormSchemaCache();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("schema-cache-invalidated"));
+      }
+
       if (isEditing) {
         setOpen(false);
         setEditSheetRow(null);

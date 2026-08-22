@@ -153,6 +153,9 @@ export function ManageTableClient({
         body: JSON.stringify({ tableName, row: addValues })
       });
       setAddOpen(false);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("schema-cache-invalidated"));
+      }
       await reloadRows();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "เพิ่มข้อมูลไม่สำเร็จ");
@@ -213,6 +216,9 @@ export function ManageTableClient({
       }
       setEditing(false);
       setDraftRows({});
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("schema-cache-invalidated"));
+      }
       await reloadRows();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "บันทึกข้อมูลไม่สำเร็จ");
@@ -250,6 +256,9 @@ export function ManageTableClient({
       });
       setDeleteMode(false);
       setSelectedRows([]);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("schema-cache-invalidated"));
+      }
       await reloadRows();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "ลบข้อมูลไม่สำเร็จ");
@@ -272,6 +281,9 @@ export function ManageTableClient({
         method: "DELETE",
         body: JSON.stringify({ tableName, sheetRows: [sheetRow] })
       });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("schema-cache-invalidated"));
+      }
       await reloadRows();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "ลบข้อมูลไม่สำเร็จ");
