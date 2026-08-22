@@ -68,7 +68,7 @@ export function LoginScreen({ peopleRows = [] }: { peopleRows?: SheetRow[] }) {
     const cleanInputDigits = rawInput.replace(/\D/g, "");
 
     // 1. Search in /settings/users list by phone number first, fallback to username/id
-    const foundUser = usersList.find((u) => {
+    let targetUser = usersList.find((u) => {
       if (u.status === "Inactive") return false;
 
       const userPhoneDigits = String(u.phone || "").replace(/\D/g, "");
@@ -85,8 +85,37 @@ export function LoginScreen({ peopleRows = [] }: { peopleRows?: SheetRow[] }) {
       );
     });
 
-    if (!foundUser) {
-      setError("ไม่พบเบอร์โทรศัพท์นี้ในระบบ หรือบัญชีถูกระงับ (ต้องมีเบอร์ในตั้งค่าผู้ใช้งาน)");
+    // 2. Fallback: Search in master_members (peopleRows)
+    if (!targetUser && peopleRows && peopleRows.length > 0) {
+      const foundInPeople = peopleRows.find((p) => {
+        const pPhoneDigits = String(p["เบอร์โทรศัพท์"] || p.phone || "").replace(/\D/g, "");
+        const pIdDigits = String(p["id"] || p.id || "").replace(/\D/g, "");
+        const rawPId = String(p["id"] || p.id || "").trim().toLowerCase();
+        const rawNickname = String(p["ชื่อเล่น"] || p.nickname || "").trim().toLowerCase();
+        const targetLower = rawInput.toLowerCase();
+
+        return (
+          (cleanInputDigits && pPhoneDigits && pPhoneDigits === cleanInputDigits) ||
+          (cleanInputDigits && pIdDigits && pIdDigits === cleanInputDigits) ||
+          rawPId === targetLower ||
+          rawNickname === targetLower
+        );
+      });
+
+      if (foundInPeople) {
+        targetUser = {
+          id: String(foundInPeople["id"] || foundInPeople.id || rawInput),
+          username: String(foundInPeople["id"] || foundInPeople.id || rawInput),
+          displayName: String(foundInPeople["ชื่อเล่น"] || foundInPeople["ชื่อ-นามสกุล"] || foundInPeople.full_name || rawInput),
+          role: String(foundInPeople["สิทธิ์การใช้งาน"] || foundInPeople.role || "User"),
+          status: "Active",
+          phone: String(foundInPeople["เบอร์โทรศัพท์"] || foundInPeople.phone || ""),
+        };
+      }
+    }
+
+    if (!targetUser) {
+      setError("ไม่พบเบอร์โทรศัพท์หรือชื่อผู้ใช้นี้ในระบบ (สามารถกรอก 'admin' หรือเบอร์โทรศัพท์ในระบบ)");
       setLoading(false);
       return;
     }
@@ -96,11 +125,11 @@ export function LoginScreen({ peopleRows = [] }: { peopleRows?: SheetRow[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          employeeId: foundUser.username || foundUser.id || rawInput,
-          name: foundUser.displayName || foundUser.username || foundUser.id,
-          role: foundUser.role || "User",
-          pictureUrl: foundUser.pictureUrl || "",
-          lineUserId: foundUser.lineUserId || "",
+          employeeId: targetUser.username || targetUser.id || rawInput,
+          name: targetUser.displayName || targetUser.username || targetUser.id,
+          role: targetUser.role || "User",
+          pictureUrl: targetUser.pictureUrl || "",
+          lineUserId: targetUser.lineUserId || "",
         }),
       });
       window.location.href = "/";
