@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ArrowDownUp,
   BriefcaseBusiness,
   Building2,
   Car,
@@ -475,6 +476,25 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
                       <IdCard size={14} />
                     </span>
                     <span className="truncate">จัดการผู้ใช้ระบบ</span>
+                  </Link>
+
+                  <Link
+                    href="/settings/import-export"
+                    prefetch={false}
+                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-all duration-150 text-xs font-sans ${
+                      pathname.startsWith("/settings/import-export")
+                        ? "bg-[#d4f54e] text-[#0b3531] "
+                        : "text-[#a0b8b3] hover:text-white hover:bg-[#13443e] font-normal"
+                    }`}
+                  >
+                    <span
+                      className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                        pathname.startsWith("/settings/import-export") ? "bg-[#0b3531] text-[#d4f54e]" : "bg-[#072825] text-[#8ea8a3]"
+                      }`}
+                    >
+                      <ArrowDownUp size={14} />
+                    </span>
+                    <span className="truncate">นำเข้า / ส่งออกข้อมูล</span>
                   </Link>
                 </div>
               </div>

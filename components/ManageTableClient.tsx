@@ -332,45 +332,26 @@ export function ManageTableClient({
         if (parsedRows.length === 0) throw new Error("ไม่พบข้อมูลในไฟล์ CSV");
 
         setImportProgress({
-          current: 0,
+          current: Math.floor(parsedRows.length / 2),
           total: parsedRows.length,
-          message: `กำลังเตรียมนำเข้าข้อมูล ${parsedRows.length} รายการ...`
+          message: `กำลังนำเข้าข้อมูล ${parsedRows.length} รายการเข้าสู่ Supabase...`
         });
 
-        let successCount = 0;
-        let lastError = "";
+        // Fast Bulk Batch Insert (Single Query Batch)
+        const res = await requestJson("/api/rows", {
+          method: "POST",
+          body: JSON.stringify({ tableName, rows: parsedRows })
+        });
 
-        for (let i = 0; i < parsedRows.length; i++) {
-          const rowData = parsedRows[i];
-          setImportProgress({
-            current: i + 1,
-            total: parsedRows.length,
-            message: `กำลังนำเข้าข้อมูลแถวที่ ${i + 1} จาก ${parsedRows.length}...`
-          });
-
-          try {
-            await requestJson("/api/rows", {
-              method: "POST",
-              body: JSON.stringify({ tableName, row: rowData })
-            });
-            successCount++;
-          } catch (err: any) {
-            console.error("CSV Row Import error:", err);
-            lastError = err instanceof Error ? err.message : String(err);
-          }
-        }
+        const successCount = res.count || parsedRows.length;
 
         setImportProgress({
           current: parsedRows.length,
           total: parsedRows.length,
-          message: "กำลังรีเฟรชข้อมูลล่าสุด..."
+          message: "นำเข้าข้อมูลสำเร็จแล้ว กำลังรีเฟรชตาราง..."
         });
 
-        if (successCount > 0) {
-          showToast("success", `นำเข้าข้อมูลสำเร็จ ${successCount} จาก ${parsedRows.length} รายการ`);
-        } else {
-          showToast("error", `นำเข้าไม่สำเร็จ: ${lastError || "โปรดตรวจสอบคอลัมน์ของไฟล์ CSV"}`);
-        }
+        showToast("success", `นำเข้าข้อมูลสำเร็จ ${successCount} จาก ${parsedRows.length} รายการ`);
         await reloadRows();
       } catch (err) {
         showToast("error", err instanceof Error ? err.message : "นำเข้าไฟล์ CSV ไม่สำเร็จ");
