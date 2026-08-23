@@ -5,6 +5,7 @@ import { clearCache } from "@/lib/cache";
 import { createBillPdfFromTemplate, uploadBillImage } from "@/lib/drive";
 import { applyBillFormulas } from "@/lib/formulas";
 import { getFormSchema } from "@/lib/schemas";
+import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 import { appendAuditLog, appendRow, getRows } from "@/lib/db";
 import type { SheetRow } from "@/lib/types";
 
@@ -119,7 +120,12 @@ function isFieldVisible(field: ReturnType<typeof getFormSchema>[number], row: Sh
   const actual = row[field.showIf.column] || "";
   if (field.showIf.equals !== undefined) return String(actual) === field.showIf.equals;
   if (field.showIf.in) return field.showIf.in.includes(String(actual));
-  if (field.showIf.notBlank) return hasValue(actual);
+  if (field.showIf.notBlank) {
+    if (field.showIf.column === "vat") return isVatActive(actual);
+    if (field.showIf.column === "หัก") return parseDeductPercent(actual) > 0;
+    if (field.showIf.column === "เครดิต") return parseCreditDays(actual) > 0;
+    return hasValue(actual);
+  }
   return true;
 }
 

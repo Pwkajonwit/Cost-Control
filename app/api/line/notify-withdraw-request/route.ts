@@ -118,6 +118,17 @@ export async function POST(req: NextRequest) {
 
     const result = await sendFlexMessageDetailed(sendTo, altText, flex);
 
+    // Also notify the bill creator (if different from requester)
+    const creatorKey = String(firstBill["ผู้สร้างบิล"] || firstBill.created_by || firstBill["ผู้บันทึก"] || "").trim();
+    if (creatorKey && creatorKey !== requesterKey) {
+      const creatorUserId = await getLineUserIdByRequester(creatorKey);
+      if (creatorUserId && creatorUserId !== targetUserId) {
+        sendFlexMessageDetailed(creatorUserId, altText, flex).catch((e) =>
+          console.warn("Failed notifying bill creator on requester flex:", e)
+        );
+      }
+    }
+
     return NextResponse.json({ success: result.success, error: result.error, target: sendTo });
   } catch (err: any) {
     console.error("❌ Withdraw notification error:", err);

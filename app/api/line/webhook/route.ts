@@ -64,6 +64,19 @@ export async function POST(req: NextRequest) {
           );
         }
       }
+
+      // Handle Postback Event Actions (from Flex Buttons)
+      if (event.type === "postback" && event.postback?.data) {
+        const text = String(event.postback.data || "").trim();
+        const handled = await handleLineCommand(text, replyToken, targetId, userId);
+
+        if (!handled && replyToken && !replyToken.startsWith("00000000")) {
+          await replyTextMessage(
+            replyToken,
+            `ดำเนินการตามคำสั่ง "${text}" เรียบร้อยแล้วครับ`
+          );
+        }
+      }
     }
 
     return NextResponse.json({ status: "ok" });

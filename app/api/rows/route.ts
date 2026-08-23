@@ -6,6 +6,7 @@ import { PRIMARY_VIEWS, TABLE_KEYS, TABLES, VIEW_COLUMNS } from "@/lib/config";
 import { uploadTableImage } from "@/lib/drive";
 import { applyBillFormulas, applyContractFormulas, applyProjectFormulas } from "@/lib/formulas";
 import { getFormSchema } from "@/lib/schemas";
+import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 import { appendAuditLog, appendRow, bulkAppendRows, deleteRows, getRows, updateRow } from "@/lib/db";
 import type { SheetRow } from "@/lib/types";
 
@@ -279,7 +280,12 @@ function isFieldVisible(field: ReturnType<typeof getFormSchema>[number], row: Sh
   const actual = row[field.showIf.column] || "";
   if (field.showIf.equals !== undefined) return String(actual) === field.showIf.equals;
   if (field.showIf.in) return field.showIf.in.includes(String(actual));
-  if (field.showIf.notBlank) return hasRowValue(actual);
+  if (field.showIf.notBlank) {
+    if (field.showIf.column === "vat") return isVatActive(actual);
+    if (field.showIf.column === "หัก") return parseDeductPercent(actual) > 0;
+    if (field.showIf.column === "เครดิต") return parseCreditDays(actual) > 0;
+    return hasRowValue(actual);
+  }
   return true;
 }
 
