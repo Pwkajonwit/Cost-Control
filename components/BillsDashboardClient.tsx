@@ -362,7 +362,7 @@ export function BillsDashboardClient({
         ) : (
           <>
             {/* MOBILE COMPACT CARD FEED (High-Density & Fast Scanning) */}
-            <div className="block md:hidden divide-y divide-slate-100">
+            <div className="block md:hidden divide-y divide-slate-200 border-t border-slate-200">
               {visibleRows.map((row, idx) => {
                 const seq = String(row["ลำดับ"] || row._sheetRow || row.id || idx + 1);
                 const statusStr = String(row["สถานะ"] || "รออนุมัติ").trim();

@@ -221,10 +221,12 @@ export function isCreditActive(value: unknown): boolean {
 
 function computeTransferAmount(row: SheetRow) {
   const amount = hasValue(row["ยอดเงิน"]) ? toNumber(row["ยอดเงิน"]) : computeBillAmount(row);
-  const hasVat = isVatActive(row.vat);
-  const deductRate = parseDeductPercent(row["หัก"]);
+  const hasVat = isVatActive(row.vat ?? row["vat"] ?? row["VAT"]);
+  const deductRate = parseDeductPercent(row["หัก"] ?? row["หัก ณ ที่จ่าย"] ?? row["หักณที่จ่าย"]);
   const hasDeduct = deductRate > 0;
-  const customDeduct = hasValue(row["จำนวนหัก"]) ? toNumber(row["จำนวนหัก"]) : null;
+  const customDeduct = hasValue(row["จำนวนหัก"]) 
+    ? toNumber(row["จำนวนหัก"]) 
+    : (hasValue(row["3เปอร์เซ็น"]) ? toNumber(row["3เปอร์เซ็น"]) : null);
 
   if (!hasVat && !hasDeduct) return amount;
 
@@ -246,8 +248,8 @@ function computeTransferAmount(row: SheetRow) {
 }
 
 export function computeBillDeductMultiplier(row: SheetRow) {
-  const rate = parseDeductPercent(row["หัก"]);
-  const hasVat = isVatActive(row.vat);
+  const rate = parseDeductPercent(row["หัก"] ?? row["หัก ณ ที่จ่าย"] ?? row["หักณที่จ่าย"]);
+  const hasVat = isVatActive(row.vat ?? row["vat"] ?? row["VAT"]);
   if (rate <= 0) return 1;
   return hasVat ? 1 - (rate / 100 / 1.07) : 1 - (rate / 100);
 }

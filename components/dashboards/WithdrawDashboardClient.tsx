@@ -508,7 +508,7 @@ export function WithdrawDashboardClient({ rows, peopleRows, initialFilters = {},
         )}
 
         {/* MOBILE SELECTABLE CARD FEED */}
-        <div className="block md:hidden divide-y divide-slate-100">
+        <div className="block md:hidden divide-y divide-slate-200 border-t border-slate-200">
           {!visibleRows.length ? (
             <div className="p-8 text-center text-slate-400 text-xs font-medium">ไม่พบรายการตั้งเบิก</div>
           ) : (

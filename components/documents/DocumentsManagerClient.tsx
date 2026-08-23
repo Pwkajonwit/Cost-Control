@@ -70,6 +70,29 @@ export function DocumentsManagerClient({
     return map;
   }, [contractors]);
 
+  // Unique deduplicated project options for dropdown
+  const uniqueProjectOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    projects.forEach((p) => {
+      const id = String(p["ID Project"] || p.id || "").trim();
+      const name = String(p["ชื่อ Project"] || "").trim();
+      if (id && !map.has(id)) {
+        map.set(id, { id, name });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.id.localeCompare(b.id));
+  }, [projects]);
+
+  // Unique deduplicated contractor options for dropdown
+  const uniqueContractorOptions = useMemo(() => {
+    const set = new Set<string>();
+    contractors.forEach((c) => {
+      const name = String(c["ชื่อเล่น"] || c["ชื่อ-นามสกุล"] || c["id_Contractor"] || "").trim();
+      if (name) set.add(name);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "th"));
+  }, [contractors]);
+
   // Filter bills based on search, project, contractor, and filter tab
   const filteredBills = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
@@ -379,16 +402,12 @@ export function DocumentsManagerClient({
               onChange={(e) => setSelectedProject(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 focus:bg-white border border-slate-200 focus:border-slate-800 rounded-lg text-xs transition outline-none cursor-pointer"
             >
-              <option value="all">ทุกโครงการ ({projects.length})</option>
-              {projects.map((p) => {
-                const id = String(p["ID Project"] || p.id || "").trim();
-                const name = String(p["ชื่อ Project"] || "").trim();
-                return (
-                  <option key={id} value={id}>
-                    {id ? `[${id}] ` : ""}{name}
-                  </option>
-                );
-              })}
+              <option value="all">ทุกโครงการ ({uniqueProjectOptions.length})</option>
+              {uniqueProjectOptions.map((p) => (
+                <option key={`proj-opt-${p.id}`} value={p.id}>
+                  {p.id ? `[${p.id}] ` : ""}{p.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -399,15 +418,12 @@ export function DocumentsManagerClient({
               onChange={(e) => setSelectedContractor(e.target.value)}
               className="w-full px-3 py-2 bg-slate-50 focus:bg-white border border-slate-200 focus:border-slate-800 rounded-lg text-xs transition outline-none cursor-pointer"
             >
-              <option value="all">ทุกผู้รับเหมา/ร้านค้า ({contractors.length})</option>
-              {contractors.map((c) => {
-                const name = String(c["ชื่อเล่น"] || c["ชื่อ-นามสกุล"] || c["id_Contractor"] || "").trim();
-                return (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                );
-              })}
+              <option value="all">ทุกผู้รับเหมา/ร้านค้า ({uniqueContractorOptions.length})</option>
+              {uniqueContractorOptions.map((name) => (
+                <option key={`contractor-opt-${name}`} value={name}>
+                  {name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -418,7 +434,7 @@ export function DocumentsManagerClient({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse font-sans">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-semibold select-none">
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 select-none">
                 <th className="p-3 w-10 text-center">
                   <input
                     type="checkbox"
@@ -447,8 +463,8 @@ export function DocumentsManagerClient({
                   </td>
                 </tr>
               ) : (
-                filteredBills.map((row) => {
-                  const seq = String(row["ลำดับ"] || row["ลำดับtest"] || row._sheetRow || "");
+                filteredBills.map((row, rowIdx) => {
+                  const seq = String(row["ลำดับ"] || row["ลำดับtest"] || row._sheetRow || rowIdx);
                   const isSelected = selectedIds.includes(seq);
                   const projName = String(row["ชื่อ Project"] || "-");
                   const contractorName = String(row["ร้าน/บุคคล"] || row["ผู้รับเหมา"] || row["ร้านค้า"] || "-");
@@ -463,7 +479,7 @@ export function DocumentsManagerClient({
 
                   return (
                     <tr
-                      key={seq}
+                      key={`doc-bill-row-${seq}-${rowIdx}`}
                       className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
                         isSelected ? "bg-emerald-50/40" : ""
                       }`}

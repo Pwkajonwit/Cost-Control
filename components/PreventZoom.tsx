@@ -6,18 +6,22 @@ export function PreventZoom() {
   useEffect(() => {
     // 1. Disable multi-touch pinch zoom on mobile devices
     function handleTouchStart(e: TouchEvent) {
-      if (e.touches.length > 1) {
+      if (e.touches.length > 1 && e.cancelable) {
         e.preventDefault();
       }
     }
 
     // 2. Disable Safari gesture zoom (pinch gesture)
     function handleGestureStart(e: Event) {
-      e.preventDefault();
+      if (e.cancelable) {
+        e.preventDefault();
+      }
     }
 
     function handleGestureChange(e: Event) {
-      e.preventDefault();
+      if (e.cancelable) {
+        e.preventDefault();
+      }
     }
 
     // 3. Disable double-tap zoom
@@ -27,7 +31,9 @@ export function PreventZoom() {
       if (now - lastTouchTime <= 300) {
         const target = e.target as HTMLElement | null;
         if (target && !["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
-          e.preventDefault();
+          if (e.cancelable) {
+            e.preventDefault();
+          }
         }
       }
       lastTouchTime = now;

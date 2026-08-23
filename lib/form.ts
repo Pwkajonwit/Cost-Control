@@ -308,7 +308,7 @@ export async function getInitialValues(tableName: string): Promise<SheetRow> {
 
 async function nextDataSequence() {
   const [rows, sysOptions] = await Promise.all([
-    getRows(TABLES.DATA, 15_000).catch(() => []),
+    getRows(TABLES.DATA, 0).catch(() => []),
     getSystemOptions().catch(() => ({} as Record<string, any>))
   ]);
 

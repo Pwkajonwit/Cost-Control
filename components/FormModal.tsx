@@ -8,6 +8,7 @@ import {
   ArrowRight,
   Building2,
   Calculator,
+  Camera,
   Check,
   CheckCircle2,
   ClipboardList,
@@ -15,6 +16,8 @@ import {
   CreditCard,
   FileCheck,
   FileText,
+  Image as ImageIcon,
+  ImagePlus,
   Plus,
   Receipt,
   Save,
@@ -177,10 +180,12 @@ export function FormModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [attachedFilesByField, setAttachedFilesByField] = useState<Record<string, File[]>>({});
   const isEditing = editSheetRow !== null && editSheetRow !== undefined;
   const isDataForm = resolvedTableName === TABLES.DATA || resolvedTableName === "Data";
 
   const [resetKey, setResetKey] = useState(0);
+  const formBodyRef = useRef<HTMLDivElement>(null);
 
   // Sync if prop form changes
   useEffect(() => {
@@ -250,6 +255,7 @@ export function FormModal({
     setError("");
     setSuccessMessage("");
     setEnumListSearch({});
+    setAttachedFilesByField({});
     const targetRowKey = detail?.sheetRow ?? detail?.row?._sheetRow ?? detail?.row?.id ?? detail?.row?.id_bank ?? detail?.row?.id_store ?? detail?.row?.id_Contractor ?? detail?.row?.id_car ?? detail?.row?.id_cus ?? detail?.row?.id_Company;
     setEditSheetRow(detail?.row ? (targetRowKey !== undefined && targetRowKey !== null ? (typeof targetRowKey === "number" || typeof targetRowKey === "string" ? targetRowKey : String(targetRowKey)) : 1) : null);
     setValues(nextValues);
@@ -257,26 +263,44 @@ export function FormModal({
   }
 
   async function handleOpen(detail?: OpenFormDetail) {
-    // If activeForm is already cached, show modal immediately for 0ms delay
-    if (activeForm) {
+    setAttachedFilesByField({});
+    setError("");
+    setSuccessMessage("");
+
+    // If editing existing row, populate directly
+    if (detail?.row && activeForm) {
       populateFormValues(activeForm, detail);
       setOpen(true);
-      // Fetch fresh reference options in background so newly created projects/stores appear
       prefetchFormSchema(resolvedTableName, true).then(fresh => {
-        if (fresh) {
-          setActiveForm(fresh);
-        }
+        if (fresh) setActiveForm(fresh);
       });
       return;
     }
 
+    // Open modal immediately and fetch fresh real-time sequence from server
     setOpen(true);
-    setLoadingSchema(true);
+    if (activeForm) {
+      populateFormValues(activeForm, detail);
+    } else {
+      setLoadingSchema(true);
+    }
+
     try {
-      const loaded = await prefetchFormSchema(resolvedTableName, true);
-      if (loaded) {
-        setActiveForm(loaded);
-        populateFormValues(loaded, detail);
+      const fresh = await prefetchFormSchema(resolvedTableName, true);
+      if (fresh) {
+        setActiveForm(fresh);
+        if (!detail?.row) {
+          const freshInitial = getInitialStringValues(fresh);
+          setValues(prev => {
+            const next = { ...prev };
+            if (freshInitial["ลำดับ"]) next["ลำดับ"] = freshInitial["ลำดับ"];
+            if (freshInitial["ID Project"] && !next["ID Project"]) next["ID Project"] = freshInitial["ID Project"];
+            if (freshInitial["id_Conwork"] && !next["id_Conwork"]) next["id_Conwork"] = freshInitial["id_Conwork"];
+            return next;
+          });
+        } else {
+          populateFormValues(fresh, detail);
+        }
       }
     } finally {
       setLoadingSchema(false);
@@ -348,6 +372,7 @@ export function FormModal({
     const validationError = validateVisibleRequiredFields(submitValues, activeForm);
     if (validationError) {
       setError(validationError);
+      formBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -358,13 +383,27 @@ export function FormModal({
     if (isEditing && editSheetRow !== null) body.set("sheetRow", String(editSheetRow));
 
     let hasFiles = false;
-    formElement.querySelectorAll<HTMLInputElement>('input[type="file"]').forEach(input => {
-      Array.from(input.files || []).forEach(file => {
-        if (file.size > 0) {
+
+    // 1. Append all attached files from state
+    Object.entries(attachedFilesByField).forEach(([fieldName, files]) => {
+      files.forEach(file => {
+        if (file && file.size > 0) {
           hasFiles = true;
-          body.append(input.name, file);
+          body.append(fieldName, file);
         }
       });
+    });
+
+    // 2. Also fallback check any native file inputs
+    formElement.querySelectorAll<HTMLInputElement>('input[type="file"]').forEach(input => {
+      if (!attachedFilesByField[input.name]) {
+        Array.from(input.files || []).forEach(file => {
+          if (file.size > 0) {
+            hasFiles = true;
+            body.append(input.name, file);
+          }
+        });
+      }
     });
 
     setSaving(true);
@@ -394,6 +433,8 @@ export function FormModal({
         window.dispatchEvent(new CustomEvent("schema-cache-invalidated"));
       }
 
+      setAttachedFilesByField({});
+
       if (isEditing) {
         setOpen(false);
         setEditSheetRow(null);
@@ -405,17 +446,48 @@ export function FormModal({
           router.refresh();
         }
       } else {
-        // Reset form to allow immediate creation of the next bill
+        // Reset form & verify fresh sequence from server for the next entry
         formElement.reset();
-        setValues(getInitialStringValues(activeForm));
+
+        const freshForm = await prefetchFormSchema(activeForm.tableName, true);
+        if (freshForm) {
+          setActiveForm(freshForm);
+        }
+
+        const prevSeq = String(payload.row?.["ลำดับ"] || payload.row?.["ลำดับtest"] || submitValues["ลำดับ"] || "");
+        const prevSeqNum = Number(prevSeq);
+
+        let nextSeq = freshForm?.initialValues?.["ลำดับ"] ? String(freshForm.initialValues["ลำดับ"]) : "";
+        if (prevSeqNum > 0 && (!nextSeq || Number(nextSeq) <= prevSeqNum)) {
+          nextSeq = String(prevSeqNum + 1);
+        }
+
+        const baseValues = freshForm ? getInitialStringValues(freshForm) : getInitialStringValues(activeForm);
+        if (nextSeq && (activeForm.tableName === TABLES.DATA || activeForm.tableName === "Data")) {
+          baseValues["ลำดับ"] = nextSeq;
+        }
+
+        setValues(baseValues);
         setEnumListSearch({});
+        setAttachedFilesByField({});
         setError("");
-        setSuccessMessage("บันทึกรายการเรียบร้อยแล้ว สามารถสร้างรายการถัดไปต่อได้เลย");
+        setSuccessMessage(
+          prevSeq
+            ? `บันทึกรายการบิลลำดับที่ ${prevSeq} สำเร็จเรียบร้อย! ระบบเตรียมเลขลำดับถัดไป (#${nextSeq || Number(prevSeq) + 1}) ให้พร้อมกรอกต่อแล้ว`
+            : "บันทึกรายการเรียบร้อยแล้ว สามารถสร้างรายการถัดไปต่อได้เลย"
+        );
         setResetKey(k => k + 1);
+
+        // Scroll to the very top smoothly so user sees success alert & top of form
+        setTimeout(() => {
+          formBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+        }, 50);
+
         router.refresh();
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "บันทึกไม่สำเร็จ");
+      formBodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSaving(false);
     }
@@ -480,7 +552,7 @@ export function FormModal({
             </header>
 
             {/* Form Content */}
-            <div className="p-3.5 sm:p-6 overflow-y-auto flex-1 space-y-3.5 bg-slate-50/70 overscroll-contain">
+            <div ref={formBodyRef} className="p-3.5 sm:p-6 overflow-y-auto flex-1 space-y-3.5 bg-slate-50/70 overscroll-contain">
               {loadingSchema || !activeForm ? (
                 <div className="py-16 flex flex-col items-center justify-center gap-3 text-center">
                   <div className="w-9 h-9 border-3 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
@@ -496,6 +568,38 @@ export function FormModal({
                   ) : null}
 
                   <fieldset className="space-y-4 border-0 p-0 m-0" disabled={saving}>
+                    {/* Top Notification Alerts */}
+                    {successMessage ? (
+                      <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs flex items-center justify-between animate-in fade-in duration-150 font-normal">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                          <span>{successMessage}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSuccessMessage("")}
+                          className="text-emerald-600 hover:text-emerald-800 transition cursor-pointer p-0.5"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {error ? (
+                      <div className="p-3 bg-rose-50 text-rose-700 rounded-lg border border-rose-200 text-xs font-normal flex items-center justify-between animate-in fade-in duration-150">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                          <span>{error}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setError("")}
+                          className="text-rose-600 hover:text-rose-800 transition cursor-pointer p-0.5"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : null}
 
                     {/* Bill Category Budget Guardrail */}
                     {isDataForm ? (
@@ -533,7 +637,9 @@ export function FormModal({
                                       value => updateValue(field, value),
                                       enumListSearch[field.name] || "",
                                       value => setEnumListSearch(current => ({ ...current, [field.name]: value })),
-                                      resetKey
+                                      resetKey,
+                                      attachedFilesByField[field.name] || [],
+                                      files => setAttachedFilesByField(current => ({ ...current, [field.name]: files }))
                                     )}
                                   </div>
                                 ))}
@@ -569,7 +675,9 @@ export function FormModal({
                                       value => updateValue(field, value),
                                       enumListSearch[field.name] || "",
                                       value => setEnumListSearch(current => ({ ...current, [field.name]: value })),
-                                      resetKey
+                                      resetKey,
+                                      attachedFilesByField[field.name] || [],
+                                      files => setAttachedFilesByField(current => ({ ...current, [field.name]: files }))
                                     )}
                                   </div>
                                 ))}
@@ -594,7 +702,9 @@ export function FormModal({
                                 value => updateValue(field, value),
                                 enumListSearch[field.name] || "",
                                 value => setEnumListSearch(current => ({ ...current, [field.name]: value })),
-                                resetKey
+                                resetKey,
+                                attachedFilesByField[field.name] || [],
+                                files => setAttachedFilesByField(current => ({ ...current, [field.name]: files }))
                               )}
                             </div>
                           ))}
@@ -605,24 +715,6 @@ export function FormModal({
                     {activeForm.tableName === TABLES.PROJECT || activeForm.tableName === "Project" ? (
                       <ProjectBudgetAllocator values={values} onChange={updateValueByName} />
                     ) : null}
-
-                    {successMessage ? (
-                      <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs flex items-center justify-between animate-in fade-in duration-150">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                          <span>{successMessage}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSuccessMessage("")}
-                          className="text-emerald-600 hover:text-emerald-800 transition cursor-pointer"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : null}
-
-                    {error ? <div className="p-3 bg-rose-50 text-rose-700 rounded-lg border border-rose-200 text-xs ">{error}</div> : null}
                   </fieldset>
                 </>
               )}
@@ -675,115 +767,200 @@ function ImageFileFieldInput({
   value,
   readOnly,
   onChange,
+  attachedFiles = [],
+  onAttachedFilesChange,
   resetKey = 0
 }: {
   field: FieldSchema;
   value: string;
   readOnly: boolean;
   onChange: (value: string) => void;
+  attachedFiles?: File[];
+  onAttachedFilesChange: (files: File[]) => void;
   resetKey?: number;
 }) {
-  const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Existing image URLs from database (comma-separated string)
+  const existingUrls = value
+    ? value
+        .split(/\s*,\s*|\s*;\s*|\n+/)
+        .map(u => u.trim())
+        .filter(Boolean)
+    : [];
+
+  // Local object URLs for previewing newly attached files
+  const [filePreviews, setFilePreviews] = useState<Array<{ file: File; url: string }>>([]);
+
   useEffect(() => {
-    setSelectedFilePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  }, [value, resetKey]);
+    const previews = attachedFiles.map(file => ({
+      file,
+      url: URL.createObjectURL(file)
+    }));
+    setFilePreviews(previews);
 
-  const previewUrl = imagePreviewUrl(value);
+    return () => {
+      previews.forEach(p => URL.revokeObjectURL(p.url));
+    };
+  }, [attachedFiles, resetKey]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFilePreview(URL.createObjectURL(file));
-    } else {
-      setSelectedFilePreview(null);
-    }
-  };
-
-  const handleRemoveExisting = () => {
-    onChange("");
-    setSelectedFilePreview(null);
+  const handleFilesAdded = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFiles = Array.from(e.target.files || []);
+    if (!newFiles.length) return;
+    onAttachedFilesChange([...attachedFiles, ...newFiles]);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  const handleRemoveSelectedFile = () => {
-    setSelectedFilePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+  const handleRemoveExisting = (indexToRemove: number) => {
+    const updated = existingUrls.filter((_, idx) => idx !== indexToRemove);
+    onChange(updated.join(", "));
   };
+
+  const handleRemoveNewFile = (indexToRemove: number) => {
+    const updated = attachedFiles.filter((_, idx) => idx !== indexToRemove);
+    onAttachedFilesChange(updated);
+  };
+
+  const totalImageCount = existingUrls.length + attachedFiles.length;
 
   return (
-    <div className="space-y-2">
-      {/* Existing Uploaded Image Preview with Delete Button */}
-      {previewUrl ? (
-        <div className="flex items-center gap-3 p-2 bg-slate-50 border border-slate-200 rounded-lg">
-          <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-200 bg-slate-900 shrink-0">
-            <img src={previewUrl} alt="รูปเดิม" className="w-full h-full object-cover" />
+    <div className="space-y-2.5">
+      {/* Hidden File Input for triggering native camera / file picker */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        name={field.name}
+        accept={field.type === "Image" ? "image/*" : undefined}
+        multiple
+        disabled={readOnly}
+        onChange={handleFilesAdded}
+        className="hidden"
+      />
+
+      {/* Grid of All Photos (Existing + Newly Attached) */}
+      {totalImageCount > 0 ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-600 font-normal">
+            <span className="flex items-center gap-1.5">
+              <Camera size={14} className="text-slate-500" />
+              <span>รูปภาพที่แนบทั้งหมด ({totalImageCount} รูป)</span>
+            </span>
+            {existingUrls.length > 0 && attachedFiles.length > 0 ? (
+              <span className="text-[11px] text-slate-400 font-normal">
+                (รูปเดิม {existingUrls.length} รูป + รูปใหม่ {attachedFiles.length} รูป)
+              </span>
+            ) : null}
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="text-xs text-slate-800 block truncate">รูปภาพที่เคยอัปโหลด</span>
-            <span className="text-xs text-slate-400 font-mono block truncate">{value}</span>
+
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+            {/* 1. Existing Uploaded Images */}
+            {existingUrls.map((url, idx) => {
+              const preview = imagePreviewUrl(url);
+              return (
+                <div
+                  key={`existing-img-${url}-${idx}`}
+                  className="group relative aspect-square rounded-md overflow-hidden border border-slate-300 bg-slate-100 flex flex-col justify-between"
+                >
+                  <img
+                    src={preview || url}
+                    alt={`รูปเดิม ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-1 left-1 bg-slate-900/80 text-white text-[9px] px-1 py-0.2 rounded font-mono">
+                    เดิม #{idx + 1}
+                  </div>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveExisting(idx)}
+                      className="absolute top-1 right-1 w-5 h-5 bg-rose-600 hover:bg-rose-700 text-white rounded-full flex items-center justify-center transition cursor-pointer active:scale-90"
+                      title="ลบรูปนี้"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* 2. Newly Attached Files (Pending Upload) */}
+            {filePreviews.map(({ file, url }, idx) => (
+              <div
+                key={`new-file-${file.name}-${idx}`}
+                className="group relative aspect-square rounded-md overflow-hidden border border-sky-400 bg-sky-50 flex flex-col justify-between animate-in fade-in zoom-in-95 duration-100"
+              >
+                <img
+                  src={url}
+                  alt={`รูปใหม่ ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-1 left-1 bg-sky-700 text-white text-[9px] px-1 py-0.2 rounded font-normal">
+                  ใหม่ #{idx + 1}
+                </div>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveNewFile(idx)}
+                    className="absolute top-1 right-1 w-5 h-5 bg-rose-600 hover:bg-rose-700 text-white rounded-full flex items-center justify-center transition cursor-pointer active:scale-90"
+                    title="ลบรูปนี้"
+                  >
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+            ))}
+
+            {/* Quick Add More Tile inside the grid */}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="aspect-square rounded-md border-2 border-dashed border-slate-300 hover:border-slate-800 hover:bg-white bg-slate-100/60 flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-slate-900 transition cursor-pointer active:scale-95"
+                title="กดเพื่อแนบรูปเพิ่มอีก"
+              >
+                <Plus size={18} />
+                <span className="text-[10px] text-center leading-tight font-normal">แนบเพิ่ม</span>
+              </button>
+            )}
           </div>
-          {!readOnly && (
-            <button
-              type="button"
-              onClick={handleRemoveExisting}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs rounded-lg border border-rose-200 transition cursor-pointer shrink-0"
-              title="ลบรูปภาพที่อัปโหลดไว้"
-            >
-              <Trash2 size={13} />
-              <span>ลบรูปภาพ</span>
-            </button>
-          )}
         </div>
       ) : null}
 
-      {/* Selected New File Preview */}
-      {selectedFilePreview ? (
-        <div className="flex items-center gap-3 p-2 bg-sky-50 border border-sky-200 rounded-lg">
-          <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-sky-300 bg-slate-900 shrink-0">
-            <img src={selectedFilePreview} alt="รูปใหม่" className="w-full h-full object-cover" />
+      {/* Main Upload Dropzone / Button (Shown when no images attached yet) */}
+      {!readOnly && totalImageCount === 0 && (
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="border-2 border-dashed border-slate-300 hover:border-slate-700 hover:bg-slate-50 rounded-lg p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group active:scale-[0.99]"
+        >
+          <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors">
+            <Camera size={20} />
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="text-xs text-sky-900 block">เลือกไฟล์ใหม่แล้ว</span>
-            <span className="text-xs text-sky-600 font-medium block">พร้อมบันทึกอัปโหลดใหม่</span>
+          <div>
+            <div className="text-xs text-slate-800 font-normal">
+              กดเพื่อถ่ายรูป หรือเลือกรูปภาพจากเครื่อง
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5 font-normal">
+              สามารถแนบทีละรูป หรือเลือกหลายรูปพร้อมกันได้
+            </div>
           </div>
-          {!readOnly && (
-            <button
-              type="button"
-              onClick={handleRemoveSelectedFile}
-              className="inline-flex items-center gap-1 px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 text-xs rounded-lg border border-slate-200 transition cursor-pointer shrink-0"
-            >
-              <X size={13} />
-              <span>ยกเลิก</span>
-            </button>
-          )}
         </div>
-      ) : null}
+      )}
 
-      {/* File Input Selector */}
-      <div className="space-y-1">
-        <input
-          ref={fileInputRef}
-          type="file"
-          name={field.name}
-          accept={field.type === "Image" ? "image/*" : undefined}
-          multiple={field.type === "Image"}
-          disabled={readOnly}
-          onChange={handleFileChange}
-          className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border border-slate-300 file:text-xs file:file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition-colors cursor-pointer"
-        />
-        {field.type === "Image" && !previewUrl && !selectedFilePreview ? (
-          <small className="text-xs text-slate-400 block font-medium">บนมือถือเลือกถ่ายรูปหรือแนบจากเครื่องได้</small>
-        ) : null}
-      </div>
+      {/* Action button when images already exist */}
+      {!readOnly && totalImageCount > 0 && (
+        <div className="flex items-center gap-2 pt-0.5">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 py-2 px-3 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-md text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 font-normal"
+          >
+            <ImagePlus size={14} className="text-slate-600" />
+            <span>ถ่ายรูป / แนบรูปเพิ่มอีก</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -797,7 +974,9 @@ function renderField(
   onChange: (value: string) => void,
   enumSearchValue = "",
   onEnumSearchChange: (value: string) => void = () => {},
-  resetKey = 0
+  resetKey = 0,
+  attachedFiles: File[] = [],
+  onAttachedFilesChange: (files: File[]) => void = () => {}
 ) {
   const readOnly = Boolean(field.readonly || (isEditing && field.readonlyOnEdit));
   if (field.type === "Image" || field.type === "File") {
@@ -807,6 +986,8 @@ function renderField(
         value={value}
         readOnly={readOnly}
         onChange={onChange}
+        attachedFiles={attachedFiles}
+        onAttachedFilesChange={onAttachedFilesChange}
         resetKey={resetKey}
       />
     );
