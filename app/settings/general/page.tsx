@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { CompanySettings } from "@/lib/types";
 import { DEFAULT_COMPANY_SETTINGS } from "@/lib/types";
+import { compressImageFile } from "@/lib/image-compressor";
 
 export default function GeneralSettingsPage() {
   const [settings, setSettings] = useState<CompanySettings>(DEFAULT_COMPANY_SETTINGS);
@@ -57,8 +58,9 @@ export default function GeneralSettingsPage() {
     setErrorMsg("");
 
     try {
+      const compressed = await compressImageFile(file, 800, 0.85);
       const formData = new FormData();
-      formData.append("logoFile", file);
+      formData.append("logoFile", compressed);
 
       const res = await fetch("/api/company-settings", {
         method: "POST",

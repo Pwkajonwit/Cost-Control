@@ -997,6 +997,22 @@ table td {
   border: 1px solid #cbd5e1 !important;
   background: #ffffff !important;
   color: #0f172a !important;
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+}
+
+/* Fix iOS WebKit date input expanding beyond container */
+input[type="date"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
 }
 
 .field input:focus,

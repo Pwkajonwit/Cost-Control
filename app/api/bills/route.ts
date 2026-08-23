@@ -120,6 +120,11 @@ function validateRequiredBySchema(row: SheetRow, tableName: string) {
 }
 
 function isFieldVisible(field: ReturnType<typeof getFormSchema>[number], row: SheetRow) {
+  if (field.name === "วันได้บิล") {
+    const hasVat = isVatActive(row["vat"]);
+    const hasCredit = parseCreditDays(row["เครดิต"]) > 0;
+    return hasVat && !hasCredit;
+  }
   if (!field.showIf) return true;
   const actual = row[field.showIf.column] || "";
   if (field.showIf.equals !== undefined) return String(actual) === field.showIf.equals;
