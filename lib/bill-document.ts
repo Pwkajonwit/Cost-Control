@@ -225,3 +225,41 @@ export async function getBillDocumentData(
     rawBill: billRow,
   };
 }
+
+export async function getMultipleBillsDocumentData(
+  billIdsOrRows: (string | SheetRow)[],
+  preloaded?: {
+    bills?: SheetRow[];
+    projects?: SheetRow[];
+    companies?: SheetRow[];
+    contractors?: SheetRow[];
+    people?: SheetRow[];
+  }
+): Promise<BillDocumentModel[]> {
+  const [rawBills, projectRows, companyRows, contractorRows] = await Promise.all([
+    preloaded?.bills || getRows(TABLES.DATA).catch(() => []),
+    preloaded?.projects || getRows(TABLES.PROJECT).catch(() => []),
+    preloaded?.companies || getRows(TABLES.COMPANY).catch(() => []),
+    preloaded?.contractors || getRows(TABLES.CONTRACTOR).catch(() => []),
+  ]);
+
+  const bills = preloaded?.bills ? rawBills : await hydrateBillRows(rawBills);
+
+  const sharedContext = {
+    bills,
+    projects: projectRows,
+    companies: companyRows,
+    contractors: contractorRows,
+  };
+
+  const results: BillDocumentModel[] = [];
+
+  for (const item of billIdsOrRows) {
+    const doc = await getBillDocumentData(item, sharedContext);
+    if (doc) {
+      results.push(doc);
+    }
+  }
+
+  return results;
+}

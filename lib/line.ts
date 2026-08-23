@@ -51,13 +51,41 @@ export async function isLineApproverAuthorized(userId: string, targetId?: string
       return true;
     }
 
+    // Check users_list in system_options
+    const { data: usersRow } = await supabaseAdmin
+      .from("system_options")
+      .select("data")
+      .eq("id", "users_list")
+      .maybeSingle();
+
+    if (usersRow?.data && Array.isArray(usersRow.data)) {
+      for (const u of usersRow.data) {
+        if (u.status === "Inactive") continue;
+        const lineId = String(u.lineUserId || u.line_user_id || "").trim();
+        if (lineId && (lineId === userId || (targetId && lineId === targetId))) {
+          if (
+            u.isOwner ||
+            u.role === "Admin" ||
+            u.role === "Owner" ||
+            Boolean(u.canApprove) ||
+            Boolean(u.canCloseBill) ||
+            u.role === "Admin_Approver" ||
+            u.role === "Approver" ||
+            u.role === "Manager"
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+
     const { data: member } = await supabaseAdmin
       .from("master_members")
       .select("*")
       .or(`line_user_id.eq.${userId},id.eq.${userId}`)
       .maybeSingle();
 
-    if (member && (member.role === "Admin" || member["สิทธิ์การใช้งาน"] === "Admin")) {
+    if (member && (member.role === "Admin" || member["สิทธิ์การใช้งาน"] === "Admin" || member.role === "Admin_Approver" || member.role === "Approver")) {
       return true;
     }
 

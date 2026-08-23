@@ -77,6 +77,7 @@ export const PRIMARY_VIEWS = [
   { id: "contract-open", name: "เปิดจ้าง", type: "table", table: TABLES.CONTRACT_WORK, position: "next" },
   { id: "bill-follow", name: "ตามบิล", type: "dashboard", position: "next", items: ["ตาม vat", "หัก 3", "หัก 3 บริษัท", "เครดิต"] },
   { id: "work-status", name: "งานที่ทำ", type: "dashboard", position: "last", items: ["Project ทำอยู่", "Project เสร็จแล้ว"] },
+  { id: "documents", name: "เอกสาร", type: "dashboard", position: "next", items: ["สัญญาจ้างเหมา", "ใบสำคัญจ่าย", "หนังสือรับรอง 50 ทวิ", "พิมพ์ชุดเอกสาร"] },
   { id: "reports", name: "สรุปข้อมูล", type: "dashboard", position: "next", items: ["สรุปค่าของ", "สรุปค่าแรง", "ค่าแรงต่อคน", "ค่าของต่อร้าน"] },
   { id: "project-analytics", name: "สรุปโครงการ", type: "dashboard", position: "next", items: ["เปรียบเทียบงบประมาณ", "สัดส่วนรายจ่าย", "วิเคราะห์กำไร", "สถานะโครงการ"] },
   { id: "project-all", name: "1. Project รวม", type: "table", table: TABLES.PROJECT, position: "menu" },

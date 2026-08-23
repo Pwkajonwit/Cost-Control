@@ -1,6 +1,6 @@
 import { TABLES } from "@/lib/config";
 import { isCommittedBill } from "@/lib/bill-status";
-import { computeBillAmount, computeBillDeductMultiplier, computeBillTransferAmount, isVatActive } from "@/lib/project-summary";
+import { computeBillAmount, computeBillDeductMultiplier, computeBillTransferAmount, isVatActive, parseDeductPercent } from "@/lib/project-summary";
 import { getRows } from "@/lib/db";
 import type { SheetRow } from "@/lib/types";
 
@@ -85,9 +85,9 @@ export function applyProjectFormulas(row: SheetRow) {
   const vatAmount = toNumber(output["ยอดรวม vat"]);
 
   if (workAmount > 0 && (!hasValue(output["ยอดรวม vat"]) || vatAmount === 0)) {
-    output["ยอดรวม vat"] = Math.round(workAmount * 1.07);
+    output["ยอดรวม vat"] = Math.round(workAmount * 1.07 * 100) / 100;
   } else if (vatAmount > 0 && (!hasValue(output["ยอดงาน"]) || workAmount === 0)) {
-    output["ยอดงาน"] = Math.round(vatAmount / 1.07);
+    output["ยอดงาน"] = Math.round((vatAmount / 1.07) * 100) / 100;
   }
 
   // Calculate overall budget cap "งบไม่เกิน"
@@ -365,7 +365,7 @@ function deductAmount(row: SheetRow) {
   if (hasValue(row["จำนวนหัก"])) return toNumber(row["จำนวนหัก"]);
   const hasVat = isVatActive(row.vat);
   const baseAmt = toNumber(row["ยอดเงิน"]) || toNumber(row["ค่าแรง+พนักงาน+อื่น"]);
-  const deductRate = toNumber(row["หัก"]);
+  const deductRate = parseDeductPercent(row["หัก"]);
   if (deductRate <= 0 || baseAmt <= 0) return 0;
   if (hasVat) {
     return (baseAmt / 1.07) * (deductRate / 100);

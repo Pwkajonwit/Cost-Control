@@ -397,28 +397,82 @@ export async function handleLineCommand(
       return true;
     }
 
-    // 4.9 Send for Approval Command ("ส่งไปเพื่ออนุมัติบิลลำดับที่:", "ส่งไปเพื่ออนุมัติ:")
+    // 4.9 Send for Approval Command ("ส่งต่อให้ผู้อนุมัติ", "ส่งไปเพื่ออนุมัติ", "ส่งอนุมัติ", etc.)
     if (
       rawText.startsWith("ส่งไปเพื่ออนุมัติบิลลำดับที่:") ||
       rawText.startsWith("ส่งไปเพื่ออนุมัติ:") ||
-      rawText.startsWith("ส่งไปเพื่ออนุมัติบิล:")
+      rawText.startsWith("ส่งไปเพื่ออนุมัติบิล:") ||
+      rawText === "ส่งไปเพื่ออนุมัติ" ||
+      rawText.startsWith("ส่งต่อให้ผู้อนุมัติ:") ||
+      rawText.startsWith("ส่งต่อให้ผู้อนุมัติ") ||
+      rawText.startsWith("ส่งต่อผู้อนุมัติ:") ||
+      rawText.startsWith("ส่งต่อผู้อนุมัติ") ||
+      rawText.startsWith("ส่งต่อ:") ||
+      rawText.startsWith("ส่งให้ผู้อนุมัติ:") ||
+      rawText.startsWith("ส่งให้ผู้อนุมัติ") ||
+      rawText.startsWith("ส่งขออนุมัติ:") ||
+      rawText.startsWith("ส่งขออนุมัติ") ||
+      rawText.startsWith("ส่งอนุมัติ:") ||
+      rawText.startsWith("ส่งอนุมัติบิล:") ||
+      rawText.startsWith("ส่งอนุมัติบิลลำดับที่:") ||
+      rawText.startsWith("ส่งบิลเพื่ออนุมัติ:")
     ) {
-      const sheetRowStr = rawText.replace(/.*?:/, "").trim();
-      if (!sheetRowStr) {
-        await replyTextMessage(replyToken, "⚠️ กรุณาระบุลำดับบิลที่ต้องการส่งอนุมัติ");
-        return true;
-      }
+      const sheetRowStr = rawText
+        .replace(/^ส่งไปเพื่ออนุมัติบิลลำดับที่:|^ส่งไปเพื่ออนุมัติ:|^ส่งไปเพื่ออนุมัติบิล:|^ส่งไปเพื่ออนุมัติ|^ส่งต่อให้ผู้อนุมัติ:|^ส่งต่อให้ผู้อนุมัติ|^ส่งต่อผู้อนุมัติ:|^ส่งต่อผู้อนุมัติ|^ส่งต่อ:|^ส่งให้ผู้อนุมัติ:|^ส่งให้ผู้อนุมัติ|^ส่งขออนุมัติ:|^ส่งขออนุมัติ|^ส่งอนุมัติ:|^ส่งอนุมัติบิล:|^ส่งอนุมัติบิลลำดับที่:|^ส่งบิลเพื่ออนุมัติ:/i, "")
+        .trim();
 
       const { getRowsFromSupabase } = await import("@/lib/supabase-db");
       const { getLineConfigIds, createWithdrawOwnerFlex, sendFlexMessageDetailed } = await import("@/lib/line");
       const { normalizeBillStatus } = await import("@/lib/bill-status");
-      const rawBills = await getRowsFromSupabase("Data", 1000);
+      const [rawBills, peopleRows] = await Promise.all([
+        getRowsFromSupabase("Data", 1000),
+        getRowsFromSupabase("master_members", 500).catch(() => []),
+      ]);
 
-      const targetIdList = sheetRowStr.split(",").map(id => id.trim()).filter(Boolean);
-      const targetBills = rawBills.filter(b => targetIdList.includes(String(b["ลำดับ"] || b.id || b._sheetRow || "").trim()));
+      const peopleMap = new Map<string, string>();
+      const nameToEmpIdMap = new Map<string, string>();
+      for (const p of peopleRows) {
+        const empId = String(p["รหัสพนักงาน"] || p.id || "").trim();
+        const empName = String(p["ชื่อเล่น"] || p["ชื่อ-นามสกุล"] || p.name || "").trim();
+        if (empId && empName) {
+          peopleMap.set(empId, empName);
+          nameToEmpIdMap.set(empName, empId);
+        }
+      }
+
+      const targetIdList = sheetRowStr.split(/[,,\s]+/).map(id => id.trim()).filter(Boolean);
+
+      let targetBills = rawBills.filter(b => {
+        const st = normalizeBillStatus(b["สถานะ"] || b.status);
+        // Only select bills that are pending approval
+        if (st === "อนุมัติ" || st === "เบิกแล้ว") return false;
+
+        if (!sheetRowStr || sheetRowStr === "ทั้งหมด" || sheetRowStr === "บิล") {
+          return true;
+        }
+
+        const bId = String(b["ลำดับ"] || b.id || b._sheetRow || "").trim();
+        if (targetIdList.includes(bId)) return true;
+
+        const bReq = String(b["ผู้เบิก"] || b.requester || "").trim();
+        const bReqName = peopleMap.get(bReq) || bReq;
+        const matchedEmpId = nameToEmpIdMap.get(sheetRowStr) || sheetRowStr;
+
+        return (
+          targetIdList.includes(bReq) ||
+          bReq === sheetRowStr ||
+          bReq === matchedEmpId ||
+          bReqName.toLowerCase().includes(sheetRowStr.toLowerCase())
+        );
+      });
 
       if (targetBills.length === 0) {
-        await replyTextMessage(replyToken, `🔍 ไม่พบรายการบิลลำดับที่ [${sheetRowStr}] ในระบบ`);
+        await replyTextMessage(
+          replyToken,
+          sheetRowStr && sheetRowStr !== "ทั้งหมด"
+            ? `🔍 ไม่พบรายการบิลที่รออนุมัติสำหรับ "${sheetRowStr}" ในระบบ`
+            : "🔍 ขณะนี้ไม่มีรายการบิลที่รอการอนุมัติในระบบครับ"
+        );
         return true;
       }
 
@@ -431,32 +485,54 @@ export async function handleLineCommand(
       if (pendingBills.length === 0) {
         await replyTextMessage(
           replyToken,
-          `⚠️ รายการบิลลำดับที่ [${sheetRowStr}] อยู่ในสถานะ "อนุมัติแล้ว" หรือ "ปิดงานแล้ว" เรียบร้อยแล้ว (ระบบป้องกันการสั่งอนุมัติซ้ำ)`
+          `⚠️ รายการบิลที่เลือกอยู่ในสถานะ "อนุมัติแล้ว" หรือ "ปิดงานแล้ว" เรียบร้อยแล้ว (ระบบป้องกันการสั่งอนุมัติซ้ำ)`
         );
         return true;
       }
 
-      const { ownerId } = await getLineConfigIds();
-      if (!ownerId) {
-        await replyTextMessage(replyToken, "⚠️ ยังไม่ได้ระบุ LINE User ID เจ้าของระบบ (OWN) ในการตั้งค่า LINE System");
+      const { ownerId, approverIds } = await getLineConfigIds();
+      const targetApprovers = Array.from(new Set([ownerId, ...(approverIds || [])].filter(Boolean)));
+
+      if (targetApprovers.length === 0) {
+        await replyTextMessage(
+          replyToken,
+          "⚠️ ยังไม่ได้ระบุ LINE User ID เจ้าของระบบ (OWN) หรือผู้อนุมัติ (Approver) ในการตั้งค่า LINE System กรุณาตรวจสอบที่เมนูตั้งค่า LINE ครับ"
+        );
         return true;
       }
 
-      const peopleMap = await getPeopleMap();
-      const flexForOwner = createWithdrawOwnerFlex(pendingBills, peopleMap);
+      const resolvedPeopleMap = await getPeopleMap();
+      const flexForOwner = createWithdrawOwnerFlex(pendingBills, resolvedPeopleMap);
       const totalAmount = pendingBills.reduce((sum, b) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
       const amountStr = totalAmount.toLocaleString("th-TH");
 
       const altText = pendingBills.length === 1
-        ? `📋 คำขออนุมัติเบิกเงิน #${sheetRowStr} (฿${amountStr})`
+        ? `📋 คำขออนุมัติเบิกเงิน #${pendingBills[0]["ลำดับ"] || pendingBills[0].id || ""} (฿${amountStr})`
         : `📋 คำขออนุมัติเบิกเงิน ${pendingBills.length} รายการ (รวม ฿${amountStr})`;
 
-      const result = await sendFlexMessageDetailed(ownerId, altText, flexForOwner);
+      let successCount = 0;
+      let lastError = "";
 
-      if (result.success) {
-        await replyTextMessage(replyToken, `✅ ส่งรายการตั้งเบิกบิลลำดับที่ [${sheetRowStr}] ไปยังเจ้าของระบบ (OWN / Admin) เพื่ออนุมัติเรียบร้อยแล้ว`);
+      for (const targetUserId of targetApprovers) {
+        const result = await sendFlexMessageDetailed(targetUserId, altText, flexForOwner);
+        if (result.success) {
+          successCount++;
+        } else {
+          lastError = result.error || "";
+        }
+      }
+
+      if (successCount > 0) {
+        const targetIdsStr = pendingBills.map(b => `#${b["ลำดับ"] || b.id || ""}`).join(", ");
+        await replyTextMessage(
+          replyToken,
+          `✅ ส่งรายการตั้งเบิก ${targetIdsStr} (${pendingBills.length} รายการ รวม ฿${amountStr}) ไปยังผู้อนุมัติ (${successCount} ท่าน) เพื่อพิจารณาอนุมัติเรียบร้อยแล้วครับ!`
+        );
       } else {
-        await replyTextMessage(replyToken, `❌ ไม่สามารถส่ง Flex ไปยังเจ้าของระบบได้: ${result.error || "ข้อผิดพลาด LINE API"}`);
+        await replyTextMessage(
+          replyToken,
+          `❌ ไม่สามารถส่ง Flex ไปยังผู้อนุมัติได้: ${lastError || "ข้อผิดพลาด LINE API กรุณาตรวจสอบสิทธิ์ LINE Bot"}`
+        );
       }
       return true;
     }

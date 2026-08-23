@@ -86,9 +86,9 @@ export function hydrateProjectRowsForList(projectRows: SheetRow[], dataRows: She
     const workAmount = toNumber(output["ยอดงาน"]);
     const vatAmount = toNumber(output["ยอดรวม vat"]);
     if (workAmount > 0 && (!hasValue(output["ยอดรวม vat"]) || vatAmount === 0)) {
-      output["ยอดรวม vat"] = Math.round(workAmount * 1.07);
+      output["ยอดรวม vat"] = Math.round(workAmount * 1.07 * 100) / 100;
     } else if (vatAmount > 0 && (!hasValue(output["ยอดงาน"]) || workAmount === 0)) {
-      output["ยอดงาน"] = Math.round(vatAmount / 1.07);
+      output["ยอดงาน"] = Math.round((vatAmount / 1.07) * 100) / 100;
     }
 
     // Calculate overall budget cap "งบไม่เกิน"
@@ -191,35 +191,45 @@ export function hydrateProjectSummary(project: SheetRow, projectDataRows: SheetR
 
 export function isVatActive(vatValue: unknown): boolean {
   if (vatValue === null || vatValue === undefined) return false;
-  const str = String(vatValue).trim();
-  return str !== "" && str !== "0" && str !== "0.00" && str !== "0%" && str !== "ไม่มี" && str !== "false";
+  const str = String(vatValue).trim().toLowerCase();
+  return str !== "" && str !== "0" && str !== "0.00" && str !== "0%" && str !== "ไม่มี" && str !== "ไม่มี vat" && str !== "false" && str !== "no";
+}
+
+export function parseDeductPercent(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  const str = String(value).trim();
+  if (str === "ไม่มี" || str === "0" || str === "0%" || str === "" || str === "false") return 0;
+  const match = str.match(/\d+(\.\d+)?/);
+  return match ? parseFloat(match[0]) : 0;
+}
+
+export function parseCreditDays(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  const str = String(value).trim();
+  if (str === "เงินสด" || str === "ไม่มี" || str === "0" || str === "" || str === "false") return 0;
+  const match = str.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
 }
 
 export function isDeductActive(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  const str = String(value).trim();
-  if (str === "" || str === "0" || str === "0.00" || str === "0%" || str === "ไม่มี" || str === "false") return false;
-  return toNumber(value) > 0;
+  return parseDeductPercent(value) > 0;
 }
 
 export function isCreditActive(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  const str = String(value).trim();
-  if (str === "" || str === "0" || str === "0.00" || str === "ไม่มี" || str === "false") return false;
-  return toNumber(value) > 0;
+  return parseCreditDays(value) > 0;
 }
 
 function computeTransferAmount(row: SheetRow) {
   const amount = hasValue(row["ยอดเงิน"]) ? toNumber(row["ยอดเงิน"]) : computeBillAmount(row);
   const hasVat = isVatActive(row.vat);
-  const hasDeduct = hasValue(row["หัก"]) && toNumber(row["หัก"]) > 0;
+  const deductRate = parseDeductPercent(row["หัก"]);
+  const hasDeduct = deductRate > 0;
   const customDeduct = hasValue(row["จำนวนหัก"]) ? toNumber(row["จำนวนหัก"]) : null;
 
   if (!hasVat && !hasDeduct) return amount;
 
   if (hasVat && hasDeduct) {
     if (customDeduct !== null && customDeduct > 0) return amount - customDeduct;
-    const deductRate = toNumber(row["หัก"]);
     const deductAmt = (amount / 1.07) * (deductRate / 100);
     return amount - deductAmt;
   }
@@ -228,7 +238,6 @@ function computeTransferAmount(row: SheetRow) {
 
   if (hasDeduct) {
     if (customDeduct !== null && customDeduct > 0) return amount - customDeduct;
-    const deductRate = toNumber(row["หัก"]);
     const deductAmt = (amount * deductRate) / 100;
     return amount - deductAmt;
   }
@@ -237,9 +246,8 @@ function computeTransferAmount(row: SheetRow) {
 }
 
 export function computeBillDeductMultiplier(row: SheetRow) {
-  const deduct = String(row["หัก"] || "").trim();
+  const rate = parseDeductPercent(row["หัก"]);
   const hasVat = isVatActive(row.vat);
-  const rate = toNumber(deduct);
   if (rate <= 0) return 1;
   return hasVat ? 1 - (rate / 100 / 1.07) : 1 - (rate / 100);
 }

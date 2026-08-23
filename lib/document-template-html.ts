@@ -319,40 +319,60 @@ export function renderBillDocumentHtml(
   data: BillDocumentModel,
   pageMode: "all" | "contract" | "voucher" | "tax50twi" = "all"
 ): string {
-  const replacements = buildTemplateReplacements(data);
+  return renderMultipleBillsDocumentHtml([data], pageMode);
+}
 
-  let p1 = PAGE_1_HTML_TEMPLATE;
-  let p2 = PAGE_2_HTML_TEMPLATE;
-  let p3 = PAGE_3_HTML_TEMPLATE;
-
-  for (const [key, value] of Object.entries(replacements)) {
-    const placeholder = `<<[${key}]>>`;
-    p1 = p1.split(placeholder).join(String(value ?? ""));
-    p2 = p2.split(placeholder).join(String(value ?? ""));
-    p3 = p3.split(placeholder).join(String(value ?? ""));
+export function renderMultipleBillsDocumentHtml(
+  dataList: BillDocumentModel[],
+  pageMode: "all" | "contract" | "voucher" | "tax50twi" = "all"
+): string {
+  if (!dataList || dataList.length === 0) {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8" />${DOCUMENT_PAGE_STYLES}</head><body><div class="a4-document-container"><div class="a4-page" style="display:flex;align-items:center;justify-content:center;color:#666;">ไม่พบข้อมูลเอกสาร</div></div></body></html>`;
   }
 
-  let pagesHtml = "";
-  if (pageMode === "all" || pageMode === "contract") {
-    pagesHtml += `<div class="a4-page a4-page-1">${p1}</div>`;
+  let allPagesHtml = "";
+
+  for (let idx = 0; idx < dataList.length; idx++) {
+    const data = dataList[idx];
+    const replacements = buildTemplateReplacements(data);
+
+    let p1 = PAGE_1_HTML_TEMPLATE;
+    let p2 = PAGE_2_HTML_TEMPLATE;
+    let p3 = PAGE_3_HTML_TEMPLATE;
+
+    for (const [key, value] of Object.entries(replacements)) {
+      const placeholder = `<<[${key}]>>`;
+      p1 = p1.split(placeholder).join(String(value ?? ""));
+      p2 = p2.split(placeholder).join(String(value ?? ""));
+      p3 = p3.split(placeholder).join(String(value ?? ""));
+    }
+
+    if (pageMode === "all" || pageMode === "contract") {
+      allPagesHtml += `<div class="a4-page a4-page-1" data-bill="${data.billSequence}">${p1}</div>`;
+    }
+    if (pageMode === "all" || pageMode === "voucher") {
+      allPagesHtml += `<div class="a4-page a4-page-2" data-bill="${data.billSequence}">${p2}</div>`;
+    }
+    if (pageMode === "all" || pageMode === "tax50twi") {
+      allPagesHtml += `<div class="a4-page a4-page-3" data-bill="${data.billSequence}">${p3}</div>`;
+    }
   }
-  if (pageMode === "all" || pageMode === "voucher") {
-    pagesHtml += `<div class="a4-page a4-page-2">${p2}</div>`;
-  }
-  if (pageMode === "all" || pageMode === "tax50twi") {
-    pagesHtml += `<div class="a4-page a4-page-3">${p3}</div>`;
-  }
+
+  const docTitle =
+    dataList.length === 1
+      ? `เอกสารบิล #${dataList[0].billSequence}`
+      : `ชุดเอกสาร (${dataList.length} รายการ)`;
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>เอกสารสัญญาจ้างและหนังสือรับรอง 50 ทวิ</title>
+  <title>${docTitle}</title>
   ${DOCUMENT_PAGE_STYLES}
 </head>
 <body>
   <div class="a4-document-container">
-    ${pagesHtml}
+    ${allPagesHtml}
   </div>
 </body>
 </html>`;

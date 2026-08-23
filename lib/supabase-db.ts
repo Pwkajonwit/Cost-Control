@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 export { supabaseAdmin };
 import { normalizeDateToIso } from "@/lib/dates";
 import { cached, clearCache } from "@/lib/cache";
+import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 
 export type SheetRow = Record<string, any>;
 
@@ -352,13 +353,21 @@ export function mapSheetRowToSupabaseRow(tableName: string, row: Record<string, 
     if (hasValue(rawAmount)) dbRow.amount = toNumber(rawAmount);
 
     const rawVat = row["vat"] ?? row.vat_amount;
-    if (hasValue(rawVat)) dbRow.vat_amount = String(rawVat).trim();
+    if (hasValue(rawVat)) {
+      const isVat = isVatActive(rawVat);
+      const parsed = parseDeductPercent(rawVat);
+      dbRow.vat_amount = isVat ? (parsed > 0 ? parsed : 7) : 0;
+    }
 
     const rawDeduct = row["หัก"] ?? row.withholding_tax;
-    if (hasValue(rawDeduct)) dbRow.withholding_tax = String(rawDeduct).trim();
+    if (hasValue(rawDeduct)) {
+      dbRow.withholding_tax = parseDeductPercent(rawDeduct);
+    }
 
     const rawCredit = row["เครดิต"] ?? row.credit_days;
-    if (hasValue(rawCredit)) dbRow.credit_days = String(rawCredit).trim();
+    if (hasValue(rawCredit)) {
+      dbRow.credit_days = parseCreditDays(rawCredit);
+    }
 
     const rawRequester = row["ผู้เบิก"] ?? row.requester;
     if (hasValue(rawRequester)) dbRow.requester = String(rawRequester).trim();
@@ -578,10 +587,12 @@ export async function getEntityBankMapFromSupabase(): Promise<Record<string, str
 
 export async function saveBillFollowDate(billId: string, patch: Record<string, any>) {
   if (!isSupabaseConfigured() || !billId) return;
-  const followKeys = ["วันได้บิล", "วันออก 3%", "วันจ่าย"];
+  const followKeys = ["วันได้บิล", "วันออก 3%", "วันจ่าย", "vat", "หัก", "จำนวนหัก", "3เปอร์", "เครดิต", "ยอดโอน"];
   const datesToSave: Record<string, string> = {};
   for (const k of followKeys) {
-    if (patch[k]) datesToSave[k] = String(patch[k]);
+    if (patch[k] !== undefined && patch[k] !== null && String(patch[k]).trim() !== "") {
+      datesToSave[k] = String(patch[k]).trim();
+    }
   }
   if (!Object.keys(datesToSave).length) return;
 
@@ -859,6 +870,12 @@ export async function getRowsFromSupabase(tableName: string, maxRows = 10_000): 
           if (dates["วันได้บิล"]) res["วันได้บิล"] = dates["วันได้บิล"];
           if (dates["วันออก 3%"]) res["วันออก 3%"] = dates["วันออก 3%"];
           if (dates["วันจ่าย"]) res["วันจ่าย"] = dates["วันจ่าย"];
+          if (dates["vat"]) res["vat"] = dates["vat"];
+          if (dates["หัก"]) res["หัก"] = dates["หัก"];
+          if (dates["จำนวนหัก"]) res["จำนวนหัก"] = dates["จำนวนหัก"];
+          if (dates["3เปอร์"]) res["3เปอร์"] = dates["3เปอร์"];
+          if (dates["เครดิต"]) res["เครดิต"] = dates["เครดิต"];
+          if (dates["ยอดโอน"]) res["ยอดโอน"] = dates["ยอดโอน"];
         }
       }
 
@@ -950,7 +967,6 @@ export async function getSystemOptionsFromSupabase(): Promise<Record<string, str
 const SYNCABLE_OPTION_FIELDS = [
   "ชื่อเครื่องมือ",
   "รายละเอียดงาน",
-  "สินค้า",
   "รายการ",
   "ยี่ห้อรถ",
   "ยี่ห้อ",
@@ -1099,6 +1115,12 @@ export async function insertRowToSupabase(tableName: string, rowData: Record<str
     if (res.error) {
       console.warn(`Failed to insert into Supabase '${dbTable}': ${res.error.message}`);
       throw new Error(`บันทึกลงตาราง '${dbTable}' ไม่สำเร็จ: ${res.error.message}`);
+    }
+
+    const insertedItem = Array.isArray(res.data) ? res.data[0] : res.data;
+    const insertedId = insertedItem?.id || rowData["ลำดับ"] || rowData.id;
+    if (insertedId && (dbTable === "bills" || tableName === "Data" || tableName === "bills")) {
+      await saveBillFollowDate(String(insertedId), rowData);
     }
 
     return res.data;
