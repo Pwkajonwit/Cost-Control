@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ClipboardList,
   Database,
+  FileText,
   FolderKanban,
   Gauge,
   HandCoins,
@@ -45,6 +46,7 @@ const ICONS: Record<string, any> = {
   "contract-open": BriefcaseBusiness,
   "bill-follow": ClipboardList,
   "work-status": FolderKanban,
+  documents: FileText,
   reports: PieChart,
   "project-analytics": Package,
   "project-all": FolderKanban,
@@ -68,6 +70,7 @@ function hrefFor(viewId: string) {
   if (viewId === "contract-open") return "/contract-open";
   if (viewId === "bill-follow") return "/bill-follow";
   if (viewId === "work-status") return "/work-status";
+  if (viewId === "documents") return "/documents";
   if (viewId === "reports") return "/reports";
   if (viewId === "project-analytics") return "/project-analytics";
   if (viewId === "settings") return "/settings";

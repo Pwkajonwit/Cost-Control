@@ -107,7 +107,7 @@ const DATA_FORM_SECTIONS: { id: string; title: string; iconName: string; fields:
     id: "basic",
     title: "ข้อมูลหลัก & โครงการ",
     iconName: "ClipboardList",
-    fields: ["ลำดับ", "ID Project", "บิล", "ผู้เบิก", "ว/ด/ป"]
+    fields: ["ลำดับ", "ID Project", "บิล", "ผู้เบิก", "ผู้สร้างบิล", "ว/ด/ป"]
   },
   {
     id: "vendor",
@@ -308,6 +308,12 @@ export function FormModal({
       applyRefFill(next, field, activeForm, value);
       normalizeDependentValues(next, field.name, activeForm);
       if (activeForm.tableName === TABLES.DATA && field.name === "จำนวนหัก") return next;
+      if (
+        (activeForm.tableName === TABLES.PROJECT || activeForm.tableName === "Project" || activeForm.tableName === "1. Project รวม") &&
+        field.name === "ยอดรวม vat"
+      ) {
+        return next;
+      }
       pruneHiddenConditionalValues(next, activeForm);
       applyLocalFormulas(next, activeForm.tableName);
       return next;
@@ -1019,17 +1025,31 @@ function renderField(
   const type = field.type === "Date" ? "date" : field.type === "Decimal" || field.type === "Number" ? "number" : "text";
   const inputMode = field.type === "Decimal" ? "decimal" : field.type === "Number" ? "numeric" : undefined;
 
+  const isProjectTable = form.tableName === TABLES.PROJECT || form.tableName === "Project" || form.tableName === "1. Project รวม";
+  const isProjectVatTotal = isProjectTable && field.name === "ยอดรวม vat";
+  const workAmount = isProjectTable ? toNumber(currentValues["ยอดงาน"]) : 0;
+  const totalVatNum = isProjectTable ? toNumber(value || (workAmount ? workAmount * 1.07 : 0)) : 0;
+  const vatAmount = workAmount > 0 ? Math.max(0, Math.round((totalVatNum - workAmount) * 100) / 100) : 0;
+
   return (
-    <input
-      type={type}
-      name={field.name}
-      value={billDateMode ? toDateInputValue(value) : value}
-      readOnly={readOnly}
-      inputMode={inputMode}
-      lang={billDateMode ? "th-TH" : undefined}
-      onChange={event => onChange(billDateMode ? normalizeBillDateInput(event.target.value) : event.target.value)}
-      className="w-full h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all"
-    />
+    <div className="space-y-1">
+      <input
+        type={type}
+        name={field.name}
+        value={billDateMode ? toDateInputValue(value) : value}
+        readOnly={readOnly}
+        inputMode={inputMode}
+        lang={billDateMode ? "th-TH" : undefined}
+        onChange={event => onChange(billDateMode ? normalizeBillDateInput(event.target.value) : event.target.value)}
+        className="w-full h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all"
+      />
+      {isProjectVatTotal && workAmount > 0 ? (
+        <div className="flex items-center justify-between text-[11px] bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-md border border-emerald-200">
+          <span>ภาษี VAT 7%: <strong className="font-semibold text-emerald-700">฿{vatAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+          <span className="text-slate-500 text-[10px]">(ยอดงาน ฿{workAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} + VAT ฿{vatAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })})</span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1477,7 +1497,7 @@ function normalizeDependentValues(values: Record<string, string>, changedField: 
 
   // Credit auto-calculate "วันจ่าย" from "วันได้บิล" (or "ว/ด/ป") + "เครดิต"
   if (changedField === "เครดิต" || changedField === "วันได้บิล" || changedField === "ว/ด/ป" || changedField === "วันที่") {
-    const creditDays = toNumber(values["เครดิต"]);
+    const creditDays = parseCreditDays(values["เครดิต"]);
     if (creditDays > 0) {
       const baseDate = values["วันได้บิล"] || values["ว/ด/ป"] || values["วันที่"];
       if (hasValue(baseDate)) {
@@ -1486,7 +1506,7 @@ function normalizeDependentValues(values: Record<string, string>, changedField: 
           values["วันจ่าย"] = dueDate;
         }
       }
-    } else if (changedField === "เครดิต" && (!values["เครดิต"] || values["เครดิต"] === "0")) {
+    } else if (changedField === "เครดิต" && (!values["เครดิต"] || values["เครดิต"] === "0" || values["เครดิต"] === "เงินสด")) {
       values["วันจ่าย"] = "";
     }
   }
@@ -1497,9 +1517,29 @@ function normalizeDependentValues(values: Record<string, string>, changedField: 
   }
 }
 
+function parseCreditDays(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  const str = String(value).trim();
+  if (str === "เงินสด" || str === "ไม่มี" || str === "0" || str === "" || str === "false") return 0;
+  const match = str.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+}
+
+function parseDeductPercent(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  const str = String(value).trim();
+  if (str === "ไม่มี" || str === "0" || str === "0%" || str === "" || str === "false") return 0;
+  const match = str.match(/\d+(\.\d+)?/);
+  return match ? parseFloat(match[0]) : 0;
+}
+
 function applyLocalFormulas(values: Record<string, string>, tableName: string) {
-  if (tableName === TABLES.PROJECT) {
-    if (hasValue(values["ยอดงาน"])) values["ยอดรวม vat"] = String(toNumber(values["ยอดงาน"]) * 1.07);
+  if (tableName === TABLES.PROJECT || tableName === "Project" || tableName === "1. Project รวม") {
+    if (hasValue(values["ยอดงาน"])) {
+      const workNum = toNumber(values["ยอดงาน"]);
+      const vatTotal = Math.round(workNum * 1.07 * 100) / 100;
+      values["ยอดรวม vat"] = String(vatTotal);
+    }
     return;
   }
   if (tableName === TABLES.DATA) {
@@ -1524,8 +1564,8 @@ function parseContractRemainingLabor(rawVal: string): { originalBalance: number;
 
 function isVatActive(vatValue: unknown): boolean {
   if (vatValue === null || vatValue === undefined) return false;
-  const str = String(vatValue).trim();
-  return str !== "" && str !== "0" && str !== "0.00" && str !== "0%" && str !== "ไม่มี" && str !== "false";
+  const str = String(vatValue).trim().toLowerCase();
+  return str !== "" && str !== "0" && str !== "0.00" && str !== "0%" && str !== "ไม่มี" && str !== "ไม่มี vat" && str !== "false" && str !== "no";
 }
 
 function applyBillDeductAmount(values: Record<string, string>) {
@@ -1539,7 +1579,7 @@ function applyBillDeductAmount(values: Record<string, string>) {
   }
 
   const deductValue = values["หัก"];
-  const deductPercent = toNumber(deductValue);
+  const deductPercent = parseDeductPercent(deductValue);
   let deductAmount = 0;
 
   const hasVat = isVatActive(values["vat"]);
@@ -1576,7 +1616,7 @@ function applyBillDeductAmount(values: Record<string, string>) {
   values["ยอดโอน"] = netTransfer > 0 ? formatDecimal(netTransfer) : (baseAmount > 0 ? String(baseAmount) : "");
 
   // Auto-calculate "วันจ่าย" from "วันได้บิล" (or "ว/ด/ป") + "เครดิต"
-  const creditDays = toNumber(values["เครดิต"]);
+  const creditDays = parseCreditDays(values["เครดิต"]);
   if (creditDays > 0) {
     const baseDate = values["วันได้บิล"] || values["ว/ด/ป"] || values["วันที่"];
     if (hasValue(baseDate)) {
@@ -1635,7 +1675,12 @@ function isFieldVisible(field: FieldSchema, values: Record<string, string>) {
   const actual = values[field.showIf.column] || "";
   if (field.showIf.equals !== undefined) return actual === field.showIf.equals;
   if (field.showIf.in) return field.showIf.in.includes(actual);
-  if (field.showIf.notBlank) return hasValue(actual);
+  if (field.showIf.notBlank) {
+    if (field.showIf.column === "vat") return isVatActive(actual);
+    if (field.showIf.column === "หัก") return parseDeductPercent(actual) > 0;
+    if (field.showIf.column === "เครดิต") return parseCreditDays(actual) > 0;
+    return hasValue(actual);
+  }
   return true;
 }
 

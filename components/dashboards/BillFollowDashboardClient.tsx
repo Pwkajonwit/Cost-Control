@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { money, toNumber } from "@/lib/numbers";
 import { formatDateDisplay, normalizeDateToIso } from "@/lib/dates";
+import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 import type { SheetRow } from "@/lib/types";
 
 const PAGE_SIZE_OPTIONS = [20, 40, 60, 100];
@@ -508,14 +509,14 @@ export function BillFollowDashboardClient({
               const amount = toNumber(row["ยอดเงิน"]);
               const daysElapsed = calculateDaysElapsed(row["ว/ด/ป"]);
 
-              const hasVat = toNumber(row.vat) > 0;
-              const hasDeduct = toNumber(row["หัก"]) > 0;
+              const hasVat = isVatActive(row.vat);
+              const hasDeduct = parseDeductPercent(row["หัก"]) > 0;
               const isCompany = String(row["statusค่าแรง"] || "").trim() === "บริษัท";
-              const hasCredit = Boolean(row["เครดิต"]);
+              const hasCredit = parseCreditDays(row["เครดิต"]) > 0;
 
               const isSaving = savingRowId === billId;
               const isCopied = copiedId === billId;
-              const isCompleted = completedRowIds.has(billId) || (toNumber(row.vat) > 0 && Boolean(row["วันได้บิล"])) || (toNumber(row["หัก"]) > 0 && Boolean(row["วันออก 3%"])) || (Boolean(row["เครดิต"]) && Boolean(row["วันจ่าย"]));
+              const isCompleted = completedRowIds.has(billId) || (hasVat && Boolean(row["วันได้บิล"])) || (hasDeduct && Boolean(row["วันออก 3%"])) || (hasCredit && Boolean(row["วันจ่าย"]));
 
               // Card aging border highlight
               const agingBorderClass =
@@ -663,10 +664,10 @@ export function BillFollowDashboardClient({
                 const amount = toNumber(row["ยอดเงิน"]);
                 const daysElapsed = calculateDaysElapsed(row["ว/ด/ป"]);
 
-                const hasVat = toNumber(row.vat) > 0;
-                const hasDeduct = toNumber(row["หัก"]) > 0;
+                const hasVat = isVatActive(row.vat);
+                const hasDeduct = parseDeductPercent(row["หัก"]) > 0;
                 const isCompany = String(row["statusค่าแรง"] || "").trim() === "บริษัท";
-                const hasCredit = Boolean(row["เครดิต"]);
+                const hasCredit = parseCreditDays(row["เครดิต"]) > 0;
 
                 const isSaving = savingRowId === billId;
                 const isCopied = copiedId === billId;
@@ -751,7 +752,7 @@ export function BillFollowDashboardClient({
                     {/* Actions: Mark Received & LINE Copy */}
                     <td className="py-2 px-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        {completedRowIds.has(billId) || (toNumber(row.vat) > 0 && Boolean(row["วันได้บิล"])) || (toNumber(row["หัก"]) > 0 && Boolean(row["วันออก 3%"])) || (Boolean(row["เครดิต"]) && Boolean(row["วันจ่าย"])) ? (
+                        {completedRowIds.has(billId) || (hasVat && Boolean(row["วันได้บิล"])) || (hasDeduct && Boolean(row["วันออก 3%"])) || (hasCredit && Boolean(row["วันจ่าย"])) ? (
                           <span className="px-2 py-1 bg-slate-100 text-slate-500 text-xs rounded border border-slate-200 cursor-not-allowed">
                             ได้บิลแล้ว
                           </span>

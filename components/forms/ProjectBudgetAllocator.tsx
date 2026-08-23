@@ -104,7 +104,9 @@ export function ProjectBudgetAllocator({
   const [productCategories, setProductCategories] = useState<CategoryItem[]>(DEFAULT_PRODUCT_CATEGORIES);
 
   const currentMode = String(values["คุมงบประเภทงาน"] || "คุมงบรายสินค้า (18 หมวด)");
-  const totalProjectBudget = toNumber(values["งบไม่เกิน"] || values["ยอดงาน"] || 0);
+  const workAmount = toNumber(values["ยอดงาน"]);
+  const budgetCap = toNumber(values["งบไม่เกิน"]);
+  const totalProjectBudget = workAmount > 0 ? workAmount : budgetCap;
 
   // Dynamically load category master data from /settings/product-categories options
   useEffect(() => {
@@ -190,7 +192,8 @@ export function ProjectBudgetAllocator({
 
   // Unallocated or over-allocated balance
   const remainingBudget = totalProjectBudget - totalAllocated;
-  const allocatedPercent = totalProjectBudget > 0 ? Math.min(100, Math.round((totalAllocated / totalProjectBudget) * 100)) : 0;
+  const allocatedPercent = totalProjectBudget > 0 ? (totalAllocated / totalProjectBudget) * 100 : 0;
+  const remainingPercent = totalProjectBudget > 0 ? (remainingBudget / totalProjectBudget) * 100 : 0;
 
   const modeOptions = [
     { key: "คุมงบรายสินค้า (18 หมวด)", label: `คุมงบรายสินค้า (${productCategories.length} หมวด)` },
@@ -214,8 +217,8 @@ export function ProjectBudgetAllocator({
             <h4 className="text-xs text-slate-800 flex items-center gap-2">
               <span>จัดสรรงบประมาณรายหมวดงาน (Category Budget Matrix)</span>
               {totalAllocated > 0 && (
-                <span className="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
-                  จัดสรรแล้ว {money(totalAllocated)} ฿ ({allocatedPercent}%)
+                <span className="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full font-medium">
+                  จัดสรรแล้ว {money(totalAllocated)} ฿ ({allocatedPercent.toFixed(1)}%)
                 </span>
               )}
             </h4>
@@ -261,15 +264,21 @@ export function ProjectBudgetAllocator({
             </div>
 
             {/* Quick KPI Strip */}
-            <div className="flex items-center gap-3 text-xs border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 sm:pl-3">
+            <div className="flex items-center gap-3 sm:gap-4 text-xs border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 sm:pl-3 flex-wrap">
               <div>
-                <span className="text-xs text-slate-400 block ">งบรวมโครงการ:</span>
-                <span className="text-slate-800">{money(totalProjectBudget)} ฿</span>
+                <span className="text-[11px] text-slate-400 block font-medium">งบรวมโครงการ:</span>
+                <span className="text-slate-900 font-semibold">{money(totalProjectBudget)} ฿</span>
               </div>
               <div>
-                <span className="text-xs text-slate-400 block ">คงเหลือจัดสรร:</span>
-                <span className={`${remainingBudget < 0 ? "text-rose-600 animate-pulse" : "text-emerald-700"}`}>
-                  {money(remainingBudget)} ฿
+                <span className="text-[11px] text-slate-400 block font-medium">จัดสรรแล้ว:</span>
+                <span className="text-slate-700 font-medium">
+                  {money(totalAllocated)} ฿ <span className="text-slate-500 font-normal">({allocatedPercent.toFixed(1)}%)</span>
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-slate-400 block font-medium">คงเหลือจัดสรร:</span>
+                <span className={`font-semibold ${remainingBudget < 0 ? "text-rose-600 animate-pulse" : "text-emerald-700"}`}>
+                  {money(remainingBudget)} ฿ <span className="font-normal text-xs">({remainingPercent.toFixed(1)}%)</span>
                 </span>
               </div>
             </div>
@@ -284,6 +293,7 @@ export function ProjectBudgetAllocator({
 
             {Object.entries(groupedCategories).map(([groupName, items]) => {
               const groupSum = items.reduce((sum, item) => sum + toNumber(values[item.field] || 0), 0);
+              const groupPercent = totalProjectBudget > 0 && groupSum > 0 ? (groupSum / totalProjectBudget) * 100 : 0;
 
               return (
                 <div key={groupName} className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs space-y-2">
@@ -297,8 +307,11 @@ export function ProjectBudgetAllocator({
                       </span>
                     </div>
                     {groupSum > 0 && (
-                      <span className="text-xs text-emerald-700 font-mono">
-                        รวมงบหมวดนี้: {money(groupSum)} ฿
+                      <span className="text-xs text-emerald-700 font-mono flex items-center gap-1.5">
+                        <span>รวมงบหมวดนี้: {money(groupSum)} ฿</span>
+                        <span className="text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                          {groupPercent.toFixed(1)}% ของงบรวม
+                        </span>
                       </span>
                     )}
                   </div>
@@ -307,18 +320,25 @@ export function ProjectBudgetAllocator({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-0.5">
                     {items.map((cat, idx) => {
                       const val = values[cat.field] !== undefined ? values[cat.field] : "";
+                      const numVal = toNumber(val);
+                      const itemPercent = totalProjectBudget > 0 && numVal > 0 ? (numVal / totalProjectBudget) * 100 : 0;
 
                       return (
                         <div
                           key={`${cat.field}-${idx}`}
                           className="bg-slate-50/60 border border-slate-200/80 hover:border-emerald-300 hover:bg-white rounded-lg p-2 transition flex items-center justify-between gap-2"
                         >
-                          <span className="text-xs text-slate-700 flex items-center gap-1.5 truncate">
+                          <div className="flex items-center gap-1.5 truncate min-w-0">
                             <Layers size={13} className="text-emerald-600 shrink-0" />
-                            <span className="truncate">{cat.label}</span>
-                          </span>
+                            <span className="text-xs text-slate-700 truncate">{cat.label}</span>
+                            {itemPercent > 0 && (
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1 rounded font-mono font-medium shrink-0" title={`คิดเป็น ${itemPercent.toFixed(1)}% ของงบรวมโครงการ`}>
+                                {itemPercent.toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
 
-                          <div className="flex items-center gap-1 shrink-0 w-32">
+                          <div className="flex items-center gap-1 shrink-0 w-28">
                             <input
                               type="number"
                               value={val}

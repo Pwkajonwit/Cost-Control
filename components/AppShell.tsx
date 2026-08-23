@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ClipboardList,
   FileSpreadsheet,
+  FileText,
   FolderKanban,
   Gauge,
   HandCoins,
@@ -38,6 +39,7 @@ const ICONS: Record<string, ComponentType<{ size?: number; strokeWidth?: number 
   "contract-open": BriefcaseBusiness,
   "bill-follow": ClipboardList,
   "work-status": FolderKanban,
+  documents: FileText,
   "project-all": FolderKanban,
   banks: WalletCards,
   categories: ClipboardList,
@@ -59,6 +61,7 @@ function hrefFor(view: (typeof PRIMARY_VIEWS)[number]) {
   if (view.id === "contract-open") return "/contract-open";
   if (view.id === "bill-follow") return "/bill-follow";
   if (view.id === "work-status") return "/work-status";
+  if (view.id === "documents") return "/documents";
   if (view.id === "reports") return "/reports";
   if (view.id === "project-analytics") return "/project-analytics";
   return `/views/${view.id}`;
