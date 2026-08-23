@@ -129,11 +129,7 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString()
           });
 
-        clearCache("sys_opt:all_options");
-        clearCache("sys_opt:all");
-        clearCache("rows:Data:15000");
-        clearCache("rows:Data:5000");
-        clearCache("rows:Data:1000");
+        clearCache();
       }
 
       return NextResponse.json({

@@ -6,7 +6,7 @@ import { createBillPdfFromTemplate, uploadBillImage } from "@/lib/drive";
 import { applyBillFormulas } from "@/lib/formulas";
 import { getFormSchema } from "@/lib/schemas";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
-import { appendAuditLog, appendRow, getRows } from "@/lib/db";
+import { appendAuditLog, appendRow, getRows, getSystemOptions } from "@/lib/db";
 import type { SheetRow } from "@/lib/types";
 
 const BILL_IMAGE_COLUMNS = ["รูปถ่ายบิล"];
@@ -67,7 +67,11 @@ async function readBillRow(request: NextRequest): Promise<SheetRow> {
         })
       )
     );
-    row[billImageField] = uploadedUrls.join(", ");
+    const existingVal = String(row[billImageField] || "").trim();
+    const existingUrls = existingVal
+      ? existingVal.split(",").map(u => u.trim()).filter(Boolean)
+      : [];
+    row[billImageField] = [...existingUrls, ...uploadedUrls].join(", ");
   }
 
   return ensureBillStatus(row);
@@ -436,22 +440,41 @@ function toNumber(value: unknown) {
 }
 
 async function ensureUniqueBillSequence(row: SheetRow) {
-  const rows = await getRows(TABLES.DATA, 15_000);
+  const [rows, sysOptions] = await Promise.all([
+    getRows(TABLES.DATA, 0),
+    getSystemOptions().catch(() => ({} as Record<string, any>))
+  ]);
+
+  const configuredStart = Number(
+    (sysOptions as any)?.["bill_start_sequence"] ||
+    (sysOptions as any)?.["ลำดับบิลเริ่มต้น"] ||
+    0
+  );
+
+  const maxFromRows = rows.reduce((max, existingRow) => {
+    return Math.max(max, ...SEQUENCE_COLUMNS.map(column => toSequenceNumber(existingRow[column])));
+  }, 0);
+
   const currentSequence = firstRowValue(row, SEQUENCE_COLUMNS).trim();
+  const currentSeqNum = Number(currentSequence);
+
   const usedSequences = new Set(
     rows
       .map(existingRow => firstRowValue(existingRow, SEQUENCE_COLUMNS).trim())
       .filter(Boolean)
   );
 
-  if (currentSequence && !usedSequences.has(currentSequence)) {
+  // If user provided sequence is valid, not used yet, and >= configuredStart
+  if (currentSequence && (configuredStart <= 0 || currentSeqNum >= configuredStart) && !usedSequences.has(currentSequence)) {
     row["ลำดับ"] = currentSequence;
     return row;
   }
 
-  const nextSequence = rows.reduce((max, existingRow) => {
-    return Math.max(max, ...SEQUENCE_COLUMNS.map(column => toSequenceNumber(existingRow[column])));
-  }, 0) + 1;
+  // Otherwise, automatically assign the next available unique sequence
+  const nextSequence = maxFromRows === 0
+    ? (configuredStart > 0 ? configuredStart : 1)
+    : (configuredStart > maxFromRows ? configuredStart : maxFromRows + 1);
+
   row["ลำดับ"] = String(nextSequence);
   return row;
 }

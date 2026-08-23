@@ -387,7 +387,11 @@ async function attachUploadedFiles(formData: FormData, tableName: string, row: S
         columnName
       }))
     );
-    row[columnName] = uploadedUrls.join(", ");
+    const existingVal = String(row[columnName] || "").trim();
+    const existingUrls = existingVal
+      ? existingVal.split(",").map(u => u.trim()).filter(Boolean)
+      : [];
+    row[columnName] = [...existingUrls, ...uploadedUrls].join(", ");
   }
 }
 

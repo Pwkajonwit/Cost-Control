@@ -14,7 +14,12 @@ import {
   FileText,
   Hash,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  ShieldAlert,
+  ArrowRight,
+  ArrowLeft,
+  Lock,
+  X
 } from "lucide-react";
 
 type SystemOptionsMap = Record<string, string[]>;
@@ -132,6 +137,23 @@ export default function SystemOptionsSettingsPage() {
   const [isUpdatingSeq, setIsUpdatingSeq] = useState<boolean>(false);
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [isResettingBills, setIsResettingBills] = useState<boolean>(false);
+  const [resetStep, setResetStep] = useState<1 | 2 | 3>(1);
+  const [acknowledgedRisk, setAcknowledgedRisk] = useState<boolean>(false);
+  const [confirmText, setConfirmText] = useState<string>("");
+
+  function openResetModal() {
+    setResetStep(1);
+    setAcknowledgedRisk(false);
+    setConfirmText("");
+    setShowResetModal(true);
+  }
+
+  function closeResetModal() {
+    setShowResetModal(false);
+    setResetStep(1);
+    setAcknowledgedRisk(false);
+    setConfirmText("");
+  }
 
   async function loadSequenceInfo() {
     try {
@@ -268,7 +290,7 @@ export default function SystemOptionsSettingsPage() {
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || "รีเซ็ตบิลไม่สำเร็จ");
 
-      setShowResetModal(false);
+      closeResetModal();
       setSuccessMsg(`ล้างข้อมูลบิลทั้งหมดและรีเซ็ตเลขเริ่มต้นเป็น ${val} สำเร็จ!`);
       await loadSequenceInfo();
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -281,7 +303,7 @@ export default function SystemOptionsSettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-8 text-center text-slate-500 font-sans text-xs flex items-center justify-center gap-2">
+      <div className="p-8 text-center text-slate-500 font-sans text-xs flex items-center justify-center gap-2 font-normal">
         <RefreshCw size={16} className="animate-spin text-emerald-600" />
         กำลังโหลดข้อมูลตัวเลือกระบบ...
       </div>
@@ -289,11 +311,11 @@ export default function SystemOptionsSettingsPage() {
   }
 
   return (
-    <div className="p-3 sm:p-5 max-w-5xl mx-auto space-y-3.5 font-sans text-xs text-slate-800">
+    <div className="p-3 sm:p-5 max-w-5xl mx-auto space-y-3.5 font-sans text-xs text-slate-800 font-normal">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 bg-white p-3 rounded-md border shadow-2xs">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 bg-white p-3 rounded-md border">
         <div>
-          <h1 className="text-sm font-medium text-slate-900 tracking-tight">ตั้งค่าตัวเลือก & เงื่อนไขระบบ (System Options)</h1>
+          <h1 className="text-sm text-slate-900 tracking-tight">ตั้งค่าตัวเลือก & เงื่อนไขระบบ (System Options)</h1>
           <p className="text-slate-500 text-xs mt-0.5">จัดการรายชื่อตัวเลือก Dropdown/Enum สำหรับแบบฟอร์มบันทึกบิลและรายการในระบบ</p>
         </div>
         <button
@@ -322,14 +344,14 @@ export default function SystemOptionsSettingsPage() {
       )}
 
       {/* BILL SEQUENCE & NUMBERING SECTION */}
-      <div className="bg-white border border-slate-200 rounded-md p-3.5 shadow-2xs space-y-3">
+      <div className="bg-white border border-slate-200 rounded-md p-3.5 space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
               <Hash size={15} />
             </div>
             <div>
-              <h2 className="text-xs font-semibold text-slate-900 m-0">จัดการเลขลำดับบิล (Bill Sequence & Reset)</h2>
+              <h2 className="text-xs text-slate-900 m-0">จัดการเลขลำดับบิล (Bill Sequence & Reset)</h2>
               <p className="text-[11px] text-slate-500 m-0">กำหนดเลขเริ่มต้นของบิลถัดไป หรือรีเซ็ตล้างข้อมูลบิลทดสอบเพื่อเริ่มนับเลขใหม่</p>
             </div>
           </div>
@@ -347,19 +369,19 @@ export default function SystemOptionsSettingsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
           <div className="bg-slate-50 border border-slate-200 rounded-md p-2.5">
             <div className="text-[11px] text-slate-500">เลขบิลสูงสุดในระบบปัจจุบัน</div>
-            <div className="text-sm font-semibold text-slate-800 mt-0.5">
+            <div className="text-sm text-slate-800 mt-0.5">
               {seqInfo ? (seqInfo.maxBillId > 0 ? `#${seqInfo.maxBillId}` : "ไม่มีรายการบิล (0)") : "-"}
             </div>
           </div>
           <div className="bg-slate-50 border border-slate-200 rounded-md p-2.5">
             <div className="text-[11px] text-slate-500">จำนวนบิลทั้งหมดในระบบ</div>
-            <div className="text-sm font-semibold text-slate-800 mt-0.5">
+            <div className="text-sm text-slate-800 mt-0.5">
               {seqInfo ? `${seqInfo.totalBills} รายการ` : "-"}
             </div>
           </div>
           <div className="bg-emerald-50/70 border border-emerald-200 rounded-md p-2.5">
-            <div className="text-[11px] text-emerald-700 font-medium">เลขบิลที่จะถูกสร้างถัดไป</div>
-            <div className="text-sm font-bold text-emerald-800 mt-0.5">
+            <div className="text-[11px] text-emerald-700">เลขบิลที่จะถูกสร้างถัดไป</div>
+            <div className="text-sm text-emerald-800 mt-0.5">
               {seqInfo ? `#${seqInfo.nextSequence}` : "-"}
             </div>
           </div>
@@ -368,7 +390,7 @@ export default function SystemOptionsSettingsPage() {
         {/* Setting Controls */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
           <div className="flex items-center gap-2 flex-1">
-            <label className="text-xs text-slate-700 whitespace-nowrap font-medium">
+            <label className="text-xs text-slate-700 whitespace-nowrap">
               เลขเริ่มต้นบิลถัดไป:
             </label>
             <input
@@ -393,8 +415,8 @@ export default function SystemOptionsSettingsPage() {
           <div>
             <button
               type="button"
-              onClick={() => setShowResetModal(true)}
-              className="w-full sm:w-auto px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded flex items-center justify-center gap-1.5 transition cursor-pointer text-xs font-medium"
+              onClick={openResetModal}
+              className="w-full sm:w-auto px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded flex items-center justify-center gap-1.5 transition cursor-pointer text-xs"
             >
               <RotateCcw size={12} />
               <span>ล้างบิลทดสอบทั้งหมด & เริ่มที่เลข {startSeqInput || 1}</span>
@@ -403,51 +425,198 @@ export default function SystemOptionsSettingsPage() {
         </div>
       </div>
 
-      {/* Confirmation Modal for Resetting Bills */}
+      {/* 3-Step Security Confirmation Modal for Resetting Bills */}
       {showResetModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl p-5 max-w-sm w-full shadow-2xl border border-slate-200 space-y-3.5">
-            <div className="flex items-center gap-2.5 text-rose-600">
-              <div className="p-2 bg-rose-100 rounded-lg">
-                <AlertTriangle size={20} />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-lg p-4 sm:p-5 max-w-md w-full border border-slate-200 space-y-4">
+            
+            {/* Header & Step Indicator */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <div className="p-1.5 bg-rose-50 border border-rose-200 text-rose-600 rounded">
+                  <ShieldAlert size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm text-slate-900 leading-tight">
+                    ระบบป้องกันการลบข้อมูล (ยืนยัน {resetStep}/3)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">ล้างข้อมูลบิลทั้งหมดออกจากระบบ</p>
+                </div>
               </div>
-              <h3 className="text-sm font-semibold text-slate-900 leading-tight">
-                ยืนยันการล้างข้อมูลบิลทั้งหมด?
-              </h3>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              การดำเนินการนี้จะ <b>ลบรายการบิลทั้งหมด ({seqInfo?.totalBills || 0} รายการ)</b> ออกจากระบบอย่างถาวร และตั้งค่าให้การสร้างบิลใหม่เริ่มต้นนับที่เลข <b>#{startSeqInput || 1}</b>
-            </p>
-
-            <div className="flex gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setShowResetModal(false)}
+                onClick={closeResetModal}
                 disabled={isResettingBills}
-                className="flex-1 py-2 border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-50 transition cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded hover:bg-slate-100 transition cursor-pointer"
               >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={handleResetBills}
-                disabled={isResettingBills}
-                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs rounded shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 font-medium"
-              >
-                {isResettingBills ? (
-                  <>
-                    <RefreshCw size={13} className="animate-spin" />
-                    <span>กำลังล้างข้อมูล...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={13} />
-                    <span>ยืนยันล้างข้อมูล</span>
-                  </>
-                )}
+                <X size={16} />
               </button>
             </div>
+
+            {/* Step Progress Bar */}
+            <div className="grid grid-cols-3 gap-1.5">
+              <div className={`h-1.5 rounded transition-all ${resetStep >= 1 ? "bg-rose-500" : "bg-slate-200"}`} />
+              <div className={`h-1.5 rounded transition-all ${resetStep >= 2 ? "bg-rose-500" : "bg-slate-200"}`} />
+              <div className={`h-1.5 rounded transition-all ${resetStep >= 3 ? "bg-rose-500" : "bg-slate-200"}`} />
+            </div>
+
+            {/* STEP 1: IMPACT AUDIT */}
+            {resetStep === 1 && (
+              <div className="space-y-3 animate-in fade-in duration-150">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-900 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 text-amber-800">
+                    <AlertTriangle size={14} className="shrink-0" />
+                    <span>แจ้งเตือน: ตรวจสอบผลกระทบ (ขั้นตอนที่ 1 จาก 3)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-700 leading-relaxed pl-5">
+                    การดำเนินการนี้จะลบรายการบิลทั้งหมดที่มีอยู่ในฐานข้อมูล <b>จำนวน {seqInfo?.totalBills || 0} รายการ</b> ออกจากระบบอย่างถาวร
+                  </p>
+                </div>
+
+                <div className="space-y-1.5 bg-slate-50 p-2.5 rounded border border-slate-200 text-xs text-slate-700">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">จำนวนบิลที่จะถูกลบ:</span>
+                    <span className="text-rose-600">{seqInfo?.totalBills || 0} รายการ</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">เลขเริ่มต้นบิลใหม่:</span>
+                    <span className="text-slate-900">#{startSeqInput || 1}</span>
+                  </div>
+                </div>
+
+                <div className="p-2 bg-rose-50 border border-rose-200 rounded text-rose-800 text-[11px] leading-relaxed">
+                  ⚠️ <b>คำเตือน:</b> หากระบบนี้เริ่มใช้งานจริงและมีบิลของบริษัทอยู่แล้ว <b>ห้ามกดดำเนินการต่อ</b> ให้กดยกเลิกทันที!
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeResetModal}
+                    className="flex-1 py-2 border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResetStep(2)}
+                    className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs rounded transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span>ยืนยันครั้งที่ 1 (ไปขั้นตอนที่ 2)</span>
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 2: RISK ACKNOWLEDGEMENT */}
+            {resetStep === 2 && (
+              <div className="space-y-3 animate-in fade-in duration-150">
+                <div className="p-3 bg-orange-50 border border-orange-200 rounded text-orange-900 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 text-orange-800">
+                    <AlertTriangle size={14} className="shrink-0" />
+                    <span>แจ้งเตือน: ยืนยันความเสี่ยงข้อมูลสูญหาย (ขั้นตอนที่ 2 จาก 3)</span>
+                  </div>
+                  <p className="text-[11px] text-orange-700 leading-relaxed pl-5">
+                    ข้อมูลค่าใช้จ่าย ยอดเงิน เอกสารแนบ และประวัติการติดตามบิลทั้งหมดจะถูกลบทิ้ง <b>ไม่สามารถกู้คืน (Undo) ได้ทุกกรณี</b>
+                  </p>
+                </div>
+
+                <label className="flex items-start gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={acknowledgedRisk}
+                    onChange={(e) => setAcknowledgedRisk(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 shrink-0 cursor-pointer"
+                  />
+                  <span className="text-xs text-slate-700 leading-relaxed">
+                    ข้าพเจ้ายืนยันและรับทราบว่า ข้อมูลบิลทั้งหมด {seqInfo?.totalBills || 0} รายการจะถูกลบถาวร และยอมรับความเสี่ยงนี้
+                  </span>
+                </label>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setResetStep(1)}
+                    className="py-2 px-3 border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-50 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <ArrowLeft size={13} />
+                    <span>ย้อนกลับ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResetStep(3)}
+                    disabled={!acknowledgedRisk}
+                    className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded transition flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>ยืนยันครั้งที่ 2 (ไปขั้นตอนสุดท้าย)</span>
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: SECURITY KEYWORD CONFIRMATION */}
+            {resetStep === 3 && (
+              <div className="space-y-3 animate-in fade-in duration-150">
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded text-rose-900 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 text-rose-800">
+                    <Lock size={14} className="shrink-0" />
+                    <span>ขั้นตอนสุดท้าย: พิมพ์ข้อความเพื่อปลดล็อก (ขั้นตอนที่ 3 จาก 3)</span>
+                  </div>
+                  <p className="text-[11px] text-rose-700 leading-relaxed pl-5">
+                    เพื่อป้องกันการกดพลาดโดยไม่ตั้งใจ กรุณาพิมพ์คำว่า:
+                  </p>
+                  <div className="pl-5 pt-1">
+                    <span className="inline-block px-2 py-1 bg-white border border-rose-300 rounded text-rose-900 font-mono text-xs select-all">
+                      ยืนยันลบข้อมูลทั้งหมด
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] text-slate-600">พิมพ์คำยืนยันด้านล่าง:</label>
+                  <input
+                    type="text"
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder="พิมพ์ ยืนยันลบข้อมูลทั้งหมด"
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-slate-900 text-xs focus:outline-none focus:border-rose-600 focus:ring-1 focus:ring-rose-600"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setResetStep(2)}
+                    disabled={isResettingBills}
+                    className="py-2 px-3 border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-50 transition cursor-pointer flex items-center gap-1"
+                  >
+                    <ArrowLeft size={13} />
+                    <span>ย้อนกลับ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetBills}
+                    disabled={isResettingBills || confirmText.trim() !== "ยืนยันลบข้อมูลทั้งหมด"}
+                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs rounded transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
+                  >
+                    {isResettingBills ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" />
+                        <span>กำลังล้างข้อมูล...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={13} />
+                        <span>🔥 ยืนยันล้างข้อมูลบิลทั้งหมด (ลบถาวร)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}
