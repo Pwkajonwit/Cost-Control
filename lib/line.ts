@@ -1506,7 +1506,9 @@ function normalizeUri(uri?: string): string {
 export async function getLineUserIdByRequester(requesterKey: string): Promise<string> {
   if (!requesterKey) return "";
   try {
-    const trimmed = String(requesterKey).trim().toLowerCase();
+    const rawStr = String(requesterKey).trim();
+    const trimmed = rawStr.toLowerCase();
+    const normalized = trimmed.replace(/['"`\s\-_]/g, "");
 
     // 1. Query users_list in system_options (Primary source from User Management)
     const { data: usersRow } = await supabaseAdmin
@@ -1515,21 +1517,30 @@ export async function getLineUserIdByRequester(requesterKey: string): Promise<st
       .eq("id", "users_list")
       .maybeSingle();
 
-    if (usersRow?.data && Array.isArray(usersRow.data)) {
-      const match = usersRow.data.find((u: any) => {
+    const usersList: any[] = (usersRow?.data && Array.isArray(usersRow.data)) ? usersRow.data : [];
+
+    if (usersList.length > 0) {
+      const match = usersList.find((u: any) => {
         const dName = String(u.displayName || "").trim().toLowerCase();
+        const normDName = dName.replace(/['"`\s\-_]/g, "");
         const uName = String(u.username || "").trim().toLowerCase();
+        const normUName = uName.replace(/['"`\s\-_]/g, "");
         const uId = String(u.id || "").trim().toLowerCase();
+        const normUId = uId.replace(/['"`\s\-_]/g, "");
         const phone = String(u.phone || "").replace(/[^0-9]/g, "");
         const cleanReq = trimmed.replace(/[^0-9]/g, "");
 
         return (
           dName === trimmed ||
+          normDName === normalized ||
           uName === trimmed ||
+          normUName === normalized ||
           uId === trimmed ||
+          normUId === normalized ||
           (cleanReq && phone && phone === cleanReq) ||
           dName.includes(trimmed) ||
-          trimmed.includes(dName)
+          trimmed.includes(dName) ||
+          (normDName && normalized && (normDName.includes(normalized) || normalized.includes(normDName)))
         );
       });
 
@@ -1545,23 +1556,45 @@ export async function getLineUserIdByRequester(requesterKey: string): Promise<st
     if (members && members.length > 0) {
       const match = members.find(m => {
         const id = String(m.id || "").trim().toLowerCase();
+        const normId = id.replace(/['"`\s\-_]/g, "");
         const empId = String(m["รหัสพนักงาน"] || "").trim().toLowerCase();
-        const nickname = String(m["ชื่อเล่น"] || "").trim().toLowerCase();
-        const fullname = String(m["ชื่อ-นามสกุล"] || "").trim().toLowerCase();
+        const normEmpId = empId.replace(/['"`\s\-_]/g, "");
+        const nickname = String(m["ชื่อเล่น"] || m.nickname || "").trim().toLowerCase();
+        const normNick = nickname.replace(/['"`\s\-_]/g, "");
+        const fullname = String(m["ชื่อ-นามสกุล"] || m.full_name || "").trim().toLowerCase();
+        const normFull = fullname.replace(/['"`\s\-_]/g, "");
         const name = String(m.name || "").trim().toLowerCase();
 
         return (
           id === trimmed ||
+          normId === normalized ||
           empId === trimmed ||
+          normEmpId === normalized ||
           nickname === trimmed ||
+          normNick === normalized ||
+          (normalized === "jame" && normNick === "เจมส์") ||
+          (normalized === "james" && normNick === "เจมส์") ||
           fullname === trimmed ||
           name === trimmed ||
           fullname.includes(trimmed) ||
-          trimmed.includes(nickname)
+          trimmed.includes(nickname) ||
+          (normFull && normalized && (normFull.includes(normalized) || normalized.includes(normFull)))
         );
       });
+
       if (match?.line_user_id) return String(match.line_user_id).trim();
       if (match?.["LINE User ID"]) return String(match["LINE User ID"]).trim();
+
+      // Cross-reference matched member with usersList by member ID
+      const matchedMemberId = String(match?.id || match?.["รหัสพนักงาน"] || "").trim().toLowerCase();
+      if (matchedMemberId && usersList.length > 0) {
+        const linkedUser = usersList.find(u => {
+          const uId = String(u.id || "").trim().toLowerCase();
+          const uName = String(u.username || "").trim().toLowerCase();
+          return uId === matchedMemberId || uName === matchedMemberId;
+        });
+        if (linkedUser?.lineUserId) return String(linkedUser.lineUserId).trim();
+      }
     }
 
     // 3. Query users table

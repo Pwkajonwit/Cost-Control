@@ -118,8 +118,9 @@ export async function getSystemOptions(): Promise<Record<string, string[]>> {
  * Insert new row into Supabase
  */
 export async function appendRow(tableName: string, row: TableRow) {
+  let result: any = null;
   try {
-    await insertRowToSupabase(tableName, row);
+    result = await insertRowToSupabase(tableName, row);
   } catch (e) {
     console.warn(`Supabase appendRow failed for ${tableName}:`, e);
     throw e;
@@ -127,6 +128,7 @@ export async function appendRow(tableName: string, row: TableRow) {
   clearCache(`rows:${tableName}`);
   clearCache(`headers:${tableName}`);
   clearCache("rows:");
+  return result;
 }
 
 export const createTableRow = appendRow;

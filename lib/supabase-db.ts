@@ -193,6 +193,18 @@ export function mapSupabaseRowToSheetRow(dbTable: string, row: Record<string, an
     res["เครื่องจักร"] = row.machine_cost ?? row["เครื่องจักร"] ?? dataObj["เครื่องจักร"] ?? "";
     res["เครื่องมือ"] = row.tool_cost ?? row["เครื่องมือ"] ?? dataObj["เครื่องมือ"] ?? "";
     res["อื่นๆ"] = row.other_cost ?? row["อื่นๆ"] ?? dataObj["อื่นๆ"] ?? "";
+
+    const cat = String(res["ประเภท"] || row.category || "").trim();
+    const amt = row.amount ?? res["ยอดเงิน"] ?? "";
+    if (cat.startsWith("1.") || cat.includes("ค่าของ")) res["ค่าของ"] = res["ค่าของ"] || amt;
+    if (cat.startsWith("2.") || cat.includes("ค่าแรง")) res["ค่าแรง"] = res["ค่าแรง"] || amt;
+    if (cat.startsWith("3.") || cat.includes("พนักงาน")) res["พนักงาน"] = res["พนักงาน"] || amt;
+    if (cat.startsWith("4.") || cat.includes("น้ำมัน")) res["น้ำมัน"] = res["น้ำมัน"] || amt;
+    if (cat.startsWith("5.") || cat.includes("ซ่อมรถ")) res["ซ่อมรถ"] = res["ซ่อมรถ"] || amt;
+    if (cat.startsWith("6.") || cat.includes("เครื่องจักร")) res["เครื่องจักร"] = res["เครื่องจักร"] || amt;
+    if (cat.startsWith("7.") || cat.includes("เครื่องมือ")) res["เครื่องมือ"] = res["เครื่องมือ"] || amt;
+    if (cat.startsWith("8.") || cat.includes("อื่นๆ")) res["อื่นๆ"] = res["อื่นๆ"] || amt;
+
     res["statusค่าแรง"] = row.labor_status ?? row.status_labor ?? row["statusค่าแรง"] ?? dataObj["statusค่าแรง"] ?? "";
     res["ยอดโอน"] = row.transfer_amount ?? row["ยอดโอน"] ?? dataObj["ยอดโอน"] ?? "";
     res["วันได้บิล"] = row.bill_received_date ?? row["วันได้บิล"] ?? dataObj["วันได้บิล"] ?? "";
@@ -204,6 +216,10 @@ export function mapSupabaseRowToSheetRow(dbTable: string, row: Record<string, an
     res["ร้านค้า/ผู้รับเหมา"] = row.vendor_type ?? row["ร้านค้า/ผู้รับเหมา"] ?? dataObj["ร้านค้า/ผู้รับเหมา"] ?? "";
     res["สินค้า"] = row.product ?? row["สินค้า"] ?? dataObj["สินค้า"] ?? "";
     res["รายละเอียดงาน"] = row.work_details ?? row["รายละเอียดงาน"] ?? dataObj["รายละเอียดงาน"] ?? "";
+    res["รายการ"] = row.sub_category ?? row.item_name ?? row["รายการ"] ?? dataObj["รายการ"] ?? "";
+    res["ชื่อเครื่องมือ"] = row.tool_name ?? row["ชื่อเครื่องมือ"] ?? dataObj["ชื่อเครื่องมือ"] ?? "";
+    res["ทะเบียน"] = row.plate_no ?? row["ทะเบียน"] ?? dataObj["ทะเบียน"] ?? "";
+    res["ชื่อพนักงาน"] = row.staff_name ?? row["ชื่อพนักงาน"] ?? dataObj["ชื่อพนักงาน"] ?? "";
   } else if (dbTable === "projects") {
     res["ID Project"] = row.id ?? row["ID Project"];
     res["_sheetRow"] = row.id ?? row._sheetRow;
@@ -424,6 +440,7 @@ export function mapSheetRowToSupabaseRow(tableName: string, row: Record<string, 
     if (hasValue(row["ร้านค้า/ผู้รับเหมา"] ?? row.vendor_type)) dbRow.vendor_type = String(row["ร้านค้า/ผู้รับเหมา"] ?? row.vendor_type).trim();
     if (hasValue(row["สินค้า"] ?? row.product)) dbRow.product = String(row["สินค้า"] ?? row.product).trim();
     if (hasValue(row["รายละเอียดงาน"] ?? row.work_details)) dbRow.work_details = String(row["รายละเอียดงาน"] ?? row.work_details).trim();
+    if (hasValue(row["รายการ"] ?? row.sub_category)) dbRow.sub_category = String(row["รายการ"] ?? row.sub_category).trim();
   } else if (dbTable === "projects") {
     if (row["ID Project"] !== undefined) dbRow.id = row["ID Project"];
     if (row["ชื่อ Project"] !== undefined) dbRow.name = row["ชื่อ Project"];
@@ -587,11 +604,16 @@ export async function getEntityBankMapFromSupabase(): Promise<Record<string, str
 
 export async function saveBillFollowDate(billId: string, patch: Record<string, any>) {
   if (!isSupabaseConfigured() || !billId) return;
-  const followKeys = ["วันได้บิล", "วันออก 3%", "วันจ่าย", "vat", "หัก", "จำนวนหัก", "3เปอร์", "เครดิต", "ยอดโอน"];
-  const datesToSave: Record<string, string> = {};
+  const followKeys = [
+    "วันได้บิล", "วันออก 3%", "วันจ่าย", "vat", "หัก", "จำนวนหัก", "3เปอร์", "3เปอร์เซ็น", "เครดิต", "ยอดโอน",
+    "รายการ", "ชื่อเครื่องมือ", "ทะเบียน", "ชื่อพนักงาน", "statusค่าแรง",
+    "ค่าของ", "ค่าแรง", "พนักงาน", "น้ำมัน", "ซ่อมรถ", "เครื่องจักร", "เครื่องมือ", "อื่นๆ",
+    "ผู้สร้างบิล", "ผู้บันทึก", "สินค้า", "รายละเอียดงาน", "ค่าแรงคงเหลือ"
+  ];
+  const datesToSave: Record<string, any> = {};
   for (const k of followKeys) {
     if (patch[k] !== undefined && patch[k] !== null && String(patch[k]).trim() !== "") {
-      datesToSave[k] = String(patch[k]).trim();
+      datesToSave[k] = patch[k];
     }
   }
   if (!Object.keys(datesToSave).length) return;
@@ -705,10 +727,11 @@ export async function updateRowInSupabase(tableName: string, keyColumn: string, 
     saveEntityBankOption(String(primaryVal), String(bankVal));
   }
 
-  const followKeys = ["วันได้บิล", "วันออก 3%", "วันจ่าย"];
-  if (followKeys.some(k => k in patch)) {
+  if (dbTable === "bills" || tableName === "Data" || tableName === "bills" || tableName === "DATA") {
     const targetBillId = String(patch["ลำดับ"] ?? patch.id ?? primaryVal ?? keyValue);
-    await saveBillFollowDate(targetBillId, patch);
+    if (targetBillId) {
+      await saveBillFollowDate(targetBillId, patch);
+    }
   }
 
   if (dbTable === "projects" || tableName === "Project" || tableName === "PROJECT") {
@@ -867,15 +890,21 @@ export async function getRowsFromSupabase(tableName: string, maxRows = 10_000): 
         const bId = String(res["ลำดับ"] || res._sheetRow || res.id || "");
         if (bId && billFollowDatesMap[bId]) {
           const dates = billFollowDatesMap[bId];
-          if (dates["วันได้บิล"]) res["วันได้บิล"] = dates["วันได้บิล"];
-          if (dates["วันออก 3%"]) res["วันออก 3%"] = dates["วันออก 3%"];
-          if (dates["วันจ่าย"]) res["วันจ่าย"] = dates["วันจ่าย"];
-          if (dates["vat"]) res["vat"] = dates["vat"];
-          if (dates["หัก"]) res["หัก"] = dates["หัก"];
-          if (dates["จำนวนหัก"]) res["จำนวนหัก"] = dates["จำนวนหัก"];
-          if (dates["3เปอร์"]) res["3เปอร์"] = dates["3เปอร์"];
-          if (dates["เครดิต"]) res["เครดิต"] = dates["เครดิต"];
-          if (dates["ยอดโอน"]) res["ยอดโอน"] = dates["ยอดโอน"];
+          Object.assign(res, dates);
+          if (dates["ผู้สร้างบิล"]) {
+            res["ผู้สร้างบิล"] = dates["ผู้สร้างบิล"];
+            res["created_by"] = dates["ผู้สร้างบิล"];
+          } else if (dates["created_by"]) {
+            res["ผู้สร้างบิล"] = dates["created_by"];
+            res["created_by"] = dates["created_by"];
+          } else if (dates["ผู้บันทึก"]) {
+            res["ผู้สร้างบิล"] = dates["ผู้บันทึก"];
+            res["created_by"] = dates["ผู้บันทึก"];
+          }
+        }
+        if (!res["ผู้สร้างบิล"]) {
+          res["ผู้สร้างบิล"] = res["ผู้เบิก"] || "";
+          res["created_by"] = res["ผู้สร้างบิล"];
         }
       }
 

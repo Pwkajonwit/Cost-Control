@@ -701,9 +701,20 @@ export async function handleLineCommand(
           const targetUserId = await getLineUserIdByRequester(reqKey);
           const fallbackGroup = await getLineTargetGroup("finance");
           const validGroup = fallbackGroup && fallbackGroup.startsWith("C") ? fallbackGroup : "";
-          const sendTo = targetUserId || validGroup;
+          
+          const creatorKeys = Array.from(
+            new Set(reqBills.map((b) => String(b["ผู้สร้างบิล"] || b.created_by || b["ผู้บันทึก"] || "").trim()).filter(Boolean))
+          );
 
-          if (sendTo) {
+          const recipients = new Set<string>();
+          if (targetUserId) recipients.add(targetUserId);
+          for (const cKey of creatorKeys) {
+            const creatorUserId = await getLineUserIdByRequester(cKey);
+            if (creatorUserId) recipients.add(creatorUserId);
+          }
+          if (recipients.size === 0 && validGroup) recipients.add(validGroup);
+
+          if (recipients.size > 0) {
             const peopleMap = await getPeopleMap();
             const flexForRequester = createWithdrawCompletedRequesterFlex(reqBills, peopleMap);
             const totalAmt = reqBills.reduce((sum, b) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
@@ -712,19 +723,8 @@ export async function handleLineCommand(
               ? `🎉 รายการเบิกเงินสำเร็จเรียบร้อย #${reqBills[0]["ลำดับ"] || reqBills[0].id || ""} (฿${totalAmtStr})`
               : `🎉 รายการเบิกเงินสำเร็จเรียบร้อย ${reqBills.length} รายการ (รวม ฿${totalAmtStr})`;
 
-            await sendFlexMessageDetailed(sendTo, altText, flexForRequester);
-
-            // Also notify the creator if different from requester
-            const creatorKeys = Array.from(
-              new Set(reqBills.map((b) => String(b["ผู้สร้างบิล"] || b.created_by || b["ผู้บันทึก"] || "").trim()).filter(Boolean))
-            );
-            for (const cKey of creatorKeys) {
-              if (cKey !== reqKey) {
-                const creatorUserId = await getLineUserIdByRequester(cKey);
-                if (creatorUserId && creatorUserId !== targetUserId) {
-                  await sendFlexMessageDetailed(creatorUserId, altText, flexForRequester).catch(() => null);
-                }
-              }
+            for (const sendTo of recipients) {
+              await sendFlexMessageDetailed(sendTo, altText, flexForRequester).catch(() => null);
             }
           }
         }

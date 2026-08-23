@@ -270,12 +270,10 @@ function getBillTypeOptionSets(rows: SheetRow[], systemOptions?: Record<string, 
     ? sysStoreWithItem
     : unique(rows.map(row => String(row["ประเภท Name3"] || "")));
 
-  const defaultValues = ["1.ค่าของ", "2.ค่าแรง", "3.พนักงาน", "4.น้ำมัน", "5.ซ่อมรถ", "6.เครื่องจักร", "7.เครื่องมือ", "8.อื่นๆ"];
-
   return {
     contractor: contractor.length > 0 ? contractor : ["2.ค่าแรง", "3.พนักงาน", "8.อื่นๆ"],
-    storeDefault: storeDefault.length > 0 ? storeDefault : defaultValues,
-    storeWithItem: storeWithItem.length > 0 ? storeWithItem : ["4.น้ำมัน", "5.ซ่อมรถ", "6.เครื่องจักร"]
+    storeDefault: storeDefault.length > 0 ? storeDefault : ["4.น้ำมัน", "5.ซ่อมรถ", "6.เครื่องจักร"],
+    storeWithItem: storeWithItem.length > 0 ? storeWithItem : ["1.ค่าของ", "7.เครื่องมือ", "8.อื่นๆ"]
   };
 }
 
@@ -309,12 +307,32 @@ export async function getInitialValues(tableName: string): Promise<SheetRow> {
 }
 
 async function nextDataSequence() {
-  const rows = await getRows(TABLES.DATA, 15_000);
-  return rows.reduce((max, row) => {
+  const [rows, sysOptions] = await Promise.all([
+    getRows(TABLES.DATA, 15_000).catch(() => []),
+    getSystemOptions().catch(() => ({} as Record<string, any>))
+  ]);
+
+  const configuredStart = Number(
+    (sysOptions as any)?.["bill_start_sequence"] ||
+    (sysOptions as any)?.["ลำดับบิลเริ่มต้น"] ||
+    0
+  );
+
+  const maxFromRows = rows.reduce((max, row) => {
     const first = Number(row["ลำดับtest"] || 0);
     const second = Number(row["ลำดับ"] || 0);
     return Math.max(max, first, second);
-  }, 0) + 1;
+  }, 0);
+
+  if (maxFromRows === 0) {
+    return configuredStart > 0 ? configuredStart : 1;
+  }
+
+  if (configuredStart > maxFromRows) {
+    return configuredStart;
+  }
+
+  return maxFromRows + 1;
 }
 
 async function nextContractWorkId() {

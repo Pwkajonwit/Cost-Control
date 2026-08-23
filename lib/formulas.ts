@@ -294,8 +294,25 @@ function applyBillFormulasFast(
   }
 
   const pFast = String(row["สินค้า"] || row.product || "").trim();
+  const itemFast = String(row["รายการ"] || row.sub_category || "").trim();
+  const toolFast = String(row["ชื่อเครื่องมือ"] || "").trim();
+  const carFast = String(row["ทะเบียน"] || "").trim();
+  const staffFast = String(row["ชื่อพนักงาน"] || "").trim();
   const dFast = String(row["รายละเอียดงาน"] || row.work_details || "").trim();
-  row["สินค้า/ทำงาน"] = pFast && dFast ? `${pFast} / ${dFast}` : (pFast || dFast || row["สินค้า/ทำงาน"] || row.description || "");
+
+  let combinedDesc = pFast;
+  if (itemFast) {
+    combinedDesc = combinedDesc ? `${combinedDesc} (${itemFast})` : itemFast;
+  } else if (toolFast) {
+    combinedDesc = combinedDesc ? `${combinedDesc} (${toolFast})` : toolFast;
+  } else if (carFast) {
+    combinedDesc = combinedDesc ? `${combinedDesc} (${carFast})` : carFast;
+  } else if (staffFast) {
+    combinedDesc = combinedDesc ? `${combinedDesc} (${staffFast})` : staffFast;
+  } else if (dFast) {
+    combinedDesc = combinedDesc ? `${combinedDesc} / ${dFast}` : dFast;
+  }
+  row["สินค้า/ทำงาน"] = combinedDesc || row["สินค้า/ทำงาน"] || row.description || "";
   return row;
 }
 
@@ -347,8 +364,25 @@ function applyBillFormulasWithContext(
   row["ยอดโอน"] = computeBillTransferAmount(row);
   row["ร้าน/บุคคล"] = vendorName(row, context.stores, contract);
   const pVal = String(row["สินค้า"] || row.product || "").trim();
+  const itemVal = String(row["รายการ"] || row.sub_category || "").trim();
+  const toolVal = String(row["ชื่อเครื่องมือ"] || "").trim();
+  const carVal = String(row["ทะเบียน"] || "").trim();
+  const staffVal = String(row["ชื่อพนักงาน"] || "").trim();
   const dVal = String(row["รายละเอียดงาน"] || row.work_details || "").trim();
-  row["สินค้า/ทำงาน"] = pVal && dVal ? `${pVal} / ${dVal}` : (pVal || dVal || row["สินค้า/ทำงาน"] || row.description || "");
+
+  let combinedVal = pVal;
+  if (itemVal) {
+    combinedVal = combinedVal ? `${combinedVal} (${itemVal})` : itemVal;
+  } else if (toolVal) {
+    combinedVal = combinedVal ? `${combinedVal} (${toolVal})` : toolVal;
+  } else if (carVal) {
+    combinedVal = combinedVal ? `${combinedVal} (${carVal})` : carVal;
+  } else if (staffVal) {
+    combinedVal = combinedVal ? `${combinedVal} (${staffVal})` : staffVal;
+  } else if (dVal) {
+    combinedVal = combinedVal ? `${combinedVal} / ${dVal}` : dVal;
+  }
+  row["สินค้า/ทำงาน"] = combinedVal || row["สินค้า/ทำงาน"] || row.description || "";
   return row;
 }
 

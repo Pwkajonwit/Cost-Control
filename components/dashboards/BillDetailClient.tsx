@@ -38,6 +38,7 @@ type BillDetailClientProps = {
   contract: SheetRow[];
   requesterDisplay?: string;
   requesterLink?: string;
+  createdByDisplay?: string;
   vendorDisplay?: string;
   vendorLink?: string;
   form?: any;
@@ -51,6 +52,7 @@ export function BillDetailClient({
   contract,
   requesterDisplay,
   requesterLink,
+  createdByDisplay,
   vendorDisplay,
   vendorLink,
   form,
@@ -91,6 +93,10 @@ export function BillDetailClient({
   const category = text(bill["ประเภท"] || bill.category) || "-";
   const productOrWork = text(bill["สินค้า/ทำงาน"] || bill["สินค้า"] || bill["รายละเอียดงาน"] || bill.description) || "-";
   const laborStatus = text(bill["statusค่าแรง"]);
+  const itemName = text(bill["รายการ"] || bill.sub_category);
+  const toolName = text(bill["ชื่อเครื่องมือ"] || bill.tool_name);
+  const carPlate = text(bill["ทะเบียน"] || bill.plate_no);
+  const staffName = text(bill["ชื่อพนักงาน"] || bill.staff_name);
 
   const billDate = formatDateThai(bill["ว/ด/ป"] || bill.bill_date);
   const billReceivedDate = formatDateThai(bill["วันได้บิล"] || bill.bill_received_date);
@@ -104,16 +110,16 @@ export function BillDetailClient({
 
     if (hasValue(bill["ค่าของ"])) items.push({ label: "ค่าของ (วัสดุก่อสร้าง)", value: bill["ค่าของ"], isAmount: true });
     if (hasValue(bill["ค่าแรง"])) items.push({ label: "ค่าแรง", value: bill["ค่าแรง"], isAmount: true, extra: laborStatus ? `สถานะ: ${laborStatus}` : undefined });
-    if (hasValue(bill["พนักงาน"])) items.push({ label: "ค่าแรงพนักงาน", value: bill["พนักงาน"], isAmount: true, extra: bill["ชื่อพนักงาน"] ? `ชื่อ: ${bill["ชื่อพนักงาน"]}` : undefined });
+    if (hasValue(bill["พนักงาน"])) items.push({ label: "ค่าแรงพนักงาน", value: bill["พนักงาน"], isAmount: true, extra: staffName ? `ชื่อ: ${staffName}` : undefined });
     if (hasValue(bill["น้ำมัน"])) items.push({ label: "ค่าน้ำมัน", value: bill["น้ำมัน"], isAmount: true });
-    if (hasValue(bill["ซ่อมรถ"])) items.push({ label: "ค่าซ่อมรถ", value: bill["ซ่อมรถ"], isAmount: true, extra: bill["ทะเบียน"] ? `ทะเบียน: ${bill["ทะเบียน"]}` : undefined });
+    if (hasValue(bill["ซ่อมรถ"])) items.push({ label: "ค่าซ่อมรถ", value: bill["ซ่อมรถ"], isAmount: true, extra: carPlate ? `ทะเบียน: ${carPlate}` : undefined });
     if (hasValue(bill["เครื่องจักร"])) items.push({ label: "ค่าเครื่องจักร", value: bill["เครื่องจักร"], isAmount: true });
-    if (hasValue(bill["เครื่องมือ"])) items.push({ label: "ค่าเครื่องมือ", value: bill["เครื่องมือ"], isAmount: true, extra: bill["ชื่อเครื่องมือ"] ? `ชื่อ: ${bill["ชื่อเครื่องมือ"]}` : undefined });
-    if (hasValue(bill["อื่นๆ"])) items.push({ label: "ค่าใช้จ่ายอื่นๆ", value: bill["อื่นๆ"], isAmount: true, extra: bill["รายการ"] ? `รายการ: ${bill["รายการ"]}` : undefined });
+    if (hasValue(bill["เครื่องมือ"])) items.push({ label: "ค่าเครื่องมือ", value: bill["เครื่องมือ"], isAmount: true, extra: toolName ? `ชื่อ: ${toolName}` : undefined });
+    if (hasValue(bill["อื่นๆ"])) items.push({ label: "ค่าใช้จ่ายอื่นๆ", value: bill["อื่นๆ"], isAmount: true, extra: itemName ? `รายการ: ${itemName}` : undefined });
     if (hasValue(bill["ค่าแรงคงเหลือ"])) items.push({ label: "ค่าแรงคงเหลือของสัญญา", value: bill["ค่าแรงคงเหลือ"], isAmount: true });
 
     return items;
-  }, [bill, laborStatus]);
+  }, [bill, laborStatus, itemName, toolName, carPlate, staffName]);
 
   return (
     <div className="w-full flex flex-col gap-4 p-4 sm:p-6 max-w-[1400px] mx-auto font-sans text-sm text-slate-800">
@@ -306,8 +312,52 @@ export function BillDetailClient({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 px-4 py-2.5 gap-1">
                 <span className="text-slate-500 font-medium">สินค้า / ทำงาน:</span>
-                <span className="sm:col-span-2 text-slate-900">{productOrWork}</span>
+                <span className="sm:col-span-2 text-slate-900 font-medium">{productOrWork}</span>
               </div>
+
+              {itemName && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 px-4 py-2.5 gap-1 bg-amber-50/40">
+                  <span className="text-amber-800 font-medium">รายการย่อย (อื่นๆ):</span>
+                  <span className="sm:col-span-2 text-slate-900 font-semibold flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-xs border border-amber-300">
+                      {itemName}
+                    </span>
+                  </span>
+                </div>
+              )}
+
+              {toolName && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 px-4 py-2.5 gap-1 bg-blue-50/40">
+                  <span className="text-blue-800 font-medium">ชื่อเครื่องมือ:</span>
+                  <span className="sm:col-span-2 text-slate-900 font-semibold flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-900 text-xs border border-blue-300">
+                      {toolName}
+                    </span>
+                  </span>
+                </div>
+              )}
+
+              {carPlate && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 px-4 py-2.5 gap-1 bg-slate-50">
+                  <span className="text-slate-600 font-medium">หมายเลขทะเบียนรถ:</span>
+                  <span className="sm:col-span-2 text-slate-900 font-semibold flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 text-xs border border-slate-300">
+                      {carPlate}
+                    </span>
+                  </span>
+                </div>
+              )}
+
+              {staffName && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 px-4 py-2.5 gap-1 bg-indigo-50/40">
+                  <span className="text-indigo-800 font-medium">ชื่อพนักงาน:</span>
+                  <span className="sm:col-span-2 text-slate-900 font-semibold flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 text-xs border border-indigo-300">
+                      {staffName}
+                    </span>
+                  </span>
+                </div>
+              )}
 
               {laborStatus && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 px-4 py-2.5 gap-1">
@@ -336,7 +386,21 @@ export function BillDetailClient({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 px-4 py-2.5 gap-1">
                 <span className="text-slate-500 font-medium">ผู้สร้าง/บันทึกบิล:</span>
-                <span className="sm:col-span-2 text-slate-700">{createdBy}</span>
+                <div className="sm:col-span-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-slate-800 font-medium">{createdByDisplay || createdBy}</span>
+                  {(() => {
+                    const c = (createdByDisplay || createdBy).toLowerCase().trim();
+                    const r = (requesterDisplay || requester).toLowerCase().trim();
+                    if (c && r && c !== "-" && r !== "-" && !c.includes(r) && !r.includes(c)) {
+                      return (
+                        <span className="inline-flex items-center gap-1 text-[11px] bg-sky-50 text-sky-700 px-2 py-0.5 rounded-md border border-sky-200 font-medium">
+                          สร้างแทนผู้เบิก
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
               </div>
 
               {createdAtFormatted !== "-" && (

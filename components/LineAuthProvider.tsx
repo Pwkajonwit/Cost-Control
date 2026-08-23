@@ -271,8 +271,8 @@ export function LineAuthProvider({ children }: { children: React.ReactNode }) {
                   <MessageSquare size={20} />
                 </div>
                 <div>
-                  <h3 className="text-base text-slate-900 leading-tight">ลงทะเบียน / ผูกบัญชี LINE</h3>
-                  <p className="text-xs text-slate-500 font-medium">ยืนยันตัวตนเพื่อเข้าใช้งานระบบ</p>
+                  <h3 className="text-base text-slate-900 leading-tight">ผูกบัญชี LINE กับระบบ</h3>
+                  <p className="text-xs text-slate-500 font-medium">ยืนยันเบอร์โทรศัพท์ที่ลงทะเบียนไว้ในระบบ</p>
                 </div>
               </div>
               <button
@@ -303,13 +303,13 @@ export function LineAuthProvider({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs text-slate-600 space-y-1">
-              <div className="text-slate-800 flex items-center gap-1.5">
+              <div className="text-slate-800 flex items-center gap-1.5 font-medium">
                 <Shield size={13} className="text-slate-500" />
-                <span>คำแนะนำการลงทะเบียน:</span>
+                <span>คำแนะนำการผูกบัญชี:</span>
               </div>
               <p className="m-0 leading-relaxed">
-                • หากมีบัญชีในระบบแล้ว: กรอก<b>เบอร์โทรศัพท์เดิม</b> เพื่อผูกบัญชีอัตโนมัติ<br />
-                • หากยังไม่มีบัญชี: กรอกเบอร์โทรศัพท์เพื่อสร้างบัญชีใหม่
+                • กรอก<b>เบอร์โทรศัพท์ที่ลงทะเบียนไว้ในระบบ</b> เพื่อผูกบัญชี LINE กับข้อมูลผู้ใช้เดิม<br />
+                • หากยังไม่มีข้อมูลในระบบ กรุณาติดต่อผู้ดูแลระบบเพื่อเพิ่มข้อมูลก่อน
               </p>
             </div>
 

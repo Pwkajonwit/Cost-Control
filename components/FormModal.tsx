@@ -339,6 +339,12 @@ export function FormModal({
     if (!submitPath || !activeForm) return;
 
     const submitValues = sanitizeValuesForSubmit(values, activeForm);
+    if (activeForm.tableName === TABLES.DATA || activeForm.tableName === "Data") {
+      const loggedInUser = getCookie("auth_name") || getCookie("auth_employee_id");
+      if (loggedInUser && !submitValues["ผู้สร้างบิล"]) {
+        submitValues["ผู้สร้างบิล"] = loggedInUser;
+      }
+    }
     const validationError = validateVisibleRequiredFields(submitValues, activeForm);
     if (validationError) {
       setError(validationError);
@@ -1229,6 +1235,14 @@ function optionLabel(option: RefOption | undefined, fieldName?: string) {
   const val = String(option.value || "").trim();
   const rawLabel = String(option.label || option.value || "").trim();
 
+  if (fieldName === "ทะเบียน" || fieldName === "ทะเบียนรถ") {
+    if (rawLabel.includes(" - ")) {
+      const parts = rawLabel.split(" - ");
+      return parts.slice(1).join(" - ").trim() || rawLabel;
+    }
+    return rawLabel;
+  }
+
   if (fieldName === "ผู้เบิก") {
     const loggedInId = getCookie("auth_employee_id").trim();
     const loggedInName = getCookie("auth_name").trim();
@@ -1344,6 +1358,11 @@ function getInitialStringValues(form: FormPayload) {
       } else if (loggedInEmployeeId) {
         values["ผู้เบิก"] = loggedInEmployeeId;
       }
+
+      const loggedInUser = loggedInName || loggedInEmployeeId;
+      if (loggedInUser) {
+        values["ผู้สร้างบิล"] = loggedInUser;
+      }
     }
   }
   return values;
@@ -1378,9 +1397,19 @@ function getRowStringValues(form: FormPayload, row: SheetRow) {
         rawVal = firstNonEmpty(row["สินค้า"], row.product, row["สินค้า/ทำงาน"], row.description);
       } else if (field.name === "รายละเอียดงาน") {
         rawVal = firstNonEmpty(row["รายละเอียดงาน"], row.work_details, row["สินค้า/ทำงาน"], row.description);
+      } else if (field.name === "รายการ") {
+        rawVal = firstNonEmpty(row["รายการ"], row.sub_category, row.item_name);
+      } else if (field.name === "ชื่อเครื่องมือ") {
+        rawVal = firstNonEmpty(row["ชื่อเครื่องมือ"], row.tool_name);
+      } else if (field.name === "ทะเบียน") {
+        rawVal = firstNonEmpty(row["ทะเบียน"], row.plate_no);
+      } else if (field.name === "ชื่อพนักงาน") {
+        rawVal = firstNonEmpty(row["ชื่อพนักงาน"], row.staff_name);
+      } else if (field.name === "statusค่าแรง") {
+        rawVal = firstNonEmpty(row["statusค่าแรง"], row.labor_status);
       } else if (["ค่าของ", "ค่าแรง", "พนักงาน", "น้ำมัน", "ซ่อมรถ", "เครื่องจักร", "เครื่องมือ", "อื่นๆ"].includes(field.name)) {
-        const rowType = String(row["ประเภท"] || "").toLowerCase();
-        const rowAmount = firstNonEmpty(row["ยอดเงิน"], row.amount);
+        const rowType = String(row["ประเภท"] || row.category || "").toLowerCase();
+        const rowAmount = firstNonEmpty(row[field.name], row["ยอดเงิน"], row.amount);
         if (!hasValue(rawVal) && hasValue(rowAmount) && rowType.includes(field.name.toLowerCase())) {
           rawVal = String(rowAmount);
         }
@@ -1412,6 +1441,10 @@ function getRowStringValues(form: FormPayload, row: SheetRow) {
     } else if (field.name === "สินค้า" && rawVal) {
       const enumOpts = field.values || [];
       const match = enumOpts.find(opt => opt === rawVal || opt.endsWith(rawVal) || rawVal.endsWith(opt) || opt.includes(rawVal));
+      values[field.name] = match || rawVal;
+    } else if (field.name === "รายการ" && rawVal) {
+      const enumOpts = field.values || [];
+      const match = enumOpts.find(opt => opt === rawVal || opt.trim() === rawVal.trim());
       values[field.name] = match || rawVal;
     } else {
       values[field.name] = rawVal;
@@ -1449,7 +1482,7 @@ function getEnumValues(field: FieldSchema, values: Record<string, string>) {
   let dynamicList: string[] = [];
   if (values["ร้านค้า/ผู้รับเหมา"] === "ผู้รับเหมา") {
     dynamicList = field.dynamicOptionSets.contractor || [];
-  } else if (values["สินค้า"]) {
+  } else if (hasValue(values["สินค้า"])) {
     dynamicList = field.dynamicOptionSets.storeWithItem || [];
   } else {
     dynamicList = field.dynamicOptionSets.storeDefault || [];
@@ -1482,7 +1515,12 @@ function normalizeDependentValues(values: Record<string, string>, changedField: 
     values["ประเภท"] = "";
   }
 
-  if (changedField === "สินค้า") values["ประเภท"] = "";
+  if (changedField === "สินค้า") {
+    const typeField = form.schema.find(field => field.name === "ประเภท");
+    if (typeField && values["ประเภท"] && !getEnumValues(typeField, values).includes(values["ประเภท"])) {
+      values["ประเภท"] = "";
+    }
+  }
 
   if (changedField === "vat" && !hasValue(values["vat"])) {
     values["วันได้บิล"] = "";
