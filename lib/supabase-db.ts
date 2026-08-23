@@ -605,6 +605,7 @@ export async function getEntityBankMapFromSupabase(): Promise<Record<string, str
 export async function saveBillFollowDate(billId: string, patch: Record<string, any>) {
   if (!isSupabaseConfigured() || !billId) return;
   const followKeys = [
+    "ลำดับ", "ลำดับtest",
     "วันได้บิล", "วันออก 3%", "วันจ่าย", "vat", "หัก", "จำนวนหัก", "3เปอร์", "3เปอร์เซ็น", "เครดิต", "ยอดโอน",
     "รายการ", "ชื่อเครื่องมือ", "ทะเบียน", "ชื่อพนักงาน", "statusค่าแรง",
     "ค่าของ", "ค่าแรง", "พนักงาน", "น้ำมัน", "ซ่อมรถ", "เครื่องจักร", "เครื่องมือ", "อื่นๆ",
@@ -887,19 +888,23 @@ export async function getRowsFromSupabase(tableName: string, maxRows = 10_000): 
       }
 
       if (dbTable === "bills") {
-        const bId = String(res["ลำดับ"] || res._sheetRow || res.id || "");
-        if (bId && billFollowDatesMap[bId]) {
-          const dates = billFollowDatesMap[bId];
-          Object.assign(res, dates);
-          if (dates["ผู้สร้างบิล"]) {
-            res["ผู้สร้างบิล"] = dates["ผู้สร้างบิล"];
-            res["created_by"] = dates["ผู้สร้างบิล"];
-          } else if (dates["created_by"]) {
-            res["ผู้สร้างบิล"] = dates["created_by"];
-            res["created_by"] = dates["created_by"];
-          } else if (dates["ผู้บันทึก"]) {
-            res["ผู้สร้างบิล"] = dates["ผู้บันทึก"];
-            res["created_by"] = dates["ผู้บันทึก"];
+        const rawId = String(row.id || "");
+        const rawSeq = String(res["ลำดับ"] || res._sheetRow || "");
+        const followData = (rawId && billFollowDatesMap[rawId]) || (rawSeq && billFollowDatesMap[rawSeq]);
+        if (followData) {
+          Object.assign(res, followData);
+          if (followData["ลำดับ"]) {
+            res["ลำดับ"] = followData["ลำดับ"];
+          }
+          if (followData["ผู้สร้างบิล"]) {
+            res["ผู้สร้างบิล"] = followData["ผู้สร้างบิล"];
+            res["created_by"] = followData["ผู้สร้างบิล"];
+          } else if (followData["created_by"]) {
+            res["ผู้สร้างบิล"] = followData["created_by"];
+            res["created_by"] = followData["created_by"];
+          } else if (followData["ผู้บันทึก"]) {
+            res["ผู้สร้างบิล"] = followData["ผู้บันทึก"];
+            res["created_by"] = followData["ผู้บันทึก"];
           }
         }
         if (!res["ผู้สร้างบิล"]) {

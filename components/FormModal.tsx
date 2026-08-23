@@ -33,6 +33,7 @@ import { normalizeDateToIso, parseDateStrict, toInputDateValue } from "@/lib/dat
 import { imagePreviewUrl } from "@/components/BillImageThumbnail";
 import { ProjectBudgetAllocator } from "@/components/forms/ProjectBudgetAllocator";
 import { BillCategoryBudgetGuardrail } from "@/components/forms/BillCategoryBudgetGuardrail";
+import { compressImageFiles } from "@/lib/image-compressor";
 
 type FormPayload = {
   tableName: string;
@@ -131,7 +132,7 @@ const DATA_FORM_SECTIONS: { id: string; title: string; iconName: string; fields:
     id: "tax",
     title: "ภาษี & เงื่อนไขการชำระเงิน",
     iconName: "Receipt",
-    fields: ["vat", "วันได้บิล", "เครดิต", "วันจ่าย", "หัก", "จำนวนหัก", "วันออก 3%"]
+    fields: ["vat", "เครดิต", "วันได้บิล", "วันจ่าย", "หัก", "จำนวนหัก", "วันออก 3%"]
   },
   {
     id: "attachment",
@@ -623,7 +624,7 @@ export function FormModal({
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                                 {sectionFields.map(field => (
-                                  <div className={`${getFieldClassName(field)} space-y-1`} key={field.name}>
+                                  <div className={`${getFieldClassName(field)} space-y-1 min-w-0 w-full overflow-hidden`} key={field.name}>
                                     <label className="text-xs font-medium text-slate-700 block">
                                       {getFieldLabel(field)}
                                       {field.required ? <span className="text-rose-600 font-medium ml-0.5">*</span> : ""}
@@ -661,7 +662,7 @@ export function FormModal({
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                                 {unsectionedFields.map(field => (
-                                  <div className={`${getFieldClassName(field)} space-y-1`} key={field.name}>
+                                  <div className={`${getFieldClassName(field)} space-y-1 min-w-0 w-full overflow-hidden`} key={field.name}>
                                     <label className="text-xs font-medium text-slate-700 block">
                                       {getFieldLabel(field)}
                                       {field.required ? <span className="text-rose-600 font-medium ml-0.5">*</span> : ""}
@@ -691,7 +692,7 @@ export function FormModal({
                       <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-2xs">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                           {visibleFields.map(field => (
-                            <div className={`${getFieldClassName(field)} space-y-1.5`} key={field.name}>
+                            <div className={`${getFieldClassName(field)} space-y-1.5 min-w-0 w-full overflow-hidden`} key={field.name}>
                               <label className="text-xs font-medium text-slate-700 block">{getFieldLabel(field)}{field.required ? <span className="text-rose-600 font-medium ml-0.5">*</span> : ""}</label>
                               {renderField(
                                 field,
@@ -791,6 +792,7 @@ function ImageFileFieldInput({
 
   // Local object URLs for previewing newly attached files
   const [filePreviews, setFilePreviews] = useState<Array<{ file: File; url: string }>>([]);
+  const [compressing, setCompressing] = useState(false);
 
   useEffect(() => {
     const previews = attachedFiles.map(file => ({
@@ -804,12 +806,21 @@ function ImageFileFieldInput({
     };
   }, [attachedFiles, resetKey]);
 
-  const handleFilesAdded = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newFiles = Array.from(e.target.files || []);
-    if (!newFiles.length) return;
-    onAttachedFilesChange([...attachedFiles, ...newFiles]);
+  const handleFilesAdded = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFiles = Array.from(e.target.files || []);
+    if (!rawFiles.length) return;
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+    setCompressing(true);
+    try {
+      const compressed = await compressImageFiles(rawFiles, 1920, 0.82);
+      onAttachedFilesChange([...attachedFiles, ...compressed]);
+    } catch (err) {
+      console.warn("Image compression failed, using original:", err);
+      onAttachedFilesChange([...attachedFiles, ...rawFiles]);
+    } finally {
+      setCompressing(false);
     }
   };
 
@@ -834,10 +845,17 @@ function ImageFileFieldInput({
         name={field.name}
         accept={field.type === "Image" ? "image/*" : undefined}
         multiple
-        disabled={readOnly}
+        disabled={readOnly || compressing}
         onChange={handleFilesAdded}
         className="hidden"
       />
+
+      {compressing ? (
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 flex items-center justify-center gap-2 animate-pulse">
+          <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin" />
+          <span>กำลังปรับขนาดและบีบอัดรูปภาพให้เหมาะสม...</span>
+        </div>
+      ) : null}
 
       {/* Grid of All Photos (Existing + Newly Attached) */}
       {totalImageCount > 0 ? (
@@ -1171,7 +1189,7 @@ function renderField(
           value={value}
           disabled={readOnly}
           onChange={e => onChange(e.target.value)}
-          className="w-full h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 transition-all cursor-pointer"
+          className="w-full min-w-0 max-w-full box-border h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 transition-all cursor-pointer"
         >
           <option value="">เลือก{field.name}...</option>
           {options.map((option, index) => (
@@ -1203,7 +1221,7 @@ function renderField(
         readOnly={readOnly}
         rows={3}
         onChange={event => onChange(event.target.value)}
-        className="w-full p-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all resize-y"
+        className="w-full min-w-0 max-w-full box-border p-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all resize-y"
       />
     );
   }
@@ -1219,7 +1237,7 @@ function renderField(
   const vatAmount = workAmount > 0 ? Math.max(0, Math.round((totalVatNum - workAmount) * 100) / 100) : 0;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 w-full min-w-0 max-w-full">
       <input
         type={type}
         name={field.name}
@@ -1228,7 +1246,7 @@ function renderField(
         inputMode={inputMode}
         lang={billDateMode ? "th-TH" : undefined}
         onChange={event => onChange(billDateMode ? normalizeBillDateInput(event.target.value) : event.target.value)}
-        className="w-full h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all"
+        className="w-full min-w-0 max-w-full block box-border h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all appearance-none"
       />
       {isProjectVatTotal && workAmount > 0 ? (
         <div className="flex items-center justify-between text-[11px] bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-md border border-emerald-200">
@@ -1349,7 +1367,7 @@ function SearchableRefSelect({
   return (
     <div
       ref={wrapRef}
-      className="relative w-full"
+      className="relative w-full min-w-0 max-w-full"
       onBlur={event => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
       }}
@@ -1357,7 +1375,7 @@ function SearchableRefSelect({
       <input type="hidden" name={name} value={value} />
       <input
         type="text"
-        className="w-full h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all"
+        className="w-full min-w-0 max-w-full box-border h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all"
         value={query}
         readOnly={readOnly}
         placeholder={placeholder}
@@ -1703,10 +1721,25 @@ function normalizeDependentValues(values: Record<string, string>, changedField: 
     }
   }
 
-  if (changedField === "vat" && !hasValue(values["vat"])) {
+  if (changedField === "vat" && !isVatActive(values["vat"])) {
     values["วันได้บิล"] = "";
     values["เครดิต"] = "";
     values["วันจ่าย"] = "";
+  }
+
+  // หากเลือกเครดิต จะเคลียข้อมูลวันที่ได้บิล และคำนวณวันจ่ายจาก ว/ด/ป (หรือ วันที่) + เครดิต
+  if (changedField === "เครดิต") {
+    const creditDays = parseCreditDays(values["เครดิต"]);
+    if (creditDays > 0) {
+      values["วันได้บิล"] = ""; // เคลียร์ข้อมูลวันที่ได้บิลทันที
+      const baseDate = values["ว/ด/ป"] || values["วันที่"] || new Date().toISOString().slice(0, 10);
+      const dueDate = calculateDueDate(baseDate, creditDays);
+      if (dueDate) {
+        values["วันจ่าย"] = dueDate;
+      }
+    } else {
+      values["วันจ่าย"] = "";
+    }
   }
 
   if (changedField === "หัก" && !hasValue(values["หัก"])) {
@@ -1714,19 +1747,17 @@ function normalizeDependentValues(values: Record<string, string>, changedField: 
     values["วันออก 3%"] = "";
   }
 
-  // Credit auto-calculate "วันจ่าย" from "วันได้บิล" (or "ว/ด/ป") + "เครดิต"
-  if (changedField === "เครดิต" || changedField === "วันได้บิล" || changedField === "ว/ด/ป" || changedField === "วันที่") {
+  // Auto-calculate "วันจ่าย" from "ว/ด/ป" + "เครดิต"
+  if (changedField === "ว/ด/ป" || changedField === "วันที่") {
     const creditDays = parseCreditDays(values["เครดิต"]);
     if (creditDays > 0) {
-      const baseDate = values["วันได้บิล"] || values["ว/ด/ป"] || values["วันที่"];
+      const baseDate = values["ว/ด/ป"] || values["วันที่"];
       if (hasValue(baseDate)) {
         const dueDate = calculateDueDate(baseDate, creditDays);
         if (dueDate) {
           values["วันจ่าย"] = dueDate;
         }
       }
-    } else if (changedField === "เครดิต" && (!values["เครดิต"] || values["เครดิต"] === "0" || values["เครดิต"] === "เงินสด")) {
-      values["วันจ่าย"] = "";
     }
   }
 
@@ -1890,6 +1921,12 @@ function pruneHiddenConditionalValues(values: Record<string, string>, form: Form
 }
 
 function isFieldVisible(field: FieldSchema, values: Record<string, string>) {
+  if (field.name === "วันได้บิล") {
+    // วันที่ได้บิลทำงานร่วมกับ vat โดยยังไม่เลือกเครดิต (หากเลือกเครดิต จะซ่อนและเคลียข้อมูล)
+    const hasVat = isVatActive(values["vat"]);
+    const hasCredit = parseCreditDays(values["เครดิต"]) > 0;
+    return hasVat && !hasCredit;
+  }
   if (!field.showIf) return true;
   const actual = values[field.showIf.column] || "";
   if (field.showIf.equals !== undefined) return actual === field.showIf.equals;
