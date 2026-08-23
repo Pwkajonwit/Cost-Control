@@ -7,6 +7,7 @@ import { WorkStatusDashboardClient } from "@/components/dashboards/WorkStatusDas
 import { BillFollowDashboardClient } from "@/components/dashboards/BillFollowDashboardClient";
 import { money, toNumber } from "@/lib/numbers";
 import { getRows } from "@/lib/db";
+import { getUsersListFromSupabase } from "@/lib/supabase-db";
 import { cookies } from "next/headers";
 import type { SheetRow } from "@/lib/types";
 
@@ -16,9 +17,24 @@ export async function MainDashboard() {
 }
 
 export async function WithdrawDashboard({ filters = {} }: { filters?: WithdrawFilters }) {
-  const [dataRows, peopleRows] = await Promise.all([safeRows(TABLES.DATA), safeRows(TABLES.PEOPLE)]);
+  const [dataRows, peopleRows, usersList] = await Promise.all([
+    safeRows(TABLES.DATA),
+    safeRows(TABLES.PEOPLE),
+    getUsersListFromSupabase()
+  ]);
   const cookieStore = await cookies();
   const isAdmin = cookieStore.get("auth_role")?.value === "Admin";
+  const authEmpId = cookieStore.get("auth_employee_id")?.value || "";
+  const authName = cookieStore.get("auth_name")?.value || "";
+
+  // If requester is not explicitly provided, default to the logged-in user
+  let effectiveFilters = { ...filters };
+  if (!effectiveFilters.requester && (authEmpId || authName)) {
+    const defaultRequester = findMatchingRequesterKey(peopleRows, authEmpId, authName, usersList);
+    if (defaultRequester) {
+      effectiveFilters.requester = defaultRequester;
+    }
+  }
   
   const rows = hydrateDataRows(dataRows).filter(row => {
     // แสดงบิลสถานะ "รอตั้งเบิก", "ตั้งเบิก" และ "อนุมัติ"
@@ -26,7 +42,7 @@ export async function WithdrawDashboard({ filters = {} }: { filters?: WithdrawFi
     if (status !== "รอตั้งเบิก" && status !== "ตั้งเบิก" && status !== "รออนุมัติ" && status !== "อนุมัติ") return false;
     return hasValue(row["ลำดับ"]) || hasValue(row["ID Project"]) || hasValue(row["ร้าน/บุคคล"]) || hasValue(row["สินค้า/ทำงาน"]);
   });
-  return <WithdrawDashboardClient rows={rows} peopleRows={peopleRows} initialFilters={filters} isAdmin={isAdmin} />;
+  return <WithdrawDashboardClient rows={rows} peopleRows={peopleRows} usersList={usersList} initialFilters={effectiveFilters} isAdmin={isAdmin} />;
 }
 
 export async function BillFollowDashboard() {
@@ -205,6 +221,60 @@ function requesterName(value: unknown, requesterNames: Record<string, string>) {
 function isCompanyLaborStatus(value: unknown) {
   const text = String(value || "").trim();
   return text === "บริษัท";
+}
+
+export function findMatchingRequesterKey(
+  peopleRows: SheetRow[],
+  authEmpId?: string,
+  authName?: string,
+  usersList: any[] = []
+): string {
+  const cleanEmpId = String(authEmpId || "").trim().toLowerCase();
+  const cleanName = String(authName || "").trim().toLowerCase();
+  if (!cleanEmpId && !cleanName) return "";
+
+  // 1. Cross-reference with users_list to find canonical employee ID / username
+  let targetEmpId = cleanEmpId;
+  if (usersList && usersList.length > 0) {
+    const matchedUser = usersList.find(u => {
+      const uId = String(u.id || "").trim().toLowerCase();
+      const uUser = String(u.username || "").trim().toLowerCase();
+      const uDisplay = String(u.displayName || "").trim().toLowerCase();
+      const uName = String(u.name || "").trim().toLowerCase();
+      return (
+        (cleanEmpId && (uId === cleanEmpId || uUser === cleanEmpId)) ||
+        (cleanName && (uDisplay === cleanName || uName === cleanName || uId === cleanName || uUser === cleanName))
+      );
+    });
+    if (matchedUser) {
+      targetEmpId = String(matchedUser.username || matchedUser.id || "").trim().toLowerCase();
+    }
+  }
+
+  // 2. Match by Employee Code (รหัสพนักงาน) in peopleRows
+  if (targetEmpId) {
+    const matched = peopleRows.find(row => {
+      const rowId = String(row["รหัสพนักงาน"] || row["id"] || row["employee_id"] || "").trim().toLowerCase();
+      return rowId && rowId === targetEmpId;
+    });
+    if (matched) {
+      return String(matched["รหัสพนักงาน"] || matched["ชื่อเล่น"] || "");
+    }
+  }
+
+  // 3. Match by Nickname (ชื่อเล่น) or Full name (ชื่อ-นามสกุล)
+  if (cleanName) {
+    const matched = peopleRows.find(row => {
+      const nickname = String(row["ชื่อเล่น"] || "").trim().toLowerCase();
+      const fullName = String(row["ชื่อ-นามสกุล"] || row["name"] || "").trim().toLowerCase();
+      return (nickname && nickname === cleanName) || (fullName && fullName.includes(cleanName));
+    });
+    if (matched) {
+      return String(matched["รหัสพนักงาน"] || matched["ชื่อเล่น"] || "");
+    }
+  }
+
+  return targetEmpId || authEmpId || authName || "";
 }
 
 function ProjectStatusPanel({

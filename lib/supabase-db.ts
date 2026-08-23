@@ -1506,3 +1506,16 @@ export async function deleteStorageFilesFromSupabase(urls: (string | null | unde
     }
   }
 }
+
+export async function getUsersListFromSupabase(): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  return cached("sys_opt:users_list", 5_000, async () => {
+    try {
+      const { data } = await supabaseAdmin.from("system_options").select("data").eq("id", "users_list").maybeSingle();
+      return Array.isArray(data?.data) ? data.data : [];
+    } catch {
+      return [];
+    }
+  });
+}
+

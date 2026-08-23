@@ -18,6 +18,7 @@ export type WithdrawFilters = {
 type WithdrawDashboardClientProps = {
   rows: SheetRow[];
   peopleRows: SheetRow[];
+  usersList?: any[];
   initialFilters?: WithdrawFilters;
   isAdmin?: boolean;
 };
@@ -25,7 +26,7 @@ type WithdrawDashboardClientProps = {
 const ALL_COLUMNS = ["ลำดับ", "ID Project", "ชื่อ Project", "ร้าน/บุคคล", "สินค้า/ทำงาน", "บิล", "ประเภท", "ยอดเงิน", "ยอดโอน", "ผู้เบิก", "ว/ด/ป", "จัดการ"];
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 
-export function WithdrawDashboardClient({ rows, peopleRows, initialFilters = {}, isAdmin = false }: WithdrawDashboardClientProps) {
+export function WithdrawDashboardClient({ rows, peopleRows, usersList = [], initialFilters = {}, isAdmin = false }: WithdrawDashboardClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get("search") || "";
@@ -65,19 +66,37 @@ export function WithdrawDashboardClient({ rows, peopleRows, initialFilters = {},
     setFilters(normalizeFilters(initialFilters));
   }, [initialFilters.requester, initialFilters.date, initialFilters.bill, initialFilters.search]);
 
+  // Client-side fallback to match logged-in requester if not already filtered
+  useEffect(() => {
+    if (typeof document !== "undefined" && !initialFilters.requester) {
+      const empMatch = document.cookie.match(/auth_employee_id=([^;]+)/);
+      const nameMatch = document.cookie.match(/auth_name=([^;]+)/);
+      const empId = empMatch ? decodeURIComponent(empMatch[1]) : "";
+      const name = nameMatch ? decodeURIComponent(nameMatch[1]) : "";
+      if (empId || name) {
+        const matched = findMatchingRequesterKey(peopleRows, empId, name, usersList);
+        if (matched) {
+          setFilters(prev => (prev.requester ? prev : { ...prev, requester: matched }));
+        }
+      }
+    }
+  }, [peopleRows, usersList, initialFilters.requester]);
+
+  const requesterNames = useMemo(() => requesterNameMap(peopleRows), [peopleRows]);
+
   const displayRows = useMemo(() => {
     const currentRows = rows.map(row => {
       const override = statusOverrides[Number(row._sheetRow)];
       return override ? { ...row, "สถานะ": override } : row;
     });
     // แสดงบิลสถานะ "รอตั้งเบิก", "ตั้งเบิก" และ "อนุมัติ" (ยังไม่เบิก/ปิดงาน)
-    return filterWithdrawRows(currentRows, filters)
+    return filterWithdrawRows(currentRows, filters, requesterNames)
       .filter(row => {
         const st = normalizedStatus(row["สถานะ"]);
         return st === "รอตั้งเบิก" || st === "ตั้งเบิก" || st === "รออนุมัติ" || st === "อนุมัติ";
       })
       .sort((a, b) => Number(b._sheetRow || 0) - Number(a._sheetRow || 0));
-  }, [rows, filters, statusOverrides]);
+  }, [rows, filters, statusOverrides, requesterNames]);
 
   const totalPages = Math.max(1, Math.ceil(displayRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -88,7 +107,6 @@ export function WithdrawDashboardClient({ rows, peopleRows, initialFilters = {},
   const amount = displayRows.reduce((sum, row) => sum + toNumber(row["ยอดเงิน"]), 0);
   // ยอดโอน = รวมเฉพาะแถวที่อนุมัติแล้ว
   const transfer = displayRows.reduce((sum, row) => sum + (normalizedStatus(row["สถานะ"]) === "อนุมัติ" ? toNumber(row["ยอดโอน"]) : 0), 0);
-  const requesterNames = useMemo(() => requesterNameMap(peopleRows), [peopleRows]);
 
   useEffect(() => {
     setPage(1);
@@ -680,14 +698,22 @@ function normalizeFilters(filters: WithdrawFilters) {
   };
 }
 
-function filterWithdrawRows(rows: SheetRow[], filters: Required<WithdrawFilters>) {
+function filterWithdrawRows(rows: SheetRow[], filters: Required<WithdrawFilters>, requesterNames: Record<string, string> = {}) {
   const requester = filters.requester.trim();
   const bill = filters.bill.trim();
   const query = filters.search.trim().toLowerCase();
   const filterDateStr = filters.date.trim();
 
   return rows.filter(row => {
-    if (requester && String(row["ผู้เบิก"] || "").trim() !== requester) return false;
+    if (requester) {
+      const rowReq = String(row["ผู้เบิก"] || "").trim();
+      const mappedName = requesterNames[rowReq] || "";
+      const matches = rowReq === requester ||
+        rowReq.toLowerCase() === requester.toLowerCase() ||
+        mappedName.toLowerCase() === requester.toLowerCase() ||
+        (requesterNames[requester] && requesterNames[requester].toLowerCase() === rowReq.toLowerCase());
+      if (!matches) return false;
+    }
     if (bill && String(row["บิล"] || "").trim() !== bill) return false;
     if (filterDateStr) {
       const rowIsoDate = normalizeDateToIso(row["ว/ด/ป"]);
@@ -842,6 +868,60 @@ function requesterNameMap(peopleRows: SheetRow[]) {
     if (key && name) names[key] = name;
     return names;
   }, {});
+}
+
+export function findMatchingRequesterKey(
+  peopleRows: SheetRow[],
+  authEmpId?: string,
+  authName?: string,
+  usersList: any[] = []
+): string {
+  const cleanEmpId = String(authEmpId || "").trim().toLowerCase();
+  const cleanName = String(authName || "").trim().toLowerCase();
+  if (!cleanEmpId && !cleanName) return "";
+
+  // 1. Cross-reference with users_list to find canonical employee ID / username
+  let targetEmpId = cleanEmpId;
+  if (usersList && usersList.length > 0) {
+    const matchedUser = usersList.find(u => {
+      const uId = String(u.id || "").trim().toLowerCase();
+      const uUser = String(u.username || "").trim().toLowerCase();
+      const uDisplay = String(u.displayName || "").trim().toLowerCase();
+      const uName = String(u.name || "").trim().toLowerCase();
+      return (
+        (cleanEmpId && (uId === cleanEmpId || uUser === cleanEmpId)) ||
+        (cleanName && (uDisplay === cleanName || uName === cleanName || uId === cleanName || uUser === cleanName))
+      );
+    });
+    if (matchedUser) {
+      targetEmpId = String(matchedUser.username || matchedUser.id || "").trim().toLowerCase();
+    }
+  }
+
+  // 2. Match by Employee Code (รหัสพนักงาน) in peopleRows
+  if (targetEmpId) {
+    const matched = peopleRows.find(row => {
+      const rowId = String(row["รหัสพนักงาน"] || row["id"] || row["employee_id"] || "").trim().toLowerCase();
+      return rowId && rowId === targetEmpId;
+    });
+    if (matched) {
+      return String(matched["รหัสพนักงาน"] || matched["ชื่อเล่น"] || "");
+    }
+  }
+
+  // 3. Match by Nickname (ชื่อเล่น) or Full name (ชื่อ-นามสกุล)
+  if (cleanName) {
+    const matched = peopleRows.find(row => {
+      const nickname = String(row["ชื่อเล่น"] || "").trim().toLowerCase();
+      const fullName = String(row["ชื่อ-นามสกุล"] || row["name"] || "").trim().toLowerCase();
+      return (nickname && nickname === cleanName) || (fullName && fullName.includes(cleanName));
+    });
+    if (matched) {
+      return String(matched["รหัสพนักงาน"] || matched["ชื่อเล่น"] || "");
+    }
+  }
+
+  return targetEmpId || authEmpId || authName || "";
 }
 
 function WithdrawPagination({
