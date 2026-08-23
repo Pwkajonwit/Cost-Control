@@ -179,87 +179,74 @@ export async function POST(request: Request) {
         });
       }
 
-      // Check master_members (employee table) by phone number
+      // Check master_members (employee table) by phone number or employee ID
       try {
-        const { data: member } = await supabaseAdmin
+        const { data: members } = await supabaseAdmin
           .from("master_members")
-          .select("*")
-          .or(`"เบอร์โทรศัพท์".eq.${phone},phone.eq.${phone}`)
-          .maybeSingle();
+          .select("*");
 
-        if (member) {
-          // Sync LINE User ID into master_members
-          await supabaseAdmin
-            .from("master_members")
-            .update({
-              line_user_id: lineUserId,
-              lineUserId: lineUserId
-            })
-            .eq("id", member.id);
-
-          const matchedUser = {
-            id: String(member.id || member.id_Contractor || member["รหัสพนักงาน"] || phone),
-            username: String(member["เบอร์โทรศัพท์"] || member.phone || member.id || phone),
-            displayName: String(member["ชื่อเล่น"] || member["ชื่อ-นามสกุล"] || member.name || displayName || phone),
-            role: String(member["สิทธิ์การใช้งาน"] || member.role || "User"),
-            status: "Active",
-            phone: phone,
-            lineUserId: lineUserId,
-            pictureUrl: pictureUrl || String(member.pictureUrl || member.image_url || "")
-          };
-
-          users.push(matchedUser);
-          await saveUsersList(users);
-
-          const empId = matchedUser.username || matchedUser.id;
-          const userName = matchedUser.displayName || empId;
-          const userRole = matchedUser.role || "User";
-
-          cookieStore.set("auth_employee_id", empId, { expires, path: "/" });
-          cookieStore.set("auth_name", userName, { expires, path: "/" });
-          cookieStore.set("auth_role", userRole, { expires, path: "/" });
-          if (pictureUrl) cookieStore.set("auth_picture_url", pictureUrl, { expires, path: "/" });
-          cookieStore.set("auth_line_user_id", lineUserId, { expires, path: "/" });
-
-          return NextResponse.json({
-            success: true,
-            isLinked: true,
-            user: matchedUser,
-            message: `ผูกบัญชี LINE กับพนักงาน "${userName}" (${userRole}) สำเร็จ!`
+        if (members && members.length > 0) {
+          const member = members.find((m: any) => {
+            const mPhoneClean = normalizePhone(m.phone || m["เบอร์โทรศัพท์"]);
+            const mIdClean = String(m.id || m["รหัสพนักงาน"] || "").trim().toLowerCase();
+            const rawPhoneClean = String(phone).trim().toLowerCase();
+            return (
+              (inputPhoneClean && mPhoneClean && mPhoneClean === inputPhoneClean) ||
+              (mIdClean && (mIdClean === rawPhoneClean || mIdClean === inputPhoneClean))
+            );
           });
+
+          if (member) {
+            // Sync LINE User ID into master_members
+            await supabaseAdmin
+              .from("master_members")
+              .update({
+                line_user_id: lineUserId,
+                lineUserId: lineUserId
+              })
+              .eq("id", member.id);
+
+            const matchedUser = {
+              id: String(member.id || member.id_Contractor || member["รหัสพนักงาน"] || phone),
+              username: String(member["เบอร์โทรศัพท์"] || member.phone || member.id || phone),
+              displayName: String(member["ชื่อเล่น"] || member["ชื่อ-นามสกุล"] || member.name || displayName || phone),
+              role: String(member["สิทธิ์การใช้งาน"] || member.role || "User"),
+              status: "Active",
+              phone: String(member.phone || member["เบอร์โทรศัพท์"] || phone),
+              lineUserId: lineUserId,
+              pictureUrl: pictureUrl || String(member.pictureUrl || member.image_url || "")
+            };
+
+            users.push(matchedUser);
+            await saveUsersList(users);
+
+            const empId = matchedUser.username || matchedUser.id;
+            const userName = matchedUser.displayName || empId;
+            const userRole = matchedUser.role || "User";
+
+            cookieStore.set("auth_employee_id", empId, { expires, path: "/" });
+            cookieStore.set("auth_name", userName, { expires, path: "/" });
+            cookieStore.set("auth_role", userRole, { expires, path: "/" });
+            if (pictureUrl) cookieStore.set("auth_picture_url", pictureUrl, { expires, path: "/" });
+            cookieStore.set("auth_line_user_id", lineUserId, { expires, path: "/" });
+
+            return NextResponse.json({
+              success: true,
+              isLinked: true,
+              user: matchedUser,
+              message: `ผูกบัญชี LINE กับพนักงาน "${userName}" (${userRole}) สำเร็จ!`
+            });
+          }
         }
       } catch (e) {
         console.warn("⚠️ Failed searching master_members during registration:", e);
       }
 
-      const newUserId = phone;
-      const newUser = {
-        id: newUserId,
-        username: phone,
-        displayName: displayName || `ผู้ใช้ LINE (${phone})`,
-        role: "User",
-        status: "Active",
-        phone: phone,
-        lineUserId: lineUserId,
-        pictureUrl: pictureUrl || "",
-        createdAt: new Date().toISOString().slice(0, 10)
-      };
-
-      users.push(newUser);
-      await saveUsersList(users);
-
-      cookieStore.set("auth_employee_id", newUserId, { expires, path: "/" });
-      cookieStore.set("auth_name", newUser.displayName, { expires, path: "/" });
-      cookieStore.set("auth_role", "User", { expires, path: "/" });
-      if (pictureUrl) cookieStore.set("auth_picture_url", pictureUrl, { expires, path: "/" });
-      cookieStore.set("auth_line_user_id", lineUserId, { expires, path: "/" });
-
+      // If not found in users_list or master_members, do NOT create a new account
       return NextResponse.json({
-        success: true,
-        isLinked: false,
-        user: newUser,
-        message: "ลงทะเบียนบัญชีใหม่สำเร็จ!"
-      });
+        success: false,
+        error: `ไม่พบเบอร์โทรศัพท์ "${phone}" ในระบบ กรุณากรอกเบอร์โทรศัพท์ให้ตรงกับข้อมูลพนักงานในระบบ หรือติดต่อผู้ดูแลระบบ`
+      }, { status: 404 });
     }
 
     // ==========================================

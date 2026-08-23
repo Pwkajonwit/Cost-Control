@@ -66,6 +66,17 @@ export async function POST(request: NextRequest) {
     }
 
     const row = body.row && typeof body.row === "object" ? body.row as SheetRow : {};
+    const actor = actorFromRequest(request);
+    if ((tableName === TABLES.DATA || tableName === "Data" || tableName === "bills")) {
+      if (!row["ผู้สร้างบิล"] && !row["created_by"]) {
+        row["ผู้สร้างบิล"] = actor;
+        row["created_by"] = actor;
+      } else if (!row["ผู้สร้างบิล"] && row["created_by"]) {
+        row["ผู้สร้างบิล"] = row["created_by"];
+      } else if (row["ผู้สร้างบิล"] && !row["created_by"]) {
+        row["created_by"] = row["ผู้สร้างบิล"];
+      }
+    }
     sanitizeBySchema(row, tableName);
     validateRequiredBySchema(row, tableName);
     if (tableName === TABLES.DATA) {
@@ -75,13 +86,15 @@ export async function POST(request: NextRequest) {
       ? await applyContractFormulas(row)
       : tableName === TABLES.PROJECT
         ? applyProjectFormulas(row)
-        : row;
+        : (tableName === TABLES.DATA || tableName === "Data" || tableName === "bills")
+          ? await applyBillFormulas(row)
+          : row;
     await appendRow(tableName, output);
     await appendAuditLog({
       action: "CREATE",
       tableName,
       key: String(output[TABLE_KEYS[tableName]] || ""),
-      actor: actorFromRequest(request),
+      actor: actor,
       details: { projectId: output["ID Project"] || "" }
     }).catch(() => undefined);
     clearCache("rows:");
@@ -250,7 +263,9 @@ function canManageTable(tableName: string) {
 }
 
 function actorFromRequest(request: NextRequest) {
-  return request.headers.get("x-user-email") || "web";
+  const authName = request.cookies.get("auth_name")?.value;
+  const authEmpId = request.cookies.get("auth_employee_id")?.value;
+  return authName || authEmpId || request.headers.get("x-user-email") || "web";
 }
 
 function sanitizeBySchema(row: SheetRow, tableName: string) {

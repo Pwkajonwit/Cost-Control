@@ -66,14 +66,25 @@ export async function POST(req: NextRequest) {
 
     if (targetRole === "completed" || targetRole === "closed") {
       const firstBill = bills[0];
-      const requesterKey = firstBill["ผู้เบิก"] || firstBill.requester || "";
-      const targetUserId = await getLineUserIdByRequester(requesterKey);
-      const fallbackGroup = await getLineTargetGroup("finance");
-      const validGroup = fallbackGroup && fallbackGroup.startsWith("C") ? fallbackGroup : "";
-      const sendTo = targetUserId || validGroup;
+      const requesterKey = String(firstBill["ผู้เบิก"] || firstBill.requester || "").trim();
+      const creatorKey = String(firstBill["ผู้สร้างบิล"] || firstBill.created_by || firstBill["ผู้บันทึก"] || "").trim();
 
-      if (!sendTo) {
-        return NextResponse.json({ error: "No LINE User ID or Group target found for requester" }, { status: 400 });
+      const [targetUserId, creatorUserId, fallbackGroup] = await Promise.all([
+        requesterKey ? getLineUserIdByRequester(requesterKey) : Promise.resolve(""),
+        creatorKey ? getLineUserIdByRequester(creatorKey) : Promise.resolve(""),
+        getLineTargetGroup("finance")
+      ]);
+
+      const validGroup = fallbackGroup && fallbackGroup.startsWith("C") ? fallbackGroup : "";
+      const recipients = new Set<string>();
+      if (targetUserId) recipients.add(targetUserId);
+      if (creatorUserId) recipients.add(creatorUserId);
+      if (recipients.size === 0 && validGroup) recipients.add(validGroup);
+
+      if (recipients.size === 0) {
+        return NextResponse.json({
+          error: `ไม่พบบัญชี LINE ของผู้เบิก "${requesterKey || "-"}" หรือผู้สร้างบิล "${creatorKey || "-"}" ในระบบ`
+        }, { status: 400 });
       }
 
       const flex = createWithdrawCompletedRequesterFlex(bills, peopleMap);
@@ -81,34 +92,39 @@ export async function POST(req: NextRequest) {
         ? `🎉 รายการเบิกเงินสำเร็จเรียบร้อย #${bills[0]._sheetRow || bills[0].id || bills[0]["ลำดับ"] || ""} (฿${amountStr})`
         : `🎉 รายการเบิกเงินสำเร็จเรียบร้อย ${bills.length} รายการ (รวม ฿${amountStr})`;
 
-      const result = await sendFlexMessageDetailed(sendTo, altText, flex);
-
-      // Also notify the bill creator (if different from requester)
-      const creatorKey = String(firstBill["ผู้สร้างบิล"] || firstBill.created_by || firstBill["ผู้บันทึก"] || "").trim();
-      if (creatorKey && creatorKey !== requesterKey) {
-        const creatorUserId = await getLineUserIdByRequester(creatorKey);
-        if (creatorUserId && creatorUserId !== targetUserId) {
-          sendFlexMessageDetailed(creatorUserId, altText, flex).catch((e) =>
-            console.warn("Failed notifying bill creator:", e)
-          );
-        }
+      const results = [];
+      for (const sendTo of recipients) {
+        const res = await sendFlexMessageDetailed(sendTo, altText, flex);
+        results.push(res);
       }
 
-      return NextResponse.json({ success: result.success, error: result.error, target: sendTo });
+      return NextResponse.json({ success: true, count: recipients.size, targets: Array.from(recipients), results });
     }
 
-    // Default: requester
+    // Default: requester & creator
     const firstBill = bills[0];
-    const requesterKey = firstBill["ผู้เบิก"] || firstBill.requester || "";
-    const targetUserId = await getLineUserIdByRequester(requesterKey);
-    const fallbackGroup = await getLineTargetGroup("finance");
+    const requesterKey = String(firstBill["ผู้เบิก"] || firstBill.requester || "").trim();
+    const creatorKey = String(firstBill["ผู้สร้างบิล"] || firstBill.created_by || firstBill["ผู้บันทึก"] || "").trim();
 
-    // Only send to fallbackGroup if it is an actual LINE Group ID starting with "C"
+    const [targetUserId, creatorUserId, fallbackGroup] = await Promise.all([
+      requesterKey ? getLineUserIdByRequester(requesterKey) : Promise.resolve(""),
+      creatorKey ? getLineUserIdByRequester(creatorKey) : Promise.resolve(""),
+      getLineTargetGroup("finance")
+    ]);
+
     const validGroup = fallbackGroup && fallbackGroup.startsWith("C") ? fallbackGroup : "";
-    const sendTo = targetUserId || validGroup;
+    const sessionLineUserId = req.cookies.get("auth_line_user_id")?.value;
 
-    if (!sendTo) {
-      return NextResponse.json({ error: `No LINE User ID found for requester "${requesterKey}"` }, { status: 400 });
+    const recipients = new Set<string>();
+    if (targetUserId) recipients.add(targetUserId);
+    if (creatorUserId) recipients.add(creatorUserId);
+    if (sessionLineUserId && sessionLineUserId.startsWith("U")) recipients.add(sessionLineUserId);
+    if (recipients.size === 0 && validGroup) recipients.add(validGroup);
+
+    if (recipients.size === 0) {
+      return NextResponse.json({
+        error: `ไม่พบบัญชี LINE ของผู้เบิก "${requesterKey || "-"}" หรือผู้สร้างบิล "${creatorKey || "-"}" ในระบบ`
+      }, { status: 400 });
     }
 
     const flex = createWithdrawRequesterFlex(bills, peopleMap);
@@ -116,20 +132,13 @@ export async function POST(req: NextRequest) {
       ? `📄 แจ้งเตือนรายการตั้งเบิกเงิน #${bills[0]._sheetRow || bills[0].id || bills[0]["ลำดับ"] || ""} (฿${amountStr})`
       : `📄 แจ้งเตือนรายการตั้งเบิกเงิน ${bills.length} รายการ (รวม ฿${amountStr})`;
 
-    const result = await sendFlexMessageDetailed(sendTo, altText, flex);
-
-    // Also notify the bill creator (if different from requester)
-    const creatorKey = String(firstBill["ผู้สร้างบิล"] || firstBill.created_by || firstBill["ผู้บันทึก"] || "").trim();
-    if (creatorKey && creatorKey !== requesterKey) {
-      const creatorUserId = await getLineUserIdByRequester(creatorKey);
-      if (creatorUserId && creatorUserId !== targetUserId) {
-        sendFlexMessageDetailed(creatorUserId, altText, flex).catch((e) =>
-          console.warn("Failed notifying bill creator on requester flex:", e)
-        );
-      }
+    const results = [];
+    for (const sendTo of recipients) {
+      const res = await sendFlexMessageDetailed(sendTo, altText, flex);
+      results.push(res);
     }
 
-    return NextResponse.json({ success: result.success, error: result.error, target: sendTo });
+    return NextResponse.json({ success: true, count: recipients.size, targets: Array.from(recipients), results });
   } catch (err: any) {
     console.error("❌ Withdraw notification error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });

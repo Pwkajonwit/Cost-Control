@@ -25,7 +25,12 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
     getRows(TABLES.COMPANY).catch(() => []),
   ]);
 
-  const dataRows = await hydrateBillRows(rawDataRows);
+  const dataRows = await hydrateBillRows(rawDataRows, {
+    projects: rawProjectRows,
+    stores: storeRows,
+    contracts: rawContractRows,
+    contractors: contractorRows,
+  });
   const projectRows = hydrateProjectRows(rawProjectRows);
   const contractRows = await hydrateContractRows(rawContractRows);
   const bill = dataRows.find((row) => billKey(row) === decodedBillId || String(row._sheetRow || "") === decodedBillId);
@@ -102,6 +107,25 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
       : `/views/stores/${encodeURIComponent(storeKey)}`
     : "";
 
+  // Resolve Creator Name & Link
+  const rawCreatedBy = text(bill["ผู้สร้างบิล"] || bill["created_by"] || bill["ผู้บันทึก"]);
+  const matchedCreator = rawCreatedBy
+    ? peopleRows.find((p) => {
+        const code = text(p["รหัสพนักงาน"] || p.id).toLowerCase();
+        const nickname = text(p["ชื่อเล่น"]).toLowerCase();
+        const fullName = text(p["ชื่อ-นามสกุล"]).toLowerCase();
+        const crLower = rawCreatedBy.toLowerCase();
+        return code === crLower || nickname === crLower || fullName === crLower;
+      })
+    : null;
+
+  const creatorName = matchedCreator ? text(matchedCreator["ชื่อเล่น"] || matchedCreator["ชื่อ-นามสกุล"]) : "";
+  const createdByDisplay = rawCreatedBy
+    ? creatorName && !rawCreatedBy.toLowerCase().includes(creatorName.toLowerCase())
+      ? `${rawCreatedBy} - ${creatorName}`
+      : rawCreatedBy
+    : "-";
+
   return (
     <BillDetailClient
       bill={bill}
@@ -110,6 +134,7 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
       contract={contract}
       requesterDisplay={requesterDisplay}
       requesterLink={requesterLink}
+      createdByDisplay={createdByDisplay}
       vendorDisplay={vendorDisplay}
       vendorLink={vendorLink}
       documentData={documentData}
