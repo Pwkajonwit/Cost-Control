@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSystemOptionsFromSupabase, isSupabaseConfigured } from "@/lib/supabase-db";
 import { clearCache } from "@/lib/cache";
-import { getRows } from "@/lib/db";
+import { getRows, invalidateTableCache } from "@/lib/db";
 import { TABLES } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -88,11 +88,11 @@ export async function POST(req: NextRequest) {
       const seqNum = Number(startSequence) || 1;
 
       if (isSupabaseConfigured()) {
-        // 1. Delete all rows in bills table
+        // 1. Delete all rows in bills table reliably
         const { error: delError } = await supabaseAdmin
           .from("bills")
           .delete()
-          .gt("id", 0);
+          .not("id", "is", null);
 
         if (delError) {
           console.error("Error resetting bills table:", delError);
@@ -127,6 +127,7 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString()
           });
 
+        invalidateTableCache(TABLES.DATA);
         clearCache();
       }
 
