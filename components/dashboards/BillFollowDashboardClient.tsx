@@ -65,6 +65,7 @@ export function BillFollowDashboardClient({
 
   const [activeTab, setActiveTab] = useState<"all" | "vat" | "natural" | "company" | "credit">("all");
   const [searchTerm, setSearchTerm] = useState(urlSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
   const [selectedRequester, setSelectedRequester] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [pageSize, setPageSize] = useState(20);
@@ -73,8 +74,17 @@ export function BillFollowDashboardClient({
 
   useEffect(() => {
     setSearchTerm(urlSearch);
+    setDebouncedSearch(urlSearch);
     setPage(1);
   }, [urlSearch]);
+
+  // Debounce search input by 250ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Quick Action & Notification States
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
@@ -125,8 +135,8 @@ export function BillFollowDashboardClient({
         if (rowIso !== selectedDate) return false;
       }
       // Filter by search
-      if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase().trim();
+      if (debouncedSearch.trim()) {
+        const q = debouncedSearch.toLowerCase().trim();
         const match =
           String(row["ลำดับ"] || "").toLowerCase().includes(q) ||
           String(row["ร้าน/บุคคล"] || "").toLowerCase().includes(q) ||
@@ -138,7 +148,7 @@ export function BillFollowDashboardClient({
       }
       return true;
     });
-  }, [activeCategoryRows, selectedRequester, selectedDate, searchTerm]);
+  }, [activeCategoryRows, selectedRequester, selectedDate, debouncedSearch]);
 
   // Financial totals
   const allPendingTotal = useMemo(() => allPendingRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [allPendingRows]);

@@ -592,7 +592,7 @@ export async function saveEntityBanksBatch(bankMap: Record<string, string>) {
 
 export async function getEntityBankMapFromSupabase(): Promise<Record<string, string>> {
   if (!isSupabaseConfigured()) return {};
-  return cached("sys_opt:entity_banks", 10_000, async () => {
+  return cached("sys_opt:entity_banks", 180_000, async () => {
     try {
       const { data } = await supabaseAdmin.from("system_options").select("*").eq("id", "entity_banks").maybeSingle();
       return (data?.data && typeof data.data === "object") ? data.data : {};
@@ -653,7 +653,7 @@ export async function saveBillFollowDate(billId: string, patch: Record<string, a
 
 export async function getBillFollowDatesFromSupabase(): Promise<Record<string, Record<string, string>>> {
   if (!isSupabaseConfigured()) return {};
-  return cached("sys_opt:bill_follow_dates", 10_000, async () => {
+  return cached("sys_opt:bill_follow_dates", 60_000, async () => {
     try {
       const { data } = await supabaseAdmin.from("system_options").select("*").eq("id", "bill_follow_dates").maybeSingle();
       return (data?.data && typeof data.data === "object") ? data.data : {};
@@ -701,7 +701,7 @@ export async function saveProjectBudgetAllocation(projectId: string, patch: Reco
 
 export async function getProjectBudgetAllocationsFromSupabase(): Promise<Record<string, Record<string, any>>> {
   if (!isSupabaseConfigured()) return {};
-  return cached("sys_opt:project_budget_allocations", 10_000, async () => {
+  return cached("sys_opt:project_budget_allocations", 60_000, async () => {
     try {
       const { data } = await supabaseAdmin.from("system_options").select("*").eq("id", "project_budget_allocations").maybeSingle();
       return (data?.data && typeof data.data === "object") ? data.data : {};
@@ -723,31 +723,41 @@ export async function updateRowInSupabase(tableName: string, keyColumn: string, 
   const numId = Number(rawVal);
   const primaryVal = Number.isFinite(numId) && String(rawVal).trim() !== "" ? numId : rawVal;
 
-  const bankVal = patch["ธนาคาร"] || patch["bank_name"];
-  if (bankVal && primaryVal) {
-    saveEntityBankOption(String(primaryVal), String(bankVal));
-  }
+  const patchKeys = Object.keys(patch).filter(k => !k.startsWith("_") && k !== "id");
+  const isStatusOnly = patchKeys.length > 0 && patchKeys.every(k => ["สถานะ", "status"].includes(k));
 
-  if (dbTable === "bills" || tableName === "Data" || tableName === "bills" || tableName === "DATA") {
-    const targetBillId = String(patch["ลำดับ"] ?? patch.id ?? primaryVal ?? keyValue);
-    if (targetBillId) {
-      await saveBillFollowDate(targetBillId, patch);
+  if (!isStatusOnly) {
+    const bankVal = patch["ธนาคาร"] || patch["bank_name"];
+    const sideTasks: Promise<any>[] = [];
+
+    if (bankVal && primaryVal) {
+      sideTasks.push(saveEntityBankOption(String(primaryVal), String(bankVal)));
     }
-  }
 
-  if (dbTable === "projects" || tableName === "Project" || tableName === "PROJECT") {
-    const targetProjId = String(patch["ID Project"] ?? patch.id ?? primaryVal ?? keyValue);
-    await saveProjectBudgetAllocation(targetProjId, patch);
-  }
+    if (dbTable === "bills" || tableName === "Data" || tableName === "bills" || tableName === "DATA") {
+      const targetBillId = String(patch["ลำดับ"] ?? patch.id ?? primaryVal ?? keyValue);
+      if (targetBillId) {
+        sideTasks.push(saveBillFollowDate(targetBillId, patch));
+      }
+    }
 
-  await syncCustomOptionsFromRow(patch);
+    if (dbTable === "projects" || tableName === "Project" || tableName === "PROJECT") {
+      const targetProjId = String(patch["ID Project"] ?? patch.id ?? primaryVal ?? keyValue);
+      sideTasks.push(saveProjectBudgetAllocation(targetProjId, patch));
+    }
 
-  try {
-    const { data: currentRecord } = await supabaseAdmin.from(dbTable).select("data").eq("id", primaryVal).maybeSingle();
-    const existingData = (currentRecord && currentRecord.data && typeof currentRecord.data === "object") ? currentRecord.data : {};
-    dbPatch.data = { ...existingData, ...patch };
-  } catch {
-    dbPatch.data = { ...patch };
+    sideTasks.push(syncCustomOptionsFromRow(patch));
+
+    // Run side-effects concurrently without blocking
+    Promise.all(sideTasks).catch(() => undefined);
+
+    try {
+      const { data: currentRecord } = await supabaseAdmin.from(dbTable).select("data").eq("id", primaryVal).maybeSingle();
+      const existingData = (currentRecord && currentRecord.data && typeof currentRecord.data === "object") ? currentRecord.data : {};
+      dbPatch.data = { ...existingData, ...patch };
+    } catch {
+      dbPatch.data = { ...patch };
+    }
   }
 
   try {
@@ -1096,16 +1106,19 @@ export async function insertRowToSupabase(tableName: string, rowData: Record<str
 
   const bankVal = rowData["ธนาคาร"] || rowData["bank_name"];
   const entityId = dbRow.id || rowData["id_store"] || rowData["id_Contractor"] || rowData["รหัสพนักงาน"];
+  const sideTasks: Promise<any>[] = [];
+
   if (bankVal && entityId) {
-    saveEntityBankOption(String(entityId), String(bankVal));
+    sideTasks.push(saveEntityBankOption(String(entityId), String(bankVal)));
   }
 
   if (dbTable === "projects" || tableName === "Project" || tableName === "PROJECT") {
     const targetProjId = String(rowData["ID Project"] ?? rowData.id ?? dbRow.id);
-    await saveProjectBudgetAllocation(targetProjId, rowData);
+    sideTasks.push(saveProjectBudgetAllocation(targetProjId, rowData));
   }
 
-  await syncCustomOptionsFromRow(rowData);
+  sideTasks.push(syncCustomOptionsFromRow(rowData));
+  Promise.all(sideTasks).catch(() => undefined);
 
   try {
     let res = await supabaseAdmin.from(dbTable).insert(dbRow).select();

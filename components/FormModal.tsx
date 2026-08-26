@@ -441,11 +441,10 @@ export function FormModal({
         setEditSheetRow(null);
         setValues(getInitialStringValues(activeForm));
         setResetKey(k => k + 1);
-        if (activeForm.tableName === TABLES.DATA) {
-          window.location.reload();
-        } else {
-          router.refresh();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("bills-data-updated"));
         }
+        router.refresh();
       } else {
         // Reset form & verify fresh sequence from server for the next entry
         formElement.reset();

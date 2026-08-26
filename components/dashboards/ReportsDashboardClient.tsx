@@ -179,7 +179,16 @@ export function ReportsDashboardClient({
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedProductCategory, setSelectedProductCategory] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [refreshing, setRefreshing] = useState(false);
+
+  // Debounce search input by 250ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Entrepreneur Financial Calculator States
   const [showCalculator, setShowCalculator] = useState(false);
@@ -408,9 +417,9 @@ export function ReportsDashboardClient({
       });
     }
 
-    if (!searchTerm.trim()) return list;
+    if (!debouncedSearch.trim()) return list;
 
-    const q = searchTerm.toLowerCase().trim();
+    const q = debouncedSearch.toLowerCase().trim();
     return list.filter((r) => {
       const reqName = getRequesterDisplayName(r["ผู้เบิก"]);
       const cInfo = getContractorInfo(r["ผู้รับเหมา"] || r["ร้าน/บุคคล"] || r["ชื่อผู้รับเหมา"]);
@@ -428,7 +437,7 @@ export function ReportsDashboardClient({
         reqName.toLowerCase().includes(q)
       );
     });
-  }, [projectFilteredRows, selectedRequester, selectedContractor, searchTerm, peopleMap, contractorMap]);
+  }, [projectFilteredRows, selectedRequester, selectedContractor, debouncedSearch, peopleMap, contractorMap]);
 
   // Tab 1: Material rows
   const materialRows = useMemo(() => {

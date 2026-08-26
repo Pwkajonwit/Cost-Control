@@ -75,8 +75,8 @@ export async function hydrateBillRows(
 }
 
 export async function applyContractFormulas(row: SheetRow) {
-  const context = await getContractFormulaContext();
-  return applyContractFormulasWithContext({ ...row }, context);
+  const [hydrated] = await hydrateContractRows([{ ...row }]);
+  return hydrated || row;
 }
 
 export function applyProjectFormulas(row: SheetRow) {
@@ -128,25 +128,46 @@ export async function hydrateContractRows(
   preloadedContext?: { projects?: SheetRow[]; contractors?: SheetRow[]; dataRows?: SheetRow[] }
 ) {
   const context = await getContractFormulaContext(preloadedContext);
-  return rows.map(row => applyContractFormulasWithContext({ ...row }, context));
+  
+  // Build lookup maps for O(1) matching
+  const projectMap = new Map<string, SheetRow>();
+  for (const p of context.projects) {
+    const k1 = String(p["ID Project"] || "").trim();
+    const k2 = String(p.id || "").trim();
+    if (k1) projectMap.set(k1, p);
+    if (k2) projectMap.set(k2, p);
+  }
+
+  const contractorMap = new Map<string, SheetRow>();
+  for (const c of context.contractors) {
+    const k1 = String(c["id_Contractor"] || "").trim();
+    const k2 = String(c.id || "").trim();
+    if (k1) contractorMap.set(k1, c);
+    if (k2) contractorMap.set(k2, c);
+  }
+
+  return rows.map(row => applyContractFormulasWithFastContext(row, { projectMap, contractorMap, dataRows: context.dataRows }));
 }
 
 async function getContractFormulaContext(preloadedContext?: { projects?: SheetRow[]; contractors?: SheetRow[]; dataRows?: SheetRow[] }) {
-  const projects = preloadedContext?.projects || await getRows(TABLES.PROJECT, 30_000).catch(() => []);
-  const contractors = preloadedContext?.contractors || await getRows(TABLES.CONTRACTOR, 30_000).catch(() => []);
-  const dataRows = preloadedContext?.dataRows || await getRows(TABLES.DATA, 120_000).catch(() => []);
+  const projects = preloadedContext?.projects || await getRows(TABLES.PROJECT, 60_000).catch(() => []);
+  const contractors = preloadedContext?.contractors || await getRows(TABLES.CONTRACTOR, 180_000).catch(() => []);
+  const dataRows = preloadedContext?.dataRows || await getRows(TABLES.DATA, 20_000, 3_000).catch(() => []);
   return { projects, contractors, dataRows };
 }
 
-function applyContractFormulasWithContext(
+function applyContractFormulasWithFastContext(
   row: SheetRow,
-  context: { projects: SheetRow[]; contractors: SheetRow[]; dataRows: SheetRow[] }
+  context: { projectMap: Map<string, SheetRow>; contractorMap: Map<string, SheetRow>; dataRows: SheetRow[] }
 ) {
-  const project = context.projects.find(item => String(item["ID Project"]).trim() === String(row["ID Project"]).trim());
+  const pId = String(row["ID Project"] || row.project_id || "").trim();
+  const project = context.projectMap.get(pId);
   if (project) {
     row["ชื่อ Project"] = project["ชื่อ Project"] || row["ชื่อ Project"] || "";
   }
-  const contractor = context.contractors.find(item => String(item["id_Contractor"]).trim() === String(row["id_Contractor"]).trim());
+
+  const cId = String(row["id_Contractor"] || row.contractor_id || "").trim();
+  const contractor = context.contractorMap.get(cId);
   if (contractor) {
     const cName = contractor["ชื่อเล่น"] || contractor["ชื่อ-นามสกุล"] || row["ชื่อเล่น"] || "";
     row["ชื่อเล่น"] = cName;
@@ -167,8 +188,8 @@ function applyContractFormulasWithContext(
 
 function computePaidForContract(contractRow: SheetRow, dataRows: SheetRow[]): number {
   const cConworkId = String(contractRow["id_Conwork"] || contractRow.id || "").trim();
-  const cProjectId = String(contractRow["ID Project"] || "").trim();
-  const cContractorId = String(contractRow["id_Contractor"] || "").trim();
+  const cProjectId = String(contractRow["ID Project"] || contractRow.project_id || "").trim();
+  const cContractorId = String(contractRow["id_Contractor"] || contractRow.contractor_id || "").trim();
   const cName = String(contractRow["ชื่อเล่น"] || contractRow["ผู้รับเหมา"] || contractRow["ชื่อ-นามสกุล"] || "").trim();
 
   let totalPaid = 0;
@@ -179,7 +200,7 @@ function computePaidForContract(contractRow: SheetRow, dataRows: SheetRow[]): nu
     const bVendorType = String(b["ร้านค้า/ผู้รับเหมา"] || "").trim();
     const bContractorRef = String(b["ผู้รับเหมา"] || b.contractor_id || b.conwork_id || "").trim();
     const bVendorRef = String(b["ร้าน/บุคคล"] || "").trim();
-    const bProjectId = String(b["ID Project"] || "").trim();
+    const bProjectId = String(b["ID Project"] || b.project_id || "").trim();
 
     const isContractorBill = bVendorType === "ผู้รับเหมา" || bContractorRef !== "" || bVendorRef.startsWith("CW");
     if (!isContractorBill) continue;

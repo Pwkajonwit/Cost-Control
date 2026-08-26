@@ -2,6 +2,7 @@ import { TABLE_KEYS, TABLES } from "@/lib/config";
 import { hydrateContractRows } from "@/lib/formulas";
 import { getRows, getSystemOptions, listRefOptions } from "@/lib/db";
 import { getFormSchema, getRefRowColumns } from "@/lib/schemas";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { FieldSchema, RefOption, SheetRow } from "@/lib/types";
 
 export async function getFormPayload(tableName: string, preloadedRows?: Record<string, SheetRow[]>) {
@@ -46,10 +47,10 @@ async function listHydratedContractOptions(column: FieldSchema, preloadedRows?: 
           contractors: preloadedRows[TABLES.CONTRACTOR],
           dataRows: preloadedRows[TABLES.DATA],
         })
-      : hydrateContractRows(await getRows(TABLES.CONTRACT_WORK, 120_000)),
+      : hydrateContractRows(await getRows(TABLES.CONTRACT_WORK, 30_000)),
     preloadedRows?.[TABLES.CONTRACTOR]
       ? Promise.resolve(preloadedRows[TABLES.CONTRACTOR])
-      : getRows(TABLES.CONTRACTOR, 120_000).catch(() => [])
+      : getRows(TABLES.CONTRACTOR, 180_000).catch(() => [])
   ]);
 
   const contractorMap = new Map<string, string>();
@@ -307,8 +308,8 @@ export async function getInitialValues(tableName: string): Promise<SheetRow> {
 }
 
 async function nextDataSequence() {
-  const [rows, sysOptions] = await Promise.all([
-    getRows(TABLES.DATA, 0).catch(() => []),
+  const [maxRecord, sysOptions] = await Promise.all([
+    supabaseAdmin.from("bills").select("id").order("id", { ascending: false }).limit(1).maybeSingle(),
     getSystemOptions().catch(() => ({} as Record<string, any>))
   ]);
 
@@ -318,11 +319,7 @@ async function nextDataSequence() {
     0
   );
 
-  const maxFromRows = rows.reduce((max, row) => {
-    const first = Number(row["ลำดับtest"] || 0);
-    const second = Number(row["ลำดับ"] || 0);
-    return Math.max(max, first, second);
-  }, 0);
+  const maxFromRows = Number(maxRecord?.data?.id || 0);
 
   if (maxFromRows === 0) {
     return configuredStart > 0 ? configuredStart : 1;

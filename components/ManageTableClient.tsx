@@ -208,12 +208,10 @@ export function ManageTableClient({
     setBusy("edit");
     setError("");
     try {
-      for (const changedRow of changedRows) {
-        await requestJson("/api/rows", {
-          method: "PATCH",
-          body: JSON.stringify({ tableName, sheetRow: changedRow.sheetRow, values: changedRow.values })
-        });
-      }
+      await requestJson("/api/rows", {
+        method: "PATCH",
+        body: JSON.stringify({ tableName, patches: changedRows })
+      });
       setEditing(false);
       setDraftRows({});
       if (typeof window !== "undefined") {

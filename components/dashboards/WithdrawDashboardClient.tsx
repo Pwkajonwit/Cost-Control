@@ -46,12 +46,23 @@ export function WithdrawDashboardClient({ rows, peopleRows, usersList = [], init
 
   const columns = useMemo(() => ALL_COLUMNS, [effectiveIsAdmin]);
   const [filters, setFilters] = useState(() => normalizeFilters(initialFilters));
+  const [searchInput, setSearchInput] = useState(() => initialFilters.search || "");
 
   useEffect(() => {
     if (urlSearch !== (filters.search || "")) {
+      setSearchInput(urlSearch);
       setFilters(prev => ({ ...prev, search: urlSearch }));
     }
   }, [urlSearch]);
+
+  // Debounce search input by 250ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters(prev => (prev.search === searchInput ? prev : { ...prev, search: searchInput }));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [statusOverrides, setStatusOverrides] = useState<Record<number, string>>({});
@@ -117,7 +128,11 @@ export function WithdrawDashboardClient({ rows, peopleRows, usersList = [], init
   }, [page, totalPages]);
 
   function updateFilter(name: keyof WithdrawFilters, value: string) {
-    setFilters(current => ({ ...current, [name]: value }));
+    if (name === "search") {
+      setSearchInput(value);
+    } else {
+      setFilters(current => ({ ...current, [name]: value }));
+    }
   }
 
   async function approveRow(row: SheetRow) {
@@ -184,25 +199,26 @@ export function WithdrawDashboardClient({ rows, peopleRows, usersList = [], init
         return;
       }
 
+      const patches = validSheetRows.map(sheetRow => ({ sheetRow, values: { "สถานะ": targetStatus } }));
+      const res = await fetch("/api/rows", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tableName: "Data", patches })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "อัปเดตไม่สำเร็จ");
+      }
+
       const updatedRowsList: SheetRow[] = [];
-
-      const updates = validSheetRows.map(async (sheetRow) => {
+      validSheetRows.forEach(sheetRow => {
         const targetRow = rows.find(r => Number(r._sheetRow) === sheetRow);
-        if (!targetRow) return;
-
-        const res = await fetch("/api/rows", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tableName: "Data", sheetRow, values: { "สถานะ": targetStatus } })
-        });
-        if (res.ok) {
+        if (targetRow) {
           const updatedRow = { ...targetRow, "สถานะ": targetStatus };
-          setStatusOverrides(current => ({ ...current, [sheetRow]: targetStatus }));
           updatedRowsList.push(updatedRow);
+          setStatusOverrides(current => ({ ...current, [sheetRow]: targetStatus }));
         }
       });
-
-      await Promise.all(updates);
 
       if (updatedRowsList.length > 0) {
         const targetRole = targetStatus === "อนุมัติ" ? "approver" : "requester";
@@ -297,11 +313,11 @@ export function WithdrawDashboardClient({ rows, peopleRows, usersList = [], init
             <input
               type="text"
               placeholder="ค้นหา Project, ร้านค้า, รายการ..."
-              value={filters.search}
+              value={searchInput}
               onChange={event => updateFilter("search", event.target.value)}
               className="w-full bg-slate-50 md:bg-white text-slate-800 text-xs pl-8 pr-7 py-1.5 rounded-lg md:rounded-md border border-slate-200 md:border-slate-300 focus:outline-none focus:bg-white focus:border-slate-400 placeholder:text-slate-400"
             />
-            {filters.search && (
+            {searchInput && (
               <X size={14} className="absolute right-2 text-slate-400 cursor-pointer hover:text-slate-600" onClick={() => updateFilter("search", "")} />
             )}
           </div>

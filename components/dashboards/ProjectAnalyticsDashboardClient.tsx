@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Coins,
@@ -95,6 +95,15 @@ export function ProjectAnalyticsDashboardClient({
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+
+  // Debounce search input by 250ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Drilldown Modal
   const [drilldownModal, setDrilldownModal] = useState<{
@@ -147,8 +156,8 @@ export function ProjectAnalyticsDashboardClient({
     if (selectedCategory !== "all") {
       rows = rows.filter((r) => getRowCategory(r).includes(selectedCategory));
     }
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase().trim();
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase().trim();
       rows = rows.filter((r) => {
         const reqName = getRequesterDisplayName(r["ผู้เบิก"]);
         return (
@@ -163,7 +172,7 @@ export function ProjectAnalyticsDashboardClient({
       });
     }
     return rows;
-  }, [dataRows, selectedProjectId, selectedCategory, searchTerm, peopleMap]);
+  }, [dataRows, selectedProjectId, selectedCategory, debouncedSearch, peopleMap]);
 
   // Summary Metrics
   const summaryMetrics = useMemo(() => {

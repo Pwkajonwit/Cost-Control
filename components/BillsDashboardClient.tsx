@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChevronLeft, ChevronRight, Eye, Filter, Search, X } from "lucide-react";
 import { FormModal } from "@/components/FormModal";
 import { BillWorkflowActions } from "@/components/BillWorkflowActions";
@@ -38,6 +39,8 @@ export function BillsDashboardClient({
   pageSize: initialPageSize = 20,
   sort: initialSort = "latest",
 }: BillsDashboardClientProps) {
+  const router = useRouter();
+  const [searchInput, setSearchInput] = useState(initialSearch);
   const [filters, setFilters] = useState({
     requester: "",
     date: "",
@@ -47,8 +50,16 @@ export function BillsDashboardClient({
   });
 
   useEffect(() => {
-    setFilters(prev => ({ ...prev, search: initialSearch }));
+    setSearchInput(initialSearch);
   }, [initialSearch]);
+
+  // Debounce search input by 250ms to prevent UI main thread lag
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters(prev => (prev.search === searchInput ? prev : { ...prev, search: searchInput }));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const [page, setPage] = useState(initialPage);
   const [pageSize, setPageSize] = useState(initialPageSize);
@@ -83,7 +94,17 @@ export function BillsDashboardClient({
         if (rowIso !== filterDateIso) return false;
       }
       if (query) {
-        const found = Object.values(row).some(v => String(v || "").toLowerCase().includes(query));
+        // Fast search checks over primary visible fields first before scanning all values
+        const primaryMatch = 
+          String(row["ชื่อ Project"] || "").toLowerCase().includes(query) ||
+          String(row["ร้าน/บุคคล"] || "").toLowerCase().includes(query) ||
+          String(row["สินค้า/ทำงาน"] || "").toLowerCase().includes(query) ||
+          String(row["ผู้เบิก"] || "").toLowerCase().includes(query) ||
+          String(row["บิล"] || "").toLowerCase().includes(query) ||
+          String(row["ลำดับ"] || "").toLowerCase().includes(query);
+        if (primaryMatch) return true;
+
+        const found = Object.values(row).some(v => typeof v === "string" && v.toLowerCase().includes(query));
         if (!found) return false;
       }
       return true;
@@ -115,7 +136,11 @@ export function BillsDashboardClient({
   }, [filters, pageSize]);
 
   function updateFilter(name: string, value: string) {
-    setFilters(cur => ({ ...cur, [name]: value }));
+    if (name === "search") {
+      setSearchInput(value);
+    } else {
+      setFilters(cur => ({ ...cur, [name]: value }));
+    }
   }
 
   return (
@@ -152,12 +177,12 @@ export function BillsDashboardClient({
             <input
               type="text"
               placeholder="ค้นหาบิล, ร้านค้า, โครงการ..."
-              value={filters.search}
-              onChange={event => updateFilter("search", event.target.value)}
+              value={searchInput}
+              onChange={event => setSearchInput(event.target.value)}
               className="w-full bg-slate-50 text-slate-800 text-xs pl-8 pr-7 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:bg-white focus:border-slate-400 placeholder:text-slate-400"
             />
-            {filters.search && (
-              <X size={14} className="absolute right-2 text-slate-400 cursor-pointer" onClick={() => updateFilter("search", "")} />
+            {searchInput && (
+              <X size={14} className="absolute right-2 text-slate-400 cursor-pointer" onClick={() => setSearchInput("")} />
             )}
           </div>
           <button
@@ -229,12 +254,12 @@ export function BillsDashboardClient({
               <input
                 type="text"
                 placeholder="ค้นหา Project, ร้านค้า, รายการ..."
-                value={filters.search}
-                onChange={event => updateFilter("search", event.target.value)}
+                value={searchInput}
+                onChange={event => setSearchInput(event.target.value)}
                 className="w-full bg-white text-slate-800 text-xs pl-8 pr-7 py-1.5 rounded-md border border-slate-300 focus:outline-none focus:border-slate-500 placeholder:text-slate-400"
               />
-              {filters.search && (
-                <X size={14} className="absolute right-2 text-slate-400 cursor-pointer hover:text-slate-600" onClick={() => updateFilter("search", "")} />
+              {searchInput && (
+                <X size={14} className="absolute right-2 text-slate-400 cursor-pointer hover:text-slate-600" onClick={() => setSearchInput("")} />
               )}
             </div>
 
@@ -623,7 +648,7 @@ export function BillsDashboardClient({
               if (res.ok) {
                 setSelectedDetailIndex(null);
                 showToast("success", "ลบบิลสำเร็จเรียบร้อย");
-                window.location.reload();
+                router.refresh();
               } else {
                 const err = await res.json();
                 showToast("error", `ลบบิลไม่สำเร็จ: ${err.error || "เกิดข้อผิดพลาด"}`);

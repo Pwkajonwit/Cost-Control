@@ -23,11 +23,77 @@ export type AuditEntry = {
   details?: Record<string, unknown>;
 };
 
+const MASTER_TABLES = new Set([
+  "stores", "ร้านค้า",
+  "contractors", "รับเหมา",
+  "banks", "ธนาคาร",
+  "categories", "ประเภท",
+  "companies", "บริษัท",
+  "customers", "ลูกค้า",
+  "cars", "ทะเบียน",
+  "products", "สินค้า",
+  "master_members", "รายชื่อ", "PEOPLE", "people",
+  "system_options", "ตัวเลือกระบบ"
+]);
+
+function getTableDefaultTtl(tableName: string): number {
+  if (MASTER_TABLES.has(tableName) || MASTER_TABLES.has(tableName.toLowerCase())) {
+    return 180_000; // 3 minutes for master data
+  }
+  if (tableName === "Project" || tableName === "projects" || tableName === "PROJECT") {
+    return 60_000; // 1 minute for projects
+  }
+  return 20_000; // 20 seconds for transactions (bills, contracts, tasks)
+}
+
+export function invalidateTableCache(tableName: string) {
+  const normalized = tableName.trim();
+  clearCache(`rows:${normalized}`);
+  clearCache(`headers:${normalized}`);
+  
+  // Also clear aliases
+  if (normalized === "bills" || normalized === "Data" || normalized === "DATA" || normalized === "data") {
+    clearCache("rows:bills");
+    clearCache("rows:Data");
+    clearCache("rows:DATA");
+    clearCache("headers:bills");
+    clearCache("headers:Data");
+    clearCache("dashboard");
+    clearCache("summary");
+  } else if (normalized === "projects" || normalized === "Project" || normalized === "PROJECT") {
+    clearCache("rows:projects");
+    clearCache("rows:Project");
+    clearCache("rows:PROJECT");
+    clearCache("headers:projects");
+    clearCache("headers:Project");
+    clearCache("dashboard");
+    clearCache("summary");
+  } else if (normalized === "contract_works" || normalized === "งานรับเหมา" || normalized === "Contract_work") {
+    clearCache("rows:contract_works");
+    clearCache("rows:งานรับเหมา");
+    clearCache("rows:Contract_work");
+    clearCache("headers:contract_works");
+  } else if (normalized === "stores" || normalized === "ร้านค้า") {
+    clearCache("rows:stores");
+    clearCache("rows:ร้านค้า");
+    clearCache("headers:stores");
+  } else if (normalized === "contractors" || normalized === "รับเหมา") {
+    clearCache("rows:contractors");
+    clearCache("rows:รับเหมา");
+    clearCache("headers:contractors");
+  } else if (normalized === "master_members" || normalized === "รายชื่อ" || normalized === "PEOPLE") {
+    clearCache("rows:master_members");
+    clearCache("rows:รายชื่อ");
+    clearCache("rows:PEOPLE");
+    clearCache("headers:master_members");
+  }
+}
+
 /**
- * Fetch rows from Supabase PostgreSQL database with memory cache
+ * Fetch rows from Supabase PostgreSQL database with tiered memory cache
  */
 export async function getRows(tableName: string, _ttlMs?: number, maxRows = 10_000): Promise<TableRow[]> {
-  const ttl = _ttlMs !== undefined ? _ttlMs : 5_000; // default 5 seconds short cache
+  const ttl = _ttlMs !== undefined ? _ttlMs : getTableDefaultTtl(tableName);
   const cacheKey = `rows:${tableName}:${maxRows}`;
 
   return cached(cacheKey, ttl, async () => {
@@ -70,7 +136,7 @@ export async function listRefOptions(tableName: string, options: {
   rowColumns?: string[];
   rows?: TableRow[];
 } = {}): Promise<RefOption[]> {
-  let rows = options.rows ? options.rows : await getRows(tableName, 0);
+  let rows = options.rows ? options.rows : await getRows(tableName, 60_000);
   if (options.validIf === "activeProjects") {
     rows = rows.filter(row => {
       const color = String(row.color || row.COLOR || "").trim().toLowerCase();
@@ -125,9 +191,7 @@ export async function appendRow(tableName: string, row: TableRow) {
     console.warn(`Supabase appendRow failed for ${tableName}:`, e);
     throw e;
   }
-  clearCache(`rows:${tableName}`);
-  clearCache(`headers:${tableName}`);
-  clearCache("rows:");
+  invalidateTableCache(tableName);
   return result;
 }
 
@@ -139,9 +203,7 @@ export const createTableRow = appendRow;
 export async function bulkAppendRows(tableName: string, rows: TableRow[]) {
   try {
     const inserted = await bulkInsertRowsToSupabase(tableName, rows);
-    clearCache(`rows:${tableName}`);
-    clearCache(`headers:${tableName}`);
-    clearCache("rows:");
+    invalidateTableCache(tableName);
     return inserted;
   } catch (e) {
     console.warn(`Supabase bulkAppendRows failed for ${tableName}:`, e);
@@ -162,8 +224,7 @@ export async function updateRow(tableName: string, sheetRow: number, patch: Tabl
     console.warn(`Supabase updateRow failed for ${tableName}:`, e);
   }
 
-  clearCache(`rows:${tableName}`);
-  clearCache(`headers:${tableName}`);
+  invalidateTableCache(tableName);
   return patch;
 }
 
@@ -224,8 +285,7 @@ export async function deleteRows(tableName: string, targetKeys: (number | string
     console.warn(`Supabase deleteRows failed for ${tableName}:`, e);
   }
 
-  clearCache(`rows:${tableName}`);
-  clearCache(`headers:${tableName}`);
+  invalidateTableCache(tableName);
 }
 
 export const deleteTableRows = deleteRows;
