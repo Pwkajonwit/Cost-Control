@@ -7,7 +7,7 @@ import { uploadTableImage } from "@/lib/drive";
 import { applyBillFormulas, applyContractFormulas, applyProjectFormulas } from "@/lib/formulas";
 import { getFormSchema } from "@/lib/schemas";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
-import { appendAuditLog, appendRow, bulkAppendRows, deleteRows, getRows, updateRow } from "@/lib/db";
+import { appendAuditLog, appendRow, bulkAppendRows, deleteRows, getRows, invalidateTableCache, updateRow } from "@/lib/db";
 import type { SheetRow } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
@@ -60,8 +60,7 @@ export async function POST(request: NextRequest) {
         actor: actorFromRequest(request),
         details: { count: rows.length }
       }).catch(() => undefined);
-      clearCache("rows:");
-      clearCache("headers:");
+      invalidateTableCache(tableName);
       return NextResponse.json({ ok: true, count: inserted?.length || rows.length });
     }
 
@@ -97,8 +96,7 @@ export async function POST(request: NextRequest) {
       actor: actor,
       details: { projectId: output["ID Project"] || "" }
     }).catch(() => undefined);
-    clearCache("rows:");
-    clearCache("headers:");
+    invalidateTableCache(tableName);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
@@ -110,6 +108,33 @@ export async function PATCH(request: NextRequest) {
     const body = await readPatchBody(request);
     const tableName = String(body.tableName || "");
     if (!canManageTable(tableName)) return NextResponse.json({ error: "Table is not manageable" }, { status: 403 });
+
+    // High performance bulk batch patching
+    if (Array.isArray(body.patches) && body.patches.length > 0) {
+      const patches = body.patches as Array<{ sheetRow: string | number; values: SheetRow }>;
+      const existingRows = await getRows(tableName);
+      const keyCol = TABLE_KEYS[tableName] || "";
+      const results = await Promise.all(
+        patches.map(async item => {
+          const targetIdentifier = item.sheetRow;
+          const patch = item.values || {};
+          const existing = existingRows.find((row: SheetRow) =>
+            Number(row._sheetRow) === Number(targetIdentifier) ||
+            String(row._sheetRow) === String(targetIdentifier) ||
+            (keyCol && String(row[keyCol]) === String(targetIdentifier)) ||
+            (row.id !== undefined && String(row.id) === String(targetIdentifier)) ||
+            (row.id_bank !== undefined && String(row.id_bank) === String(targetIdentifier)) ||
+            (row.id_store !== undefined && String(row.id_store) === String(targetIdentifier)) ||
+            (row.id_Contractor !== undefined && String(row.id_Contractor) === String(targetIdentifier))
+          );
+          if (!existing) return null;
+          const values = { ...existing, ...patch };
+          return updateRow(tableName, Number(targetIdentifier) || Number(existing._sheetRow) || 0, values);
+        })
+      );
+      invalidateTableCache(tableName);
+      return NextResponse.json({ ok: true, count: results.filter(Boolean).length });
+    }
 
     const sheetRow = Number(body.sheetRow);
     const patch = body.values && typeof body.values === "object" ? body.values as SheetRow : {};
@@ -162,7 +187,7 @@ export async function PATCH(request: NextRequest) {
       actor: actorFromRequest(request),
       details: Object.fromEntries(Object.keys(patch).map(key => [key, row[key] ?? ""]))
     }).catch(() => undefined);
-    clearCache("rows:");
+    invalidateTableCache(tableName);
     return NextResponse.json({ ok: true, row });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
@@ -207,7 +232,7 @@ export async function DELETE(request: NextRequest) {
       details: { projectId: row["ID Project"] || "" }
     }).catch(() => undefined)));
 
-    clearCache("rows:");
+    invalidateTableCache(tableName);
     return NextResponse.json({ ok: true, deleted: rawKeys.length });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 400 });

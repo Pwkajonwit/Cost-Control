@@ -9,16 +9,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [rows, options] = await Promise.all([
-      getRows(TABLES.DATA, 15_000).catch(() => []),
+    const [maxRecord, countResult, options] = await Promise.all([
+      supabaseAdmin.from("bills").select("id").order("id", { ascending: false }).limit(1).maybeSingle(),
+      supabaseAdmin.from("bills").select("id", { count: "exact", head: true }),
       getSystemOptionsFromSupabase().catch(() => ({} as Record<string, any>))
     ]);
 
-    const maxFromRows = rows.reduce((max, row) => {
-      const first = Number(row["ลำดับtest"] || 0);
-      const second = Number(row["ลำดับ"] || 0);
-      return Math.max(max, first, second);
-    }, 0);
+    const maxFromRows = Number(maxRecord?.data?.id || 0);
+    const totalBills = countResult.count || 0;
 
     const configuredStart = Number(
       (options as any)?.["bill_start_sequence"] ||
@@ -32,7 +30,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      totalBills: rows.length,
+      totalBills,
       maxBillId: maxFromRows,
       configuredStartSequence: configuredStart,
       nextSequence

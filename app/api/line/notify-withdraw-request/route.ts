@@ -40,11 +40,9 @@ export async function POST(req: NextRequest) {
         ? `✅ รายการอนุมัติสำเร็จ (รอปิดงาน) #${bills[0]._sheetRow || bills[0].id || bills[0]["ลำดับ"] || ""} (฿${amountStr})`
         : `✅ รายการอนุมัติสำเร็จ ${bills.length} รายการ (รวม ฿${amountStr})`;
 
-      const results = [];
-      for (const approverId of approverIds) {
-        const res = await sendFlexMessageDetailed(approverId, altText, flex);
-        results.push(res);
-      }
+      const results = await Promise.all(
+        approverIds.map(approverId => sendFlexMessageDetailed(approverId, altText, flex))
+      );
 
       return NextResponse.json({ success: true, count: approverIds.length, results });
     }

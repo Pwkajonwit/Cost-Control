@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TABLES } from "@/lib/config";
 import { validateBillRelations } from "@/lib/bill-validation";
-import { clearCache } from "@/lib/cache";
 import { createBillPdfFromTemplate, uploadBillImage } from "@/lib/drive";
 import { applyBillFormulas } from "@/lib/formulas";
 import { getFormSchema } from "@/lib/schemas";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
-import { appendAuditLog, appendRow, getRows, getSystemOptions } from "@/lib/db";
+import { appendAuditLog, appendRow, getRows, getSystemOptions, invalidateTableCache } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { SheetRow } from "@/lib/types";
 
 const BILL_IMAGE_COLUMNS = ["รูปถ่ายบิล"];
@@ -17,11 +17,11 @@ const STATUS_COLUMNS = ["สถานะ"];
 export async function POST(request: NextRequest) {
   try {
     const row = await readBillRow(request);
-  ensureBillVendorType(row);
-  sanitizeBySchema(row, TABLES.DATA);
-  validateRequiredBySchema(row, TABLES.DATA);
-  await validateBillRelations(row);
-  const output = await applyBillFormulas(row);
+    ensureBillVendorType(row);
+    sanitizeBySchema(row, TABLES.DATA);
+    validateRequiredBySchema(row, TABLES.DATA);
+    await validateBillRelations(row);
+    const output = await applyBillFormulas(row);
     applyAppSheetBillSystemFields(output);
     const pdfWarning = await attachBillPdf(output);
     await appendRow(TABLES.DATA, output);
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       actor: request.headers.get("x-user-email") || "web",
       details: { projectId: output["ID Project"] || "", status: output["สถานะ"] || "" }
     }).catch(() => undefined);
-    clearCache("rows:");
+    invalidateTableCache(TABLES.DATA);
     return NextResponse.json({ ok: true, row: output, pdfWarning });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
@@ -210,33 +210,13 @@ async function getTemplateReplacements(row: SheetRow) {
 
 async function attachBillPdf(row: SheetRow) {
   try {
-    const dateValue = firstRowValue(row, BILL_DATE_COLUMNS) || new Date().toLocaleDateString("th-TH");
-    let month = new Date().getMonth() + 1;
-    const parts = dateValue.split(/[/-]/);
-    if (parts.length >= 2) {
-      month = Number(parts[1]);
-    }
-    if (!Number.isFinite(month) || month <= 0) {
-      month = new Date().getMonth() + 1;
-    }
-
-    let laborStatus = String(row["statusค่าแรง"] || "").trim();
-    if (!laborStatus) {
-      const vendorType = String(row["ร้านค้า/ผู้รับเหมา"] || "").trim();
-      laborStatus = vendorType === "ผู้รับเหมา" ? "บุคคลธรรมดา" : "บริษัท";
-    }
-
-    const subFolder = `${laborStatus} เดือน ${month} ยื่นภาษี`;
     const sequence = firstRowValue(row, SEQUENCE_COLUMNS);
-
-    const replacements = await getTemplateReplacements(row);
-    const url = await createBillPdfFromTemplate(replacements, {
+    const url = await createBillPdfFromTemplate({}, {
       sequence,
       projectId: String(row["ID Project"] || ""),
       billDate: firstRowValue(row, BILL_DATE_COLUMNS),
-      subFolder
     });
-    row["filed"] = url;
+    if (url) row["filed"] = url;
     return "";
   } catch (error) {
     return errorMessage(error);
@@ -445,8 +425,11 @@ function toNumber(value: unknown) {
 }
 
 async function ensureUniqueBillSequence(row: SheetRow) {
-  const [rows, sysOptions] = await Promise.all([
-    getRows(TABLES.DATA, 0),
+  const currentSequence = firstRowValue(row, SEQUENCE_COLUMNS).trim();
+  const currentSeqNum = Number(currentSequence);
+
+  const [maxRecord, sysOptions] = await Promise.all([
+    supabaseAdmin.from("bills").select("id").order("id", { ascending: false }).limit(1).maybeSingle(),
     getSystemOptions().catch(() => ({} as Record<string, any>))
   ]);
 
@@ -456,23 +439,15 @@ async function ensureUniqueBillSequence(row: SheetRow) {
     0
   );
 
-  const maxFromRows = rows.reduce((max, existingRow) => {
-    return Math.max(max, ...SEQUENCE_COLUMNS.map(column => toSequenceNumber(existingRow[column])));
-  }, 0);
-
-  const currentSequence = firstRowValue(row, SEQUENCE_COLUMNS).trim();
-  const currentSeqNum = Number(currentSequence);
-
-  const usedSequences = new Set(
-    rows
-      .map(existingRow => firstRowValue(existingRow, SEQUENCE_COLUMNS).trim())
-      .filter(Boolean)
-  );
+  const maxFromRows = Number(maxRecord?.data?.id || 0);
 
   // If user provided sequence is valid, not used yet, and >= configuredStart
-  if (currentSequence && (configuredStart <= 0 || currentSeqNum >= configuredStart) && !usedSequences.has(currentSequence)) {
-    row["ลำดับ"] = currentSequence;
-    return row;
+  if (currentSequence && currentSeqNum > 0 && (configuredStart <= 0 || currentSeqNum >= configuredStart)) {
+    const { data: existingItem } = await supabaseAdmin.from("bills").select("id").eq("id", currentSeqNum).maybeSingle();
+    if (!existingItem) {
+      row["ลำดับ"] = currentSequence;
+      return row;
+    }
   }
 
   // Otherwise, automatically assign the next available unique sequence
