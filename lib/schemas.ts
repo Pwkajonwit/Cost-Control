@@ -222,6 +222,32 @@ export const FORM_SCHEMAS: Record<string, FieldSchema[]> = {
     { name: "ที่อยู่", type: "LongText", readonly: true },
     { name: "ยอดเงินจ่าย", type: "Decimal", readonly: true },
     { name: "ค่าแรงคงเหลือ", type: "Decimal", readonly: true }
+  ],
+  [TABLES.TASKS]: [
+    { name: "ลำดับ", type: "Number", key: true, initialValue: "nextTaskId", readonlyOnEdit: true },
+    { name: "รายการ", type: "Text", required: true, description: "ชื่องาน หรือ รายละเอียดงาน" },
+    { name: "ผู้รับมอบหมาย", type: "Ref", refTable: TABLES.PEOPLE, refKey: "ชื่อเล่น", refLabel: "ชื่อเล่น", required: true },
+    { name: "ดู/ทำ", type: "Date", initialValue: "today" },
+    { name: "ส่งงาน", type: "Date" },
+    { name: "ประเภท", type: "Enum", values: ["1 (เอกสาร)", "2 (แผนงาน)", "3 (PJSA)"], initialValue: "1 (เอกสาร)", inputMode: "buttons" },
+    { name: "สถานะ", type: "Enum", values: ["ดำเนินการ", "สำเร็จ"], initialValue: "ดำเนินการ", inputMode: "buttons" }
+  ],
+  [TABLES.WORKS]: [
+    { name: "ลำดับ", type: "Number", key: true, initialValue: "nextWorkId", readonlyOnEdit: true },
+    { name: "ทีม", type: "Enum", values: ["PW", "PW1", "PW2", "PW3", "PW4"], initialValue: "PW", inputMode: "buttons" },
+    { name: "กิจกรรม", type: "Enum", values: ["เสนอราคา", "ประชุมงาน", "ประมูล"], initialValue: "เสนอราคา", inputMode: "buttons" },
+    { name: "เรื่อง", type: "Text", required: true, description: "ชื่องานรับเหมา หรือ หัวข้อกิจกรรม" },
+    { name: "PR", type: "Text" },
+    { name: "สถานที่", type: "Text" },
+    { name: "นัดดู", type: "Text", description: "วันเวลาที่นัดดูหน้างาน เช่น 28/08/26 เวลา 14:00" },
+    { name: "นัดเสนอ", type: "Text", description: "วันเวลาที่นัดส่งใบเสนอราคา" },
+    { name: "ติดต่อ1", type: "Text" },
+    { name: "เบอร์1", type: "Text" },
+    { name: "ติดต่อ2", type: "Text" },
+    { name: "เบอร์2", type: "Text" },
+    { name: "บริษัท", type: "Text" },
+    { name: "สถานะ", type: "Enum", values: ["รอดูงาน", "รอเสนอ", "ส่งแล้ว", "ประชุม", "ปิดประชุม", "ประมูล", "ปิดประมูล"], initialValue: "รอดูงาน", inputMode: "dropdown" },
+    { name: "หมายเหตุ", type: "LongText" }
   ]
 };
 

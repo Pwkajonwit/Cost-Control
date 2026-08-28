@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, List, Pencil, Plus, Save, Trash2, X, Search,
 import { BillImageThumbnail } from "@/components/BillImageThumbnail";
 import { showConfirm, showToast } from "@/components/ToastProvider";
 import type { RowValue, SheetRow } from "@/lib/types";
-import { formatDateDisplay } from "@/lib/dates";
+import { formatDateDisplay, toInputDateValue } from "@/lib/dates";
 
 type BusyState = "add" | "edit" | "delete" | "import" | null;
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
@@ -139,7 +139,16 @@ export function ManageTableClient({
       window.dispatchEvent(new Event(addOpenEventName));
       return;
     }
-    setAddValues(emptyValues(addColumns));
+    const initial = emptyValues(addColumns);
+    if ("ลำดับ" in initial || "id" in initial) {
+      const nextSeq = rows.reduce((max, r) => {
+        const val = Number(r["ลำดับ"] || r["id"] || 0);
+        return Number.isFinite(val) ? Math.max(max, val) : max;
+      }, 0) + 1;
+      if ("ลำดับ" in initial) initial["ลำดับ"] = String(nextSeq);
+      if ("id" in initial) initial["id"] = String(nextSeq);
+    }
+    setAddValues(initial);
     setAddOpen(true);
   }
 
@@ -696,11 +705,20 @@ export function ManageTableClient({
                             data-label={column}
                           >
                             {editing ? (
-                              <input
-                                className="w-full px-2 py-0.5 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:border-slate-500"
-                                value={draftValue}
-                                onChange={event => updateDraft(id, column, event.target.value)}
-                              />
+                              isDateColumn(column) ? (
+                                <input
+                                  type="date"
+                                  className="w-full px-2 py-0.5 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:border-slate-500 cursor-pointer"
+                                  value={toInputDateValue(draftValue)}
+                                  onChange={event => updateDraft(id, column, event.target.value)}
+                                />
+                              ) : (
+                                <input
+                                  className="w-full px-2 py-0.5 text-xs border border-slate-300 rounded bg-white focus:outline-none focus:border-slate-500"
+                                  value={draftValue}
+                                  onChange={event => updateDraft(id, column, event.target.value)}
+                                />
+                              )
                             ) : detailBasePath && isLinkColumn ? (
                               <Link
                                 href={`${detailBasePath}/${encodeURIComponent(targetKey)}`}
@@ -810,13 +828,24 @@ export function ManageTableClient({
                 {addColumns.map(column => (
                   <label className="flex flex-col gap-1 text-xs" key={column}>
                     <span className="text-slate-700">{column}</span>
-                    <input
-                      name={column}
-                      value={addValues[column] || ""}
-                      disabled={Boolean(busy)}
-                      onChange={event => setAddValues(current => ({ ...current, [column]: event.target.value }))}
-                      className="w-full h-8 px-2.5 bg-white border border-slate-300 focus:border-slate-500 focus:outline-none rounded text-xs font-normal text-slate-900 placeholder:text-slate-400 transition"
-                    />
+                    {isDateColumn(column) ? (
+                      <input
+                        type="date"
+                        name={column}
+                        value={toInputDateValue(addValues[column])}
+                        disabled={Boolean(busy)}
+                        onChange={event => setAddValues(current => ({ ...current, [column]: event.target.value }))}
+                        className="w-full h-8 px-2.5 bg-white border border-slate-300 focus:border-slate-500 focus:outline-none rounded text-xs font-normal text-slate-900 transition cursor-pointer"
+                      />
+                    ) : (
+                      <input
+                        name={column}
+                        value={addValues[column] || ""}
+                        disabled={Boolean(busy)}
+                        onChange={event => setAddValues(current => ({ ...current, [column]: event.target.value }))}
+                        className="w-full h-8 px-2.5 bg-white border border-slate-300 focus:border-slate-500 focus:outline-none rounded text-xs font-normal text-slate-900 placeholder:text-slate-400 transition"
+                      />
+                    )}
                   </label>
                 ))}
               </div>
@@ -1080,7 +1109,7 @@ function isImageColumn(column: string) {
 }
 
 function isDateColumn(column: string) {
-  return /วันที่|date|ว\/ด\/ป/.test(column);
+  return /วันที่|date|ว\/ด\/ป|ดู\/ทำ|ส่งงาน|นัดดู|นัดเสนอ|วันเริ่ม|วันจบ/.test(column);
 }
 
 function isCenterColumn(column: string) {

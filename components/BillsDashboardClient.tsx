@@ -67,20 +67,31 @@ export function BillsDashboardClient({
   const [sortDesc, setSortDesc] = useState(initialSort === "latest");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
-  // Live sync from Supabase PostgreSQL changes
+  // Live sync from Supabase PostgreSQL changes + Local Form Events
   useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
+    const handleDataUpdated = () => {
+      router.refresh();
+    };
+    window.addEventListener("bills-data-updated", handleDataUpdated);
+    window.addEventListener("data-updated", handleDataUpdated);
 
-    const channel = supabase
-      .channel("bills_table_live_sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "bills" }, () => {
-        router.refresh();
-      })
-      .subscribe();
+    const supabase = getSupabaseBrowserClient();
+    let channel: any = null;
+    if (supabase) {
+      channel = supabase
+        .channel("bills_table_live_sync")
+        .on("postgres_changes", { event: "*", schema: "public", table: "bills" }, () => {
+          router.refresh();
+        })
+        .subscribe();
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      window.removeEventListener("bills-data-updated", handleDataUpdated);
+      window.removeEventListener("data-updated", handleDataUpdated);
+      if (supabase && channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [router]);
 

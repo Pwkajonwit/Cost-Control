@@ -22,7 +22,10 @@ export const TABLES = {
   MAIN5: "main5",
   WITHDRAW: "เบิกเงิน",
   SYSTEM_OPTIONS: "ตัวเลือกระบบ",
-  PRODUCT: "สินค้า"
+  PRODUCT: "สินค้า",
+  TASKS: "Tasks",
+  WORKS: "Works",
+  PLANS: "Plan"
 } as const;
 
 export const TABLE_KEYS: Record<string, string> = {
@@ -53,6 +56,15 @@ export const TABLE_KEYS: Record<string, string> = {
   contract_work: "id_Conwork",
   contractwork: "id_Conwork",
   contract_works: "id_Conwork",
+
+  [TABLES.TASKS]: "id",
+  tasks: "id",
+
+  [TABLES.WORKS]: "id",
+  works: "id",
+
+  [TABLES.PLANS]: "id",
+  plans: "id",
 
   [TABLES.BANK]: "id_bank",
   banks: "id_bank",
@@ -89,7 +101,9 @@ export const PRIMARY_VIEWS = [
   { id: "cars", name: "7. ทะเบียนรถ", type: "table", table: TABLES.CAR, position: "menu" },
   { id: "customers", name: "8. ลูกค้า", type: "table", table: TABLES.CUSTOMER, position: "menu" },
   { id: "companies", name: "9. บริษัท", type: "table", table: TABLES.COMPANY, position: "menu" },
-  { id: "loans", name: "10. ยืมเงิน", type: "table", table: TABLES.LOAN, position: "menu" }
+  { id: "loans", name: "10. ยืมเงิน", type: "table", table: TABLES.LOAN, position: "menu" },
+  { id: "tasks", name: "1. จัดการงาน (Tasks)", type: "table", table: TABLES.TASKS, position: "task" },
+  { id: "works", name: "2. งานรับเหมา & PW", type: "table", table: TABLES.WORKS, position: "task" }
 ] as const;
 
 export const VIEW_COLUMNS: Record<string, string[]> = {
@@ -106,5 +120,11 @@ export const VIEW_COLUMNS: Record<string, string[]> = {
   "8.ลูกค้า": ["id_cus", "ชื่อลูกค้า", "ที่อยู่", "เลขที่ผู้เสียภาษี"],
   "9. บริษัท": ["id_Company", "ชื่ออังกฤษ", "ชื่อบริษัท", "สำนักงาน", "ที่อยู่", "เลขที่สียภาษี ", "เบอร์โทร"],
   "10. ยืมเงิน": ["id", "ชื่อ", "type", "จำนวนเงิน", "วันที่"],
+  "1. จัดการงาน (Tasks)": ["ลำดับ", "รายการ", "ดู/ทำ", "ส่งงาน", "ผู้รับมอบหมาย", "ประเภท", "สถานะ"],
+  "11. จัดการงาน (Tasks)": ["ลำดับ", "รายการ", "ดู/ทำ", "ส่งงาน", "ผู้รับมอบหมาย", "ประเภท", "สถานะ"],
+  "tasks": ["ลำดับ", "รายการ", "ดู/ทำ", "ส่งงาน", "ผู้รับมอบหมาย", "ประเภท", "สถานะ"],
+  "2. งานรับเหมา & PW": ["ลำดับ", "ทีม", "กิจกรรม", "เรื่อง", "PR", "สถานที่", "นัดดู", "นัดเสนอ", "ติดต่อ1", "เบอร์1", "บริษัท", "สถานะ", "หมายเหตุ"],
+  "12. งานรับเหมา & PW": ["ลำดับ", "ทีม", "กิจกรรม", "เรื่อง", "PR", "สถานที่", "นัดดู", "นัดเสนอ", "ติดต่อ1", "เบอร์1", "บริษัท", "สถานะ", "หมายเหตุ"],
+  "works": ["ลำดับ", "ทีม", "กิจกรรม", "เรื่อง", "PR", "สถานที่", "นัดดู", "นัดเสนอ", "ติดต่อ1", "เบอร์1", "บริษัท", "สถานะ", "หมายเหตุ"],
   "11. ประเภทสินค้า": ["รหัสสินค้า", "ชื่อประเภทสินค้า", "หมายเหตุ"]
 };

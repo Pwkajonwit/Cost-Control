@@ -7,6 +7,7 @@ import { showToast } from "@/components/ToastProvider";
 import { money, toNumber } from "@/lib/numbers";
 import type { SheetRow } from "@/lib/types";
 import { formatDateDisplay, normalizeDateToIso, parseDateStrict } from "@/lib/dates";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export type WithdrawFilters = {
   requester?: string;
@@ -92,6 +93,34 @@ export function WithdrawDashboardClient({ rows, peopleRows, usersList = [], init
       }
     }
   }, [peopleRows, usersList, initialFilters.requester]);
+
+  // Live sync from Supabase PostgreSQL changes + Local Form Events
+  useEffect(() => {
+    const handleDataUpdated = () => {
+      router.refresh();
+    };
+    window.addEventListener("bills-data-updated", handleDataUpdated);
+    window.addEventListener("data-updated", handleDataUpdated);
+
+    const supabase = getSupabaseBrowserClient();
+    let channel: any = null;
+    if (supabase) {
+      channel = supabase
+        .channel("withdraw_live_sync")
+        .on("postgres_changes", { event: "*", schema: "public", table: "bills" }, () => {
+          router.refresh();
+        })
+        .subscribe();
+    }
+
+    return () => {
+      window.removeEventListener("bills-data-updated", handleDataUpdated);
+      window.removeEventListener("data-updated", handleDataUpdated);
+      if (supabase && channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [router]);
 
   const requesterNames = useMemo(() => requesterNameMap(peopleRows), [peopleRows]);
 

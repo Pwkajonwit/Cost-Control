@@ -324,6 +324,22 @@ export function FormModal({
   const [attachedFilesByField, setAttachedFilesByField] = useState<Record<string, File[]>>({});
   const isEditing = editSheetRow !== null && editSheetRow !== undefined;
   const isDataForm = resolvedTableName === TABLES.DATA || resolvedTableName === "Data";
+  const hasSavedDuringSession = useRef(false);
+
+  function handleClose() {
+    setOpen(false);
+    setEditSheetRow(null);
+    setSuccessMessage("");
+    setError("");
+    if (hasSavedDuringSession.current) {
+      hasSavedDuringSession.current = false;
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("bills-data-updated"));
+        window.dispatchEvent(new CustomEvent("data-updated", { detail: { tableName: resolvedTableName } }));
+      }
+      router.refresh();
+    }
+  }
 
   // Multi-Line Items State for Multi-category Bill Entry
   const [multiLineItems, setMultiLineItems] = useState<MultiLineItem[]>([]);
@@ -488,6 +504,7 @@ export function FormModal({
   }
 
   async function handleOpen(detail?: OpenFormDetail) {
+    hasSavedDuringSession.current = false;
     setAttachedFilesByField({});
     setError("");
     setSuccessMessage("");
@@ -677,9 +694,12 @@ export function FormModal({
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "บันทึกไม่สำเร็จ");
       
+      hasSavedDuringSession.current = true;
       clearFormSchemaCache();
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("schema-cache-invalidated"));
+        window.dispatchEvent(new CustomEvent("bills-data-updated", { detail: { row: payload.row } }));
+        window.dispatchEvent(new CustomEvent("data-updated", { detail: { tableName: activeForm.tableName, row: payload.row } }));
       }
 
       setAttachedFilesByField({});
@@ -689,9 +709,6 @@ export function FormModal({
         setEditSheetRow(null);
         setValues(getInitialStringValues(activeForm));
         setResetKey(k => k + 1);
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("bills-data-updated"));
-        }
         router.refresh();
       } else {
         // Reset form & verify fresh sequence from server for the next entry
@@ -793,7 +810,7 @@ export function FormModal({
                 className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                 aria-label="ปิด"
                 disabled={saving}
-                onClick={() => { setOpen(false); setEditSheetRow(null); }}
+                onClick={handleClose}
               >
                 <X size={18} />
               </button>
@@ -818,18 +835,27 @@ export function FormModal({
                   <fieldset className="space-y-4 border-0 p-0 m-0" disabled={saving}>
                     {/* Top Notification Alerts */}
                     {successMessage ? (
-                      <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs flex items-center justify-between animate-in fade-in duration-150 font-normal">
-                        <div className="flex items-center gap-2">
+                      <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs flex items-center justify-between gap-2 animate-in fade-in duration-150 font-normal">
+                        <div className="flex items-center gap-2 min-w-0">
                           <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                          <span>{successMessage}</span>
+                          <span className="truncate sm:whitespace-normal">{successMessage}</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setSuccessMessage("")}
-                          className="text-emerald-600 hover:text-emerald-800 transition cursor-pointer p-0.5"
-                        >
-                          <X size={14} />
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleClose}
+                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-md text-xs font-medium transition cursor-pointer shadow-2xs whitespace-nowrap"
+                          >
+                            ปิดฟอร์มดูตาราง
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSuccessMessage("")}
+                            className="text-emerald-600 hover:text-emerald-800 transition cursor-pointer p-0.5"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       </div>
                     ) : null}
 
@@ -1028,10 +1054,10 @@ export function FormModal({
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => { setOpen(false); setEditSheetRow(null); setSuccessMessage(""); }}
+                  onClick={handleClose}
                   className="w-1/3 sm:w-auto h-11 sm:h-12 px-5 rounded-xl text-sm text-slate-700 hover:bg-slate-100 border border-slate-300 bg-white transition cursor-pointer active:bg-slate-200 flex items-center justify-center"
                 >
-                  ยกเลิก
+                  {hasSavedDuringSession.current ? "ปิดฟอร์ม" : "ยกเลิก"}
                 </button>
                 <button
                   type={submitPath ? "submit" : "button"}
@@ -1513,8 +1539,8 @@ function renderField(
     );
   }
 
-  const billDateMode = form.tableName === TABLES.DATA && field.type === "Date";
-  const type = field.type === "Date" ? "date" : field.type === "Decimal" || field.type === "Number" ? "number" : "text";
+  const isDateField = field.type === "Date";
+  const type = isDateField ? "date" : field.type === "Decimal" || field.type === "Number" ? "number" : "text";
   const inputMode = field.type === "Decimal" ? "decimal" : field.type === "Number" ? "numeric" : undefined;
 
   const isProjectTable = form.tableName === TABLES.PROJECT || form.tableName === "Project" || form.tableName === "1. Project รวม";
@@ -1528,12 +1554,12 @@ function renderField(
       <input
         type={type}
         name={field.name}
-        value={billDateMode ? toDateInputValue(value) : value}
+        value={isDateField ? toDateInputValue(value) : value}
         readOnly={readOnly}
         inputMode={inputMode}
-        lang={billDateMode ? "th-TH" : undefined}
-        onChange={event => onChange(billDateMode ? normalizeBillDateInput(event.target.value) : event.target.value)}
-        className="w-full min-w-0 max-w-full block box-border h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all appearance-none"
+        lang={isDateField ? "th-TH" : undefined}
+        onChange={event => onChange(isDateField ? normalizeBillDateInput(event.target.value) : event.target.value)}
+        className="w-full min-w-0 max-w-full block box-border h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all appearance-none cursor-pointer"
       />
       {isProjectVatTotal && workAmount > 0 ? (
         <div className="flex items-center justify-between text-[11px] bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-md border border-emerald-200">

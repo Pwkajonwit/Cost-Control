@@ -335,7 +335,23 @@ import { formatDateDisplay } from "@/lib/dates";
 
 function isDateColumn(column: string) {
   const col = column.trim();
-  return col === "ว/ด/ป" || col === "วันได้บิล" || col === "วันออก 3%" || col === "วันจ่าย" || col === "วันที่" || col.toLowerCase().includes("date");
+  return (
+    col === "ว/ด/ป" ||
+    col === "วันได้บิล" ||
+    col === "วันออก 3%" ||
+    col === "วันจ่าย" ||
+    col === "วันที่" ||
+    col === "ดู/ทำ" ||
+    col === "ส่งงาน" ||
+    col === "วันที่ดู/ทำ" ||
+    col === "วันที่ส่งงาน" ||
+    col === "วันที่เริ่ม" ||
+    col === "วันที่จบ" ||
+    col.toLowerCase().includes("date") ||
+    col.includes("วัน") ||
+    col.includes("ดู/ทำ") ||
+    col.includes("ส่งงาน")
+  );
 }
 
 function renderCell(column: string, value: unknown, row: SheetRow, cellFormatters?: DataTableProps["cellFormatters"]) {

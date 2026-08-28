@@ -16,6 +16,7 @@ import {
 } from "@/lib/line";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { insertRowToSupabase } from "@/lib/supabase-db";
+import { normalizeDateToIso } from "@/lib/dates";
 
 /**
   * Central command processor for all 63 AppscriptBot keywords migrated to Next.js + Supabase
@@ -79,20 +80,21 @@ export async function handleLineCommand(
         return true;
       }
       if (lowerText === "doo" || lowerText === "doo2") {
-        const { data: activeWorks } = await supabaseAdmin
-          .from("contract_works")
+        const { data: activeTasks } = await supabaseAdmin
+          .from("tasks")
           .select("*")
+          .neq("status", "สำเร็จ")
           .order("id", { ascending: false })
           .limit(8);
 
-        if (!activeWorks || activeWorks.length === 0) {
+        if (!activeTasks || activeTasks.length === 0) {
           await replyTextMessage(replyToken, `📋 ไม่พบรายการงานค้างในขณะนี้`);
           return true;
         }
 
-        let summary = `📋 รายการงานค้างล่าสุด (${activeWorks.length} รายการ):\n\n`;
-        activeWorks.forEach((w, i) => {
-          summary += `${i + 1}. [CW${w.id}] ${w.work_details || w.project_name || "งานประจำวัน"} (รับผิดชอบ: ${w["ชื่อเล่น"] || w.contractor_name || "ทีมงาน"})\n`;
+        let summary = `📋 รายการงานค้างล่าสุด (${activeTasks.length} รายการ):\n\n`;
+        activeTasks.forEach((t, i) => {
+          summary += `${i + 1}. [#${t.id}] ${t.title || "งานประจำวัน"} (รับผิดชอบ: ${t.assignee_name || "ทีมงาน"})\n`;
         });
         await replyTextMessage(replyToken, summary);
         return true;
@@ -108,22 +110,25 @@ export async function handleLineCommand(
       // A) Query Member Task Table Grid
       if (isTaskGridQuery || content.length < 15) {
         const memberName = content || "ทีมงาน";
-        const { data: contractWorks } = await supabaseAdmin
-          .from("contract_works")
+        const { data: tasksList } = await supabaseAdmin
+          .from("tasks")
           .select("*")
+          .or(`assignee_name.ilike.%${memberName}%,title.ilike.%${memberName}%`)
           .order("id", { ascending: false })
           .limit(10);
 
-        if (!contractWorks || contractWorks.length === 0) {
+        if (!tasksList || tasksList.length === 0) {
           await replyTextMessage(replyToken, `📋 ไม่พบรายการงานของ "${memberName}" ในระบบ\n\nกรุณาตรวจสอบชื่อหรือเพิ่มงานผ่านคำสั่ง "งาน: รายละเอียด" ครับ`);
           return true;
         }
 
-        const dbTasks = contractWorks.map(w => ({
-          id: w.id,
-          details: w.work_details || w.project_name || "งานประจำวัน",
-          dateStr: new Date().toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" }),
-          status: "กำลังทำ"
+        const dbTasks = tasksList.map(t => ({
+          id: t.id,
+          details: t.title || "งานประจำวัน",
+          dateStr: t.do_date ? new Date(t.do_date).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" }) : new Date().toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" }),
+          sendDateStr: t.send_date ? new Date(t.send_date).toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" }) : undefined,
+          status: t.status || "ดำเนินการ",
+          task_type: t.task_type || 1
         }));
 
         const flex = createMemberTaskTableFlex(memberName, dbTasks);
@@ -132,16 +137,16 @@ export async function handleLineCommand(
         if (!sent && replyToken) {
           let textSummary = `📋 งานทั้งหมด : ${memberName} (${dbTasks.length} รายการ)\n\n`;
           dbTasks.forEach((t, i) => {
-            textSummary += `${i + 1}. [CW${t.id}] ${t.details} (${t.dateStr}) - Close\n`;
+            textSummary += `${i + 1}. [#${t.id}] ${t.details} (${t.dateStr}) - ${t.status}\n`;
           });
           await replyTextMessage(replyToken, textSummary);
         }
         return true;
       }
 
-      // B) Create Task with safe row insertion and generated non-null ID
+      // B) Create Task in `tasks` table
       const isUrgent = rawText.startsWith("งานด่วน:");
-      let assignee = "-";
+      let assignee = "ทีมงาน";
       let details = content;
       const match = content.match(/\[(.*?)\]$/) || content.match(/-(.*?)$/);
       if (match) {
@@ -149,21 +154,21 @@ export async function handleLineCommand(
         details = content.replace(match[0], "").trim();
       }
 
-      const generatedId = `CW-${Date.now().toString().slice(-6)}`;
-      const rowObj = {
-        id_Conwork: generatedId,
-        id: generatedId,
-        "ชื่อเล่น": assignee,
-        "ผู้รับผิดชอบ": assignee,
-        "รายละเอียดงาน": `${isUrgent ? "🔴 [ด่วน] " : ""}${details}`,
-        "เบอร์โทรศัพท์": "-",
-        "ยอดเงินจ้าง": 0,
-        "ยอดเงินจ่าย": 0
-      };
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const { data: inserted } = await supabaseAdmin
+        .from("tasks")
+        .insert({
+          title: `${isUrgent ? "🔴 [ด่วน] " : ""}${details}`,
+          assignee_name: assignee,
+          status: "ดำเนินการ",
+          task_type: isUrgent ? 1 : 1,
+          do_date: todayIso
+        })
+        .select()
+        .single();
 
-      await insertRowToSupabase("งานรับเหมา", rowObj);
-
-      const notifyMsg = `✅ บันทึกงานเรียบร้อยแล้ว!\n\n📌 รหัสงาน: ${generatedId}\nรายละเอียด: ${details}\nผู้รับผิดชอบ: ${assignee}\nสถานะ: กำลังดำเนินการ`;
+      const createdId = inserted?.id ? `#${inserted.id}` : "ใหม่";
+      const notifyMsg = `✅ บันทึกงานเรียบร้อยแล้ว!\n\n📌 รหัสงาน: ${createdId}\nรายละเอียด: ${details}\nผู้รับผิดชอบ: ${assignee}\nสถานะ: กำลังดำเนินการ`;
       await replyTextMessage(replyToken, notifyMsg);
 
       // Multi-Group Routing: Push to Task Group if configured and different from source
@@ -177,21 +182,22 @@ export async function handleLineCommand(
 
     // 3.2 Close Task ("ปิดงาน:", "ยืนยันปิดงาน:")
     if (rawText.startsWith("ปิดงาน:") || rawText.startsWith("ยืนยันปิดงาน:")) {
-      const taskId = rawText.replace(/^ปิดงาน:|^ยืนยันปิดงาน:/, "").trim();
-      if (!taskId) {
+      const rawTaskId = rawText.replace(/^ปิดงาน:|^ยืนยันปิดงาน:/, "").trim();
+      const numId = parseInt(rawTaskId.replace(/\D/g, ""), 10);
+      if (!numId) {
         await replyTextMessage(replyToken, `⚠️ กรุณาระบุรหัสงานที่ต้องการปิด\nเช่น ปิดงาน: 101`);
         return true;
       }
 
       const { error } = await supabaseAdmin
-        .from("contract_works")
-        .update({ work_details: `[เสร็จสิ้น] (ปิดงานเมื่อ ${new Date().toLocaleDateString("th-TH")})` })
-        .eq("id", taskId);
+        .from("tasks")
+        .update({ status: "สำเร็จ" })
+        .eq("id", numId);
 
       if (error) {
-        await replyTextMessage(replyToken, `❌ ปิดงานรหัส ${taskId} ไม่สำเร็จ: ${error.message}`);
+        await replyTextMessage(replyToken, `❌ ปิดงานรหัส [${numId}] ไม่สำเร็จ: ${error.message}`);
       } else {
-        const closeMsg = `🎉 ปิดงานรหัส [${taskId}] เรียบร้อยแล้วครับ!`;
+        const closeMsg = `🎉 ปิดงานรหัส [${numId}] เรียบร้อยแล้วครับ! (สถานะ: สำเร็จ)`;
         await replyTextMessage(replyToken, closeMsg);
 
         // Multi-Group Routing: Push to Task Group
@@ -206,9 +212,14 @@ export async function handleLineCommand(
     // 3.3 Search Task ("s:", "งานทั้งหมด", ":งานที่ทำ", ":งานที่เสร็จ")
     if (rawText.startsWith("s:") || lowerText === "งานทั้งหมด" || lowerText === "งาน" || lowerText.includes(":งานที่ทำ") || lowerText.includes(":งานที่เสร็จ")) {
       const searchTerm = rawText.replace(/^s:/, "").replace(/^งาน:/, "").trim();
-      let query = supabaseAdmin.from("contract_works").select("*");
+      let query = supabaseAdmin.from("tasks").select("*");
       if (searchTerm && searchTerm !== "งานทั้งหมด" && searchTerm !== "งาน") {
-        query = query.ilike("work_details", `%${searchTerm}%`);
+        query = query.or(`title.ilike.%${searchTerm}%,assignee_name.ilike.%${searchTerm}%`);
+      }
+      if (lowerText.includes(":งานที่เสร็จ")) {
+        query = query.eq("status", "สำเร็จ");
+      } else {
+        query = query.neq("status", "สำเร็จ");
       }
       const { data: tasks } = await query.order("id", { ascending: false }).limit(10);
 
@@ -222,13 +233,13 @@ export async function handleLineCommand(
 
       const formattedTasks = tasks.map(t => ({
         id: t.id,
-        details: t.work_details || "-",
-        status: "กำลังทำ",
-        project: t.project_name || t.project_id || "งานทั่วไป"
+        details: t.title || "-",
+        status: t.status || "กำลังทำ",
+        project: t.assignee_name ? `ผู้รับ: ${t.assignee_name}` : "งานทั่วไป"
       }));
 
       const flex = createTaskSummaryFlex(formattedTasks);
-      await replyFlexMessage(replyToken, `📋 รายการงานค้าง (${tasks.length} รายการ)`, flex);
+      await replyFlexMessage(replyToken, `📋 รายการงาน (${tasks.length} รายการ)`, flex);
       return true;
     }
 
@@ -239,17 +250,19 @@ export async function handleLineCommand(
       const receiver = lines[1]?.replace(/^ผู้รับ:|^ถึง:|^ผู้รับผิดชอบ:/, "").trim() || "ทีมงาน";
       const head = lines[2]?.replace(/^หัวหน้า:|^อนุมัติโดย:/, "").trim() || "หัวหน้า";
 
-      const now = Date.now();
-      const id1 = `CW-${now.toString().slice(-6)}-1`;
-      const id2 = `CW-${now.toString().slice(-6)}-2`;
-      const id3 = `CW-${now.toString().slice(-6)}-3`;
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const { data: insRows } = await supabaseAdmin
+        .from("tasks")
+        .insert([
+          { title: mainTitle, assignee_name: receiver, status: "ดำเนินการ", task_type: 1, do_date: todayIso },
+          { title: `${mainTitle} (ส่ง หัวหน้า)`, assignee_name: head, status: "ดำเนินการ", task_type: 1, do_date: todayIso },
+          { title: `${mainTitle} (ส่ง ${receiver})`, assignee_name: receiver, status: "ดำเนินการ", task_type: 1, do_date: todayIso },
+        ])
+        .select();
 
-      // 3 Linked Sub-tasks
-      await Promise.all([
-        insertRowToSupabase("งานรับเหมา", { id_Conwork: id1, id: id1, "ชื่อเล่น": receiver, "ผู้รับผิดชอบ": receiver, "รายละเอียดงาน": mainTitle }),
-        insertRowToSupabase("งานรับเหมา", { id_Conwork: id2, id: id2, "ชื่อเล่น": head, "ผู้รับผิดชอบ": head, "รายละเอียดงาน": `${mainTitle} (ส่ง หัวหน้า)` }),
-        insertRowToSupabase("งานรับเหมา", { id_Conwork: id3, id: id3, "ชื่อเล่น": receiver, "ผู้รับผิดชอบ": receiver, "รายละเอียดงาน": `${mainTitle} (ส่ง ${receiver})` }),
-      ]);
+      const id1 = insRows?.[0]?.id ? `#${insRows[0].id}` : "1";
+      const id2 = insRows?.[1]?.id ? `#${insRows[1].id}` : "2";
+      const id3 = insRows?.[2]?.id ? `#${insRows[2].id}` : "3";
 
       const createdMsg = `🎉 สร้าง 3 งานย่อยเรียบร้อยแล้ว!\n\n1. [${id1}] ${mainTitle}\n   ผู้รับผิดชอบ: ${receiver}\n2. [${id2}] ${mainTitle} (ส่ง หัวหน้า)\n   ผู้รับผิดชอบ: ${head}\n3. [${id3}] ${mainTitle} (ส่ง ${receiver})\n   ผู้รับผิดชอบ: ${receiver}`;
 
@@ -270,34 +283,45 @@ export async function handleLineCommand(
         return match ? match[1].trim() : "";
       };
 
-      const taskId = getVal("ลำดับ");
+      const rawTaskId = getVal("ลำดับ");
+      const numTaskId = rawTaskId ? parseInt(rawTaskId.replace(/\D/g, ""), 10) : 0;
       const listName = getVal("รายการ");
       const doWork = getVal("ดู/ทำ") || getVal("ทำ");
       const sendWork = getVal("ส่งงาน") || getVal("ส่ง");
-      const typeNum = getVal("ประเภท");
-      const receiver = getVal("ผู้รับ") || getVal("ผู้รับมอบหมาย");
+      const typeNumStr = getVal("ประเภท");
+      const typeNum = typeNumStr === "2" ? 2 : typeNumStr === "3" ? 3 : 1;
+      const receiver = getVal("ผู้รับ") || getVal("ผู้รับมอบหมาย") || "ทีมงาน";
 
-      const typeLabel = typeNum === "1" ? "เอกสาร" : typeNum === "2" ? "แผนงาน" : typeNum === "3" ? "PJSA" : "ทั่วไป";
+      const typeLabel = typeNum === 2 ? "แผนงาน" : typeNum === 3 ? "PJSA" : "เอกสาร";
 
-      if (taskId) {
+      if (numTaskId > 0) {
         await supabaseAdmin
-          .from("contract_works")
+          .from("tasks")
           .update({
-            work_details: `[${typeLabel}] ${listName} (ดู: ${doWork || "-"}, ส่ง: ${sendWork || "-"})`,
-            "ชื่อเล่น": receiver || "ทีมงาน"
+            title: listName,
+            assignee_name: receiver,
+            task_type: typeNum,
+            do_date: doWork && doWork !== "-" ? normalizeDateToIso(doWork) : null,
+            send_date: sendWork && sendWork !== "-" ? normalizeDateToIso(sendWork) : null,
           })
-          .eq("id", taskId);
+          .eq("id", numTaskId);
 
-        await replyTextMessage(replyToken, `✅ อัปเดตงานลำดับ [${taskId}] เรียบร้อยแล้ว! (${typeLabel})`);
+        await replyTextMessage(replyToken, `✅ อัปเดตงานลำดับ [#${numTaskId}] เรียบร้อยแล้ว! (${typeLabel})`);
       } else {
-        const newId = `CW-${Date.now().toString().slice(-6)}`;
-        await insertRowToSupabase("งานรับเหมา", {
-          id_Conwork: newId,
-          id: newId,
-          "ชื่อเล่น": receiver || "ทีมงาน",
-          "ผู้รับผิดชอบ": receiver || "ทีมงาน",
-          "รายละเอียดงาน": `[${typeLabel}] ${listName} (ดู: ${doWork || "-"}, ส่ง: ${sendWork || "-"})`
-        });
+        const { data: insTask } = await supabaseAdmin
+          .from("tasks")
+          .insert({
+            title: listName,
+            assignee_name: receiver,
+            task_type: typeNum,
+            status: "ดำเนินการ",
+            do_date: doWork && doWork !== "-" ? normalizeDateToIso(doWork) : new Date().toISOString().slice(0, 10),
+            send_date: sendWork && sendWork !== "-" ? normalizeDateToIso(sendWork) : null,
+          })
+          .select()
+          .single();
+
+        const newId = insTask?.id ? `#${insTask.id}` : "ใหม่";
         await replyTextMessage(replyToken, `✅ สร้างงานใหม่ [${newId}] เรียบร้อยแล้ว! (${typeLabel})`);
       }
       return true;
@@ -320,19 +344,29 @@ export async function handleLineCommand(
       const contact1 = getPWVal("ติดต่อ1") || getPWVal("ติดต่อ") || "-";
       const phone1 = getPWVal("เบอร์1") || getPWVal("เบอร์") || "-";
       const company = getPWVal("บริษัท") || "-";
+      const note = getPWVal("หมายเหตุ") || "-";
 
-      const pwId = `PW-${Date.now().toString().slice(-6)}`;
+      const { data: insWork } = await supabaseAdmin
+        .from("works")
+        .insert({
+          team: "PW",
+          activity_type: "เสนอราคา",
+          title: topic,
+          pr_no: prNo,
+          location: location,
+          date_inspect: inspectDate,
+          date_propose: offerDate,
+          contact1: contact1,
+          phone1: phone1,
+          company: company,
+          status: "รอดูงาน",
+          note: note
+        })
+        .select()
+        .single();
+
+      const pwId = insWork?.id ? `PW-${insWork.id}` : `PW-${Date.now().toString().slice(-4)}`;
       const fullDetails = `${topic} (PR: ${prNo}, สถานที่: ${location}, นัดดู: ${inspectDate}, นัดเสนอ: ${offerDate})`;
-
-      await insertRowToSupabase("งานรับเหมา", {
-        id_Conwork: pwId,
-        id: pwId,
-        "ชื่อเล่น": contact1,
-        "ผู้รับผิดชอบ": contact1,
-        "รายละเอียดงาน": fullDetails,
-        "เบอร์โทรศัพท์": phone1,
-        "บริษัท": company
-      });
 
       const flex = createWorkAssignmentFlex({
         id: pwId,
@@ -353,8 +387,32 @@ export async function handleLineCommand(
       return true;
     }
 
-    if (rawText.startsWith("มอบหมาย:") || rawText.startsWith("กิจกรรม:") || rawText.startsWith("PW:") || rawText.startsWith("PW1:") || rawText.startsWith("PWALL:")) {
-      const content = rawText.replace(/^มอบหมาย:|^กิจกรรม:|^PW:|^PW1:work|^PWALL:work|^PW:/, "").trim();
+    // 4.2 Single-line Quick PW Assignment or PW Query (PW1:work, PWALL:work)
+    if (rawText.startsWith("PW1:work") || rawText.startsWith("PW2:work") || rawText.startsWith("PW3:work") || rawText.startsWith("PW4:work") || rawText.startsWith("PWALL:work") || rawText.startsWith("PW:work")) {
+      const teamFilter = rawText.startsWith("PW1") ? "PW1" : rawText.startsWith("PW2") ? "PW2" : rawText.startsWith("PW3") ? "PW3" : rawText.startsWith("PW4") ? "PW4" : "";
+      
+      let query = supabaseAdmin.from("works").select("*");
+      if (teamFilter) {
+        query = query.eq("team", teamFilter);
+      }
+      const { data: worksList } = await query.order("id", { ascending: false }).limit(10);
+
+      if (!worksList || worksList.length === 0) {
+        await replyTextMessage(replyToken, `👷‍♂️ ไม่พบรายการงาน PW ${teamFilter || "ทั้งหมด"} ในขณะนี้`);
+        return true;
+      }
+
+      let textSummary = `👷‍♂️ รายการงาน PW ${teamFilter || "ทั้งหมด"} (${worksList.length} รายการ):\n\n`;
+      worksList.forEach((w, i) => {
+        textSummary += `${i + 1}. [PW${w.id}] ${w.title || "งานรับเหมา"}\n   - สถานะ: ${w.status || "รอดูงาน"}\n   - นัดดู: ${w.date_inspect || "-"}\n   - ติดต่อ: ${w.contact1 || "-"} (${w.phone1 || "-"})\n\n`;
+      });
+
+      await replyTextMessage(replyToken, textSummary.trim());
+      return true;
+    }
+
+    if (rawText.startsWith("มอบหมาย:") || rawText.startsWith("กิจกรรม:") || rawText.startsWith("PW:")) {
+      const content = rawText.replace(/^มอบหมาย:|^กิจกรรม:|^PW:/, "").trim();
       if (!content) {
         await replyTextMessage(replyToken, `⚠️ กรุณาระบุรายละเอียดการมอบหมายงาน\nเช่น มอบหมาย: งานผูกเหล็กและเทคอนกรีต [ช่างเอก] ฿250,000`);
         return true;
@@ -374,7 +432,21 @@ export async function handleLineCommand(
         .replace(/(?:โทร|tel|phone)[:\s]*[\d\-]+/i, "")
         .trim() || content;
 
-      const pwId = `PW-${Date.now().toString().slice(-6)}`;
+      const { data: insWork } = await supabaseAdmin
+        .from("works")
+        .insert({
+          team: "PW",
+          activity_type: "เสนอราคา",
+          title: parsedDetails,
+          contact1: parsedContractor,
+          phone1: parsedPhone,
+          status: "รอดูงาน",
+          note: parsedAmount > 0 ? `ยอดเสนอ: ฿${parsedAmount.toLocaleString("th-TH")}` : ""
+        })
+        .select()
+        .single();
+
+      const pwId = insWork?.id ? `PW-${insWork.id}` : `PW-${Date.now().toString().slice(-4)}`;
 
       const flex = createWorkAssignmentFlex({
         id: pwId,

@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 export { supabaseAdmin };
-import { normalizeDateToIso } from "@/lib/dates";
+import { normalizeDateToIso, formatDateDisplay } from "@/lib/dates";
 import { cached, clearCache } from "@/lib/cache";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 
@@ -127,6 +127,15 @@ export function getDbTableName(tableName: string): string {
   }
   if (normalized === "loan" || normalized === "loans" || tableName === "ยืมเงิน") {
     return "loans";
+  }
+  if (normalized === "tasks" || normalized === "task" || tableName === "งาน" || tableName === "Tasks") {
+    return "tasks";
+  }
+  if (normalized === "works" || normalized === "work" || tableName === "งานPW" || tableName === "PW" || tableName === "Works") {
+    return "works";
+  }
+  if (normalized === "plans" || normalized === "plan" || tableName === "แผนงาน" || tableName === "Plan") {
+    return "plans";
   }
   if (normalized === "product" || normalized === "products" || tableName === "สินค้า" || tableName === "ประเภทสินค้า") {
     return "products";
@@ -324,6 +333,55 @@ export function mapSupabaseRowToSheetRow(dbTable: string, row: Record<string, an
     res["รหัสสินค้า"] = row.code ?? row["รหัสสินค้า"];
     res["ชื่อประเภทสินค้า"] = row.name ?? row["ชื่อประเภทสินค้า"];
     res["หมายเหตุ"] = row.note ?? row["หมายเหตุ"];
+  } else if (dbTable === "tasks") {
+    res["id"] = row.id ?? row["id"];
+    res["ลำดับ"] = row.id ?? row["ลำดับ"];
+    res["_sheetRow"] = row.id ?? row._sheetRow;
+    res["รายการ"] = row.title ?? row["รายการ"] ?? "";
+    const doDateFormatted = row.do_date ? formatDateDisplay(row.do_date) : (row["ดู/ทำ"] ? formatDateDisplay(row["ดู/ทำ"]) : (row["วันที่ดู/ทำ"] ? formatDateDisplay(row["วันที่ดู/ทำ"]) : "-"));
+    const sendDateFormatted = row.send_date ? formatDateDisplay(row.send_date) : (row["ส่งงาน"] ? formatDateDisplay(row["ส่งงาน"]) : (row["วันที่ส่งงาน"] ? formatDateDisplay(row["วันที่ส่งงาน"]) : "-"));
+    res["ดู/ทำ"] = doDateFormatted;
+    res["วันที่ดู/ทำ"] = doDateFormatted;
+    res["ส่งงาน"] = sendDateFormatted;
+    res["วันที่ส่งงาน"] = sendDateFormatted;
+    res["รหัสพนักงาน"] = row.assignee_id ?? row["รหัสพนักงาน"] ?? "";
+    res["ผู้รับมอบหมาย"] = row.assignee_name ?? row["ผู้รับมอบหมาย"] ?? row["ผู้รับผิดชอบ"] ?? "";
+    res["ผู้รับผิดชอบ"] = row.assignee_name ?? row["ผู้รับผิดชอบ"] ?? row["ผู้รับมอบหมาย"] ?? "";
+    res["สถานะ"] = row.status ?? row["สถานะ"] ?? "ดำเนินการ";
+    const typeNum = Number(row.task_type ?? row["ประเภท"] ?? 1);
+    res["ประเภท"] = typeNum === 2 ? "2 (แผนงาน)" : typeNum === 3 ? "3 (PJSA)" : "1 (เอกสาร)";
+    res["task_type"] = typeNum;
+  } else if (dbTable === "works") {
+    res["id"] = row.id ?? row["id"];
+    res["ลำดับ"] = row.id ?? row["ลำดับ"];
+    res["_sheetRow"] = row.id ?? row._sheetRow;
+    res["ทีม"] = row.team ?? row["ทีม"] ?? "PW";
+    res["กิจกรรม"] = row.activity_type ?? row["กิจกรรม"] ?? "เสนอราคา";
+    res["เรื่อง"] = row.title ?? row["เรื่อง"] ?? "";
+    res["PR"] = row.pr_no ?? row["PR"] ?? "-";
+    res["สถานที่"] = row.location ?? row["สถานที่"] ?? "-";
+    res["นัดดู"] = row.date_inspect ?? row["นัดดู"] ?? "-";
+    res["นัดเสนอ"] = row.date_propose ?? row["นัดเสนอ"] ?? "-";
+    res["ติดต่อ1"] = row.contact1 ?? row["ติดต่อ1"] ?? "-";
+    res["เบอร์1"] = row.phone1 ?? row["เบอร์1"] ?? "-";
+    res["ติดต่อ2"] = row.contact2 ?? row["ติดต่อ2"] ?? "-";
+    res["เบอร์2"] = row.phone2 ?? row["เบอร์2"] ?? "-";
+    res["บริษัท"] = row.company ?? row["บริษัท"] ?? "-";
+    res["สถานะ"] = row.status ?? row["สถานะ"] ?? "รอดูงาน";
+    res["หมายเหตุ"] = row.note ?? row["หมายเหตุ"] ?? "";
+  } else if (dbTable === "plans") {
+    res["id"] = row.id ?? row["id"];
+    res["ลำดับ"] = row.id ?? row["ลำดับ"];
+    res["_sheetRow"] = row.id ?? row._sheetRow;
+    res["รหัสงาน"] = row.project_code ?? row["รหัสงาน"] ?? "";
+    res["ชื่อแผนงาน"] = row.job_name ?? row["ชื่อแผนงาน"] ?? "";
+    res["รายการ"] = row.item_name ?? row["รายการ"] ?? "";
+    res["วันที่เริ่ม"] = row.start_date ? String(row.start_date) : (row["วันที่เริ่ม"] ?? "");
+    res["วันที่จบ"] = row.end_date ? String(row.end_date) : (row["วันที่จบ"] ?? "");
+    res["จำนวนวัน"] = row.days_count ?? row["จำนวนวัน"] ?? 0;
+    res["%แผน"] = row.plan_percentage ?? row["%แผน"] ?? 0;
+    res["actual"] = row.actual_percentage ?? row["actual"] ?? 0;
+    res["สถานะ"] = row.status ?? row["สถานะ"] ?? "Open";
   }
 
   const sheetRowVal = Number(res["_sheetRow"] ?? row._sheetRow ?? row.id);
@@ -543,6 +601,117 @@ export function mapSheetRowToSupabaseRow(tableName: string, row: Record<string, 
     if (row["ประเภท Name1"] !== undefined) dbRow.name1 = row["ประเภท Name1"];
     if (row["ประเภท Name2"] !== undefined) dbRow.name2 = row["ประเภท Name2"];
     if (row["ประเภท Name3"] !== undefined) dbRow.name3 = row["ประเภท Name3"];
+  } else if (dbTable === "tasks") {
+    if (row["id"] !== undefined || row["ลำดับ"] !== undefined) {
+      const parsedId = Number(row["id"] ?? row["ลำดับ"]);
+      if (Number.isFinite(parsedId) && parsedId > 0) dbRow.id = parsedId;
+    }
+    if (row["รายการ"] !== undefined || row["title"] !== undefined || row["รายละเอียด"] !== undefined) {
+      dbRow.title = String(row["รายการ"] ?? row["title"] ?? row["รายละเอียด"] ?? "").trim();
+    }
+    if (row["ดู/ทำ"] !== undefined || row["วันที่ดู/ทำ"] !== undefined || row["do_date"] !== undefined) {
+      const d = row["วันที่ดู/ทำ"] ?? row["ดู/ทำ"] ?? row["do_date"];
+      dbRow.do_date = (d && d !== "-") ? (normalizeDateToIso(d) || null) : null;
+    }
+    if (row["ส่งงาน"] !== undefined || row["วันที่ส่งงาน"] !== undefined || row["send_date"] !== undefined) {
+      const d = row["วันที่ส่งงาน"] ?? row["ส่งงาน"] ?? row["send_date"];
+      dbRow.send_date = (d && d !== "-") ? (normalizeDateToIso(d) || null) : null;
+    }
+    if (row["รหัสพนักงาน"] !== undefined || row["assignee_id"] !== undefined) {
+      dbRow.assignee_id = String(row["รหัสพนักงาน"] ?? row["assignee_id"] ?? "").trim() || null;
+    }
+    if (row["ผู้รับมอบหมาย"] !== undefined || row["ผู้รับผิดชอบ"] !== undefined || row["assignee_name"] !== undefined || row["ชื่อเล่น"] !== undefined) {
+      dbRow.assignee_name = String(row["ผู้รับมอบหมาย"] ?? row["ผู้รับผิดชอบ"] ?? row["assignee_name"] ?? row["ชื่อเล่น"] ?? "").trim();
+    }
+    if (row["ประเภท"] !== undefined || row["task_type"] !== undefined) {
+      const rawType = String(row["ประเภท"] ?? row["task_type"] ?? "1").trim();
+      const typeNum = parseInt(rawType.replace(/\D/g, "") || "1", 10);
+      dbRow.task_type = (typeNum === 2 || typeNum === 3) ? typeNum : 1;
+    }
+    if (row["สถานะ"] !== undefined || row["status"] !== undefined) {
+      dbRow.status = String(row["สถานะ"] ?? row["status"] ?? "ดำเนินการ").trim();
+    }
+  } else if (dbTable === "works") {
+    if (row["id"] !== undefined || row["ลำดับ"] !== undefined) {
+      const parsedId = Number(row["id"] ?? row["ลำดับ"]);
+      if (Number.isFinite(parsedId) && parsedId > 0) dbRow.id = parsedId;
+    }
+    if (row["ทีม"] !== undefined || row["team"] !== undefined) {
+      dbRow.team = String(row["ทีม"] ?? row["team"] ?? "PW").trim();
+    }
+    if (row["กิจกรรม"] !== undefined || row["activity_type"] !== undefined) {
+      dbRow.activity_type = String(row["กิจกรรม"] ?? row["activity_type"] ?? "เสนอราคา").trim();
+    }
+    if (row["เรื่อง"] !== undefined || row["title"] !== undefined) {
+      dbRow.title = String(row["เรื่อง"] ?? row["title"] ?? "").trim();
+    }
+    if (row["PR"] !== undefined || row["pr_no"] !== undefined) {
+      dbRow.pr_no = String(row["PR"] ?? row["pr_no"] ?? "-").trim();
+    }
+    if (row["สถานที่"] !== undefined || row["location"] !== undefined) {
+      dbRow.location = String(row["สถานที่"] ?? row["location"] ?? "-").trim();
+    }
+    if (row["นัดดู"] !== undefined || row["date_inspect"] !== undefined) {
+      dbRow.date_inspect = String(row["นัดดู"] ?? row["date_inspect"] ?? "-").trim();
+    }
+    if (row["นัดเสนอ"] !== undefined || row["date_propose"] !== undefined) {
+      dbRow.date_propose = String(row["นัดเสนอ"] ?? row["date_propose"] ?? "-").trim();
+    }
+    if (row["ติดต่อ1"] !== undefined || row["contact1"] !== undefined) {
+      dbRow.contact1 = String(row["ติดต่อ1"] ?? row["contact1"] ?? "-").trim();
+    }
+    if (row["เบอร์1"] !== undefined || row["phone1"] !== undefined) {
+      dbRow.phone1 = String(row["เบอร์1"] ?? row["phone1"] ?? "-").trim();
+    }
+    if (row["ติดต่อ2"] !== undefined || row["contact2"] !== undefined) {
+      dbRow.contact2 = String(row["ติดต่อ2"] ?? row["contact2"] ?? "-").trim();
+    }
+    if (row["เบอร์2"] !== undefined || row["phone2"] !== undefined) {
+      dbRow.phone2 = String(row["เบอร์2"] ?? row["phone2"] ?? "-").trim();
+    }
+    if (row["บริษัท"] !== undefined || row["company"] !== undefined) {
+      dbRow.company = String(row["บริษัท"] ?? row["company"] ?? "-").trim();
+    }
+    if (row["สถานะ"] !== undefined || row["status"] !== undefined) {
+      dbRow.status = String(row["สถานะ"] ?? row["status"] ?? "รอดูงาน").trim();
+    }
+    if (row["หมายเหตุ"] !== undefined || row["note"] !== undefined) {
+      dbRow.note = String(row["หมายเหตุ"] ?? row["note"] ?? "").trim();
+    }
+  } else if (dbTable === "plans") {
+    if (row["id"] !== undefined || row["ลำดับ"] !== undefined) {
+      const parsedId = Number(row["id"] ?? row["ลำดับ"]);
+      if (Number.isFinite(parsedId) && parsedId > 0) dbRow.id = parsedId;
+    }
+    if (row["รหัสงาน"] !== undefined || row["project_code"] !== undefined) {
+      dbRow.project_code = String(row["รหัสงาน"] ?? row["project_code"] ?? "").trim();
+    }
+    if (row["ชื่อแผนงาน"] !== undefined || row["job_name"] !== undefined) {
+      dbRow.job_name = String(row["ชื่อแผนงาน"] ?? row["job_name"] ?? "").trim();
+    }
+    if (row["รายการ"] !== undefined || row["item_name"] !== undefined) {
+      dbRow.item_name = String(row["รายการ"] ?? row["item_name"] ?? "").trim();
+    }
+    if (row["วันที่เริ่ม"] !== undefined || row["start_date"] !== undefined) {
+      const d = row["วันที่เริ่ม"] ?? row["start_date"];
+      dbRow.start_date = d ? (normalizeDateToIso(d) || null) : null;
+    }
+    if (row["วันที่จบ"] !== undefined || row["end_date"] !== undefined) {
+      const d = row["วันที่จบ"] ?? row["end_date"];
+      dbRow.end_date = d ? (normalizeDateToIso(d) || null) : null;
+    }
+    if (row["จำนวนวัน"] !== undefined || row["days_count"] !== undefined) {
+      dbRow.days_count = toNumber(row["จำนวนวัน"] ?? row["days_count"]);
+    }
+    if (row["%แผน"] !== undefined || row["plan_percentage"] !== undefined) {
+      dbRow.plan_percentage = toNumber(row["%แผน"] ?? row["plan_percentage"]);
+    }
+    if (row["actual"] !== undefined || row["actual_percentage"] !== undefined) {
+      dbRow.actual_percentage = toNumber(row["actual"] ?? row["actual_percentage"]);
+    }
+    if (row["สถานะ"] !== undefined || row["status"] !== undefined) {
+      dbRow.status = String(row["สถานะ"] ?? row["status"] ?? "Open").trim();
+    }
   } else {
     Object.entries(row).forEach(([k, v]) => {
       if (!k.startsWith("_")) dbRow[k] = v;

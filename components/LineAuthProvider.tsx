@@ -30,7 +30,13 @@ const LineAuthContext = createContext<LineAuthContextType>({
 
 export const useLineAuth = () => useContext(LineAuthContext);
 
-export function LineAuthProvider({ children }: { children: React.ReactNode }) {
+export function LineAuthProvider({
+  children,
+  isAuthenticated = false,
+}: {
+  children: React.ReactNode;
+  isAuthenticated?: boolean;
+}) {
   const [liffId, setLiffId] = useState("");
   const [isLiffReady, setIsLiffReady] = useState(false);
   const [lineProfile, setLineProfile] = useState<LineProfile | null>(null);
@@ -103,10 +109,9 @@ export function LineAuthProvider({ children }: { children: React.ReactNode }) {
         };
         setLineProfile(pData);
 
-        // Only trigger auto-login check if missing auth cookie or on login page
-        const hasAuthCookie = typeof document !== "undefined" && document.cookie.includes("auth_employee_id=");
-        if (!hasAuthCookie) {
-          await checkAndLoginLineUser(pData);
+        // Only trigger auto-login if the user is NOT already authenticated in the app
+        if (!isAuthenticated) {
+          await checkAndLoginLineUser(pData, false);
         }
       }
     } catch (err: any) {
@@ -114,11 +119,9 @@ export function LineAuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // 3. Attempt LINE Auto-Login
-  async function checkAndLoginLineUser(profile: LineProfile) {
+  // 3. Attempt LINE Login (isManual: true when user clicks login button, false when auto-login on LoginScreen)
+  async function checkAndLoginLineUser(profile: LineProfile, isManual = false) {
     setIsLoading(true);
-    const hadAuthCookieBefore = typeof document !== "undefined" && document.cookie.includes("auth_employee_id=");
-    const isLoginPagePath = typeof window !== "undefined" && window.location.pathname.startsWith("/login");
 
     try {
       const res = await fetch("/api/auth", {
@@ -138,8 +141,10 @@ export function LineAuthProvider({ children }: { children: React.ReactNode }) {
           sessionStorage.removeItem("line_user_logged_out");
         }
 
-        if (!hadAuthCookieBefore || isLoginPagePath) {
-          window.location.href = "/";
+        // Refresh/redirect to current URL only if user was not authenticated or if user manually clicked login
+        if (!isAuthenticated || isManual) {
+          const currentUrl = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+          window.location.href = currentUrl || "/";
         }
       } else {
         // User not found in DB ➡️ Prompt for Phone Registration / Account Linking
@@ -191,7 +196,8 @@ export function LineAuthProvider({ children }: { children: React.ReactNode }) {
 
     if (currentLiff) {
       if (!currentLiff.isLoggedIn()) {
-        currentLiff.login();
+        const currentUri = typeof window !== "undefined" ? window.location.href : undefined;
+        currentLiff.login(currentUri ? { redirectUri: currentUri } : undefined);
       } else {
         try {
           const profile = await currentLiff.getProfile();
@@ -202,7 +208,7 @@ export function LineAuthProvider({ children }: { children: React.ReactNode }) {
             statusMessage: profile.statusMessage,
           };
           setLineProfile(pData);
-          await checkAndLoginLineUser(pData);
+          await checkAndLoginLineUser(pData, true);
         } catch (err: any) {
           alert(`⚠️ ไม่สามารถดึงโปรไฟล์ LINE ได้: ${err?.message || "โปรดลองใหม่อีกครั้ง"}`);
         }
@@ -240,7 +246,8 @@ export function LineAuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (res.ok && data.success) {
         setShowPhoneModal(false);
-        window.location.href = "/";
+        const currentUrl = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        window.location.href = currentUrl || "/";
       } else {
         setRegisterError(data.error || "เกิดข้อผิดพลาดในการลงทะเบียน");
       }

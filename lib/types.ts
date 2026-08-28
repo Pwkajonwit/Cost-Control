@@ -55,7 +55,7 @@ export type ViewConfig = {
   type: "dashboard" | "table" | "detail";
   table?: string;
   sourceTable?: string;
-  position: "first" | "next" | "last" | "menu";
+  position: "first" | "next" | "last" | "menu" | "task";
   items?: string[];
 };
 

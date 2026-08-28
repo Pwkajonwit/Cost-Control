@@ -303,6 +303,8 @@ export async function getInitialValues(tableName: string): Promise<SheetRow> {
     if (column.initialValue === "nextCustomerId") values[column.name] = await nextPrefixedId(TABLES.CUSTOMER, "id_cus", "C", 100);
     if (column.initialValue === "nextCompanyId") values[column.name] = await nextPrefixedId(TABLES.COMPANY, "id_Company", "CO", 100);
     if (column.initialValue === "nextLoanId") values[column.name] = await nextPrefixedId(TABLES.LOAN, "id", "L", 100);
+    if (column.initialValue === "nextTaskId") values[column.name] = String(await nextTaskId());
+    if (column.initialValue === "nextWorkId") values[column.name] = String(await nextWorkId());
     if (!values[column.name]) values[column.name] = column.initialValue;
   }
   return values;
@@ -310,6 +312,22 @@ export async function getInitialValues(tableName: string): Promise<SheetRow> {
 
 async function nextDataSequence() {
   return await getNextBillSequence();
+}
+
+async function nextTaskId() {
+  const rows = await getRows(TABLES.TASKS, 15_000).catch(() => []);
+  return rows.reduce((max, row) => {
+    const value = Number(row["ลำดับ"] || row["id"] || 0);
+    return Number.isFinite(value) ? Math.max(max, value) : max;
+  }, 0) + 1;
+}
+
+async function nextWorkId() {
+  const rows = await getRows(TABLES.WORKS, 15_000).catch(() => []);
+  return rows.reduce((max, row) => {
+    const value = Number(row["ลำดับ"] || row["id"] || 0);
+    return Number.isFinite(value) ? Math.max(max, value) : max;
+  }, 0) + 1;
 }
 
 async function nextContractWorkId() {

@@ -8,6 +8,7 @@ import {
   BriefcaseBusiness,
   Building2,
   Car,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -59,6 +60,8 @@ const ICONS: Record<string, any> = {
   customers: Users,
   companies: Building2,
   loans: HandCoins,
+  tasks: ClipboardList,
+  works: BriefcaseBusiness,
   settings: Database,
   "settings-general": Building2,
 };
@@ -116,9 +119,12 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
     };
   }, []);
 
-  const getInitialCategory = (path: string): "all" | "main" | "master" | "system" => {
+  const getInitialCategory = (path: string): "all" | "main" | "task" | "master" | "system" => {
     if (path.startsWith("/settings") || path.startsWith("/line-system") || path.startsWith("/users")) {
       return "system";
+    }
+    if (path.startsWith("/views/tasks") || path.startsWith("/views/works") || path === "/tasks" || path === "/works") {
+      return "task";
     }
     if (path.startsWith("/views/")) {
       return "master";
@@ -126,22 +132,27 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
     return "main";
   };
 
-  const [activeCategory, setActiveCategory] = useState<"all" | "main" | "master" | "system">(() => getInitialCategory(pathname));
+  const [activeCategory, setActiveCategory] = useState<"all" | "main" | "task" | "master" | "system">(() => getInitialCategory(pathname));
 
   useEffect(() => {
     setActiveCategory(getInitialCategory(pathname));
   }, [pathname]);
 
-  const mainViews = PRIMARY_VIEWS.filter((view) => view.position !== "menu");
+  const mainViews = PRIMARY_VIEWS.filter((view) => view.position !== "menu" && view.position !== "task");
+  const taskViews = PRIMARY_VIEWS.filter((view) => view.position === "task");
   const masterViews = PRIMARY_VIEWS.filter((view) => view.position === "menu");
 
   const filterText = filterSearch.toLowerCase().trim();
 
   const filteredMainViews = mainViews.filter((v) => !filterText || v.name.toLowerCase().includes(filterText));
+  const filteredTaskViews = taskViews.filter((v) => !filterText || v.name.toLowerCase().includes(filterText));
   const filteredMasterViews = masterViews.filter((v) => !filterText || v.name.toLowerCase().includes(filterText));
 
   const isSettingsActive = pathname.startsWith("/settings");
   const isGeneralSettingsActive = pathname === "/settings/general";
+
+  const isTaskPath = pathname.startsWith("/views/tasks") || pathname.startsWith("/views/works");
+  const isMasterPath = pathname.startsWith("/views/") && !isTaskPath;
 
   const currentTab = filterText ? "all" : activeCategory;
 
@@ -188,7 +199,25 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
               <LayoutGrid size={17} />
             </button>
 
-            {/* Mode 2: Master Submenus */}
+            {/* Mode 2: Tasks & PW Group */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCategory("task");
+                setFilterSearch("");
+                if (collapsed) onToggleCollapse();
+              }}
+              className={`w-9 h-9 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                currentTab === "task" || (currentTab === "all" && isTaskPath)
+                  ? "bg-[#d4f54e] text-[#0b3531] font-bold shadow-xs"
+                  : "text-[#a5dad0] hover:text-white hover:bg-white/10"
+              }`}
+              title="จัดการงาน & PW (TASKS & PW)"
+            >
+              <CheckSquare size={17} />
+            </button>
+
+            {/* Mode 3: Master Submenus */}
             <button
               type="button"
               onClick={() => {
@@ -197,18 +226,18 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
                 if (collapsed) onToggleCollapse();
               }}
               className={`w-9 h-9 rounded-md flex items-center justify-center transition-all cursor-pointer ${
-                currentTab === "master" || (currentTab === "all" && pathname.startsWith("/views/"))
+                currentTab === "master" || (currentTab === "all" && isMasterPath)
                   ? "bg-[#d4f54e] text-[#0b3531] font-bold shadow-xs"
                   : "text-[#a5dad0] hover:text-white hover:bg-white/10"
               }`}
-              title="เมนูย่อย / ข้อมูลมาสเตอร์ (MANAGEMENT)"
+              title="ข้อมูลมาสเตอร์ (MASTER DATA)"
             >
               <Layers size={17} />
             </button>
 
             <div className="w-5 h-px bg-[#13443e] my-0.5" />
 
-            {/* Mode 3: System & Settings */}
+            {/* Mode 4: System & Settings */}
             <button
               type="button"
               onClick={() => {
@@ -322,11 +351,53 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
               </div>
             )}
 
-            {/* SECTION 2: เมนูย่อย / ข้อมูลมาสเตอร์ (MANAGEMENT) */}
+            {/* SECTION 2: จัดการงาน & PW (TASKS & PW) */}
+            {(currentTab === "all" || currentTab === "task") && (
+              <div className="space-y-1.5">
+                <div className="px-1.5 pb-1 flex items-center justify-between text-xs text-[#86cfc2] uppercase font-sans font-semibold tracking-wider">
+                  <span>จัดการงาน & PW (TASKS & PW)</span>
+                  <span className="text-xs bg-[#072825] text-[#d4f54e] px-2 py-0.5 rounded-full border border-[#144d47] font-normal">
+                    {filteredTaskViews.length}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {filteredTaskViews.map((view) => {
+                    const href = hrefFor(view.id);
+                    const active = pathname.startsWith(href);
+                    const Icon = ICONS[view.id] || ClipboardList;
+                    return (
+                      <Link
+                        key={view.id}
+                        href={href}
+                        prefetch={false}
+                        className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
+                          active
+                            ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"
+                            : "text-[#d6eee9] hover:text-white hover:bg-[#124d45] font-medium"
+                        }`}
+                      >
+                        <span
+                          className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                            active
+                              ? "bg-[#0b3531] text-[#d4f54e]"
+                              : "bg-[#083a34] text-[#a5dad0] border border-[#144d45] group-hover:bg-[#195a52] group-hover:text-white"
+                          }`}
+                        >
+                          <Icon size={14} />
+                        </span>
+                        <span className="truncate">{view.name}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* SECTION 3: ข้อมูลมาสเตอร์ (MASTER DATA) */}
             {(currentTab === "all" || currentTab === "master") && (
               <div className="space-y-1.5">
                 <div className="px-1.5 pb-1 flex items-center justify-between text-xs text-[#86cfc2] uppercase font-sans font-semibold tracking-wider">
-                  <span>เมนูย่อย (MANAGEMENT)</span>
+                  <span>ข้อมูลมาสเตอร์ (MASTER DATA)</span>
                   <span className="text-xs bg-[#072825] text-[#d4f54e] px-2 py-0.5 rounded-full border border-[#144d47] font-normal">
                     {filteredMasterViews.length}
                   </span>

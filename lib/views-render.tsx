@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Building2, Store, User, Briefcase, Truck, Users, Building, FileText } from "lucide-react";
+import { ArrowLeft, Building2, Store, User, Briefcase, Truck, Users, Building, FileText, ClipboardList } from "lucide-react";
 import { notFound } from "next/navigation";
 import { BillFollowDashboard, MainDashboard, WithdrawDashboard, WorkStatusDashboard } from "@/components/Dashboards";
 import { DataTable } from "@/components/tables/DataTable";
@@ -41,6 +41,10 @@ function getEntityIcon(viewId: string) {
       return <Users size={18} className="text-emerald-600 shrink-0" />;
     case "companies":
       return <Building size={18} className="text-emerald-600 shrink-0" />;
+    case "tasks":
+      return <ClipboardList size={18} className="text-emerald-600 shrink-0" />;
+    case "works":
+      return <Briefcase size={18} className="text-emerald-600 shrink-0" />;
     default:
       return <FileText size={18} className="text-emerald-600 shrink-0" />;
   }
@@ -247,6 +251,8 @@ function detailTitle(id: string, row: SheetRow, fallback: string) {
   if (id === "customers") return String(row["ชื่อลูกค้า"] || row["ลูกค้า"] || fallback);
   if (id === "companies") return String(row["ชื่อบริษัท"] || row["บริษัท"] || fallback);
   if (id === "cars") return String(row["ทะเบียน"] || row["ทะเบียนรถ"] || fallback);
+  if (id === "tasks") return String(row["รายการ"] || row.title || fallback);
+  if (id === "works") return String(row["เรื่อง"] || row.title || fallback);
   return String(row["ชื่อ"] || row.name || fallback);
 }
 
@@ -316,7 +322,7 @@ async function renderView(
     const rows = view.id === "contract-open" ? hydratedRows : filterRows(hydratedRows, search);
     const fallback = rows[0] ? Object.keys(rows[0]).filter(column => !column.startsWith("_")) : [];
     const columns = getViewColumns(view.name, fallback);
-    if (view.position === "menu") {
+    if (view.position === "menu" || view.position === "task") {
       const keyColumn = tableKeyColumn(view.id, view.table);
       const schemaAddEventName = isSchemaForm ? `open-${view.id}-form` : undefined;
       const schemaEditEventName = isSchemaForm ? `open-${view.id}-edit-form` : undefined;
@@ -460,14 +466,14 @@ function getManageFormColumns(columns: string[], headers: string[], keyColumn: s
 }
 
 function usesSchemaForm(viewId: string) {
-  return ["contract-open", "project-all", "banks", "stores", "contractors", "people", "cars", "customers", "companies", "loans"].includes(viewId);
+  return ["contract-open", "project-all", "banks", "stores", "contractors", "people", "cars", "customers", "companies", "loans", "tasks", "works"].includes(viewId);
 }
 
 function detailBasePathForView(viewId: string) {
   if (viewId === "project-all") {
     return "/work-status";
   }
-  if (["stores", "contractors", "people", "banks", "cars", "customers", "companies"].includes(viewId)) {
+  if (["stores", "contractors", "people", "banks", "cars", "customers", "companies", "tasks", "works"].includes(viewId)) {
     return `/views/${viewId}`;
   }
   return undefined;
@@ -483,7 +489,9 @@ function tableKeyColumn(viewId: string, tableName: string) {
     cars: "id_car",
     customers: "id_cus",
     companies: "id_Company",
-    loans: "id"
+    loans: "id",
+    tasks: "ลำดับ",
+    works: "ลำดับ"
   };
   return keyByView[viewId] || TABLE_KEYS[tableName] || "_RowNumber";
 }

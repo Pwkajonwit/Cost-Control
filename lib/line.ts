@@ -1319,9 +1319,13 @@ export function createTaskSummaryFlex(tasks: Array<{ id: any; details: string; s
 
 export function createMemberTaskTableFlex(
   memberName: string,
-  tasks: Array<{ id: any; details: string; dateStr?: string; days?: number; status?: string }>
+  tasks: Array<{ id: any; details: string; dateStr?: string; days?: number; status?: string; task_type?: number | string; sendDateStr?: string }>
 ): Record<string, any> {
   const planTasks = tasks;
+  const docCount = tasks.filter(t => Number(t.task_type) === 1 || String(t.task_type).includes("เอกสาร")).length;
+  const planCount = tasks.filter(t => Number(t.task_type) === 2 || String(t.task_type).includes("แผนงาน")).length;
+  const pjsaCount = tasks.filter(t => Number(t.task_type) === 3 || String(t.task_type).includes("PJSA")).length;
+
   const todayDateStr = new Date().toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
   const todayDate = new Date();
   const currentMonth = todayDate.getMonth() + 1;
@@ -1336,24 +1340,24 @@ export function createMemberTaskTableFlex(
     header: {
       type: "box",
       layout: "vertical",
-      backgroundColor: "#525252",
+      backgroundColor: "#1E293B",
       paddingAll: "15px",
       contents: [
         {
           type: "text",
-          text: `งานทั้งหมด : ${memberName}(${tasks.length})`,
+          text: `งานทั้งหมด : ${memberName} (${tasks.length} รายการ)`,
           weight: "bold",
           color: "#FFFFFF",
-          size: "lg",
+          size: "md",
         },
         {
           type: "box",
           layout: "horizontal",
           margin: "md",
           contents: [
-            { type: "text", text: `เอกสาร 0 งาน`, color: "#E5E7EB", size: "xs", weight: "bold" },
-            { type: "text", text: `แผนงาน ${tasks.length} งาน`, color: "#F97316", size: "xs", weight: "bold" },
-            { type: "text", text: `PJSA 0 งาน`, color: "#E5E7EB", size: "xs", weight: "bold", align: "end" },
+            { type: "text", text: `เอกสาร ${docCount} งาน`, color: docCount > 0 ? "#38BDF8" : "#94A3B8", size: "xs", weight: "bold" },
+            { type: "text", text: `แผนงาน ${planCount} งาน`, color: planCount > 0 ? "#F97316" : "#94A3B8", size: "xs", weight: "bold", align: "center" },
+            { type: "text", text: `PJSA ${pjsaCount} งาน`, color: pjsaCount > 0 ? "#A7F3D0" : "#94A3B8", size: "xs", weight: "bold", align: "end" },
           ],
         },
       ],
@@ -1370,8 +1374,9 @@ export function createMemberTaskTableFlex(
           layout: "vertical",
           backgroundColor: "#F97316",
           paddingAll: "6px",
+          cornerRadius: "4px",
           contents: [
-            { type: "text", text: `แผนงาน ${tasks.length} งาน (ไทม์ไลน์ 4 วัน - เดือน ${currentMonth})`, color: "#FFFFFF", weight: "bold", size: "xs" }
+            { type: "text", text: `📋 รายการงาน (${tasks.length} งาน) | ไทม์ไลน์ 4 วัน - เดือน ${currentMonth}`, color: "#FFFFFF", weight: "bold", size: "xs" }
           ]
         },
         // Table Column Header Row
@@ -1413,8 +1418,9 @@ export function createMemberTaskTableFlex(
         },
         { type: "separator", margin: "xs" },
         // Table Task Items
-        ...planTasks.slice(0, 8).map((t, index) => {
+        ...planTasks.slice(0, 10).map((t, index) => {
           const taskIdStr = String(t.id || index + 100);
+          const displayDate = t.sendDateStr && t.sendDateStr !== "-" ? `${t.dateStr || todayDateStr}\n${t.sendDateStr}` : (t.dateStr || todayDateStr);
           return {
             type: "box",
             layout: "vertical",
@@ -1427,7 +1433,7 @@ export function createMemberTaskTableFlex(
                 contents: [
                   {
                     type: "text",
-                    text: `[${taskIdStr}]${t.details}`,
+                    text: `[#${taskIdStr}] ${t.details}`,
                     size: "xs",
                     color: "#1F2937",
                     flex: 6,
@@ -1437,11 +1443,12 @@ export function createMemberTaskTableFlex(
                   { type: "separator" },
                   {
                     type: "text",
-                    text: t.dateStr || todayDateStr,
+                    text: displayDate,
                     size: "xxs",
                     color: "#6B7280",
                     flex: 3,
-                    align: "center"
+                    align: "center",
+                    wrap: true
                   },
                   { type: "separator" },
                   {
@@ -1471,9 +1478,9 @@ export function createMemberTaskTableFlex(
                   { type: "separator" },
                   {
                     type: "text",
-                    text: t.status === "เสร็จ" ? "✅" : "Close",
+                    text: t.status === "เสร็จ" || t.status === "สำเร็จ" ? "✅" : "Close",
                     size: "xs",
-                    color: t.status === "เสร็จ" ? "#16A34A" : "#DC2626",
+                    color: t.status === "เสร็จ" || t.status === "สำเร็จ" ? "#16A34A" : "#DC2626",
                     flex: 2,
                     align: "end",
                     weight: "bold",

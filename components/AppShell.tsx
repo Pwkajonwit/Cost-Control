@@ -49,7 +49,9 @@ const ICONS: Record<string, ComponentType<{ size?: number; strokeWidth?: number 
   cars: Car,
   customers: Users,
   companies: Building2,
-  loans: HandCoins
+  loans: HandCoins,
+  tasks: ClipboardList,
+  works: BriefcaseBusiness
 };
 
 const MOBILE_VIEW_IDS = ["dashboard-main", "bill-entry", "withdraw-request", "contract-open", "bill-follow", "work-status"];
@@ -77,6 +79,7 @@ export function AppShell({ children, peopleRows = [], currentUser = null }: { ch
   const pathname = usePathname();
   const router = useRouter();
   const mobileViews = PRIMARY_VIEWS.filter(view => MOBILE_VIEW_IDS.includes(view.id));
+  const mobileTaskViews = PRIMARY_VIEWS.filter(view => view.position === "task");
   const mobileMenuViews = PRIMARY_VIEWS.filter(view => view.position === "menu");
   const activeView = PRIMARY_VIEWS.find(view => {
     const href = hrefFor(view);
@@ -273,26 +276,60 @@ export function AppShell({ children, peopleRows = [], currentUser = null }: { ch
               <X size={18} />
             </button>
           </div>
-          <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-            {mobileMenuViews.map(view => {
-              const href = hrefFor(view);
-              const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-              const Icon = ICONS[view.id];
-              return (
-                <Link
-                  key={view.id}
-                  href={href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? "bg-[#d4f54e] text-[#0b3531] shadow-xs" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          <nav className="flex-1 overflow-y-auto p-3 space-y-3">
+            {mobileTaskViews.length > 0 && (
+              <div className="space-y-1">
+                <div className="px-2 py-1 text-xs font-semibold text-[#86cfc2] uppercase tracking-wider">
+                  จัดการงาน & PW
+                </div>
+                {mobileTaskViews.map(view => {
+                  const href = hrefFor(view);
+                  const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+                  const Icon = ICONS[view.id];
+                  return (
+                    <Link
+                      key={view.id}
+                      href={href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                        active ? "bg-[#d4f54e] text-[#0b3531] shadow-xs font-semibold" : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      }`}
+                    >
+                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"}`}>
+                        {Icon ? <Icon size={16} strokeWidth={2.1} /> : view.name.slice(0, 1)}
+                      </span>
+                      <span className="truncate">{view.name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <div className="px-2 py-1 text-xs font-semibold text-[#86cfc2] uppercase tracking-wider">
+                ข้อมูลมาสเตอร์
+              </div>
+              {mobileMenuViews.map(view => {
+                const href = hrefFor(view);
+                const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+                const Icon = ICONS[view.id];
+                return (
+                  <Link
+                    key={view.id}
+                    href={href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                      active ? "bg-[#d4f54e] text-[#0b3531] shadow-xs font-semibold" : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                     }`}
-                >
-                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"}`}>
-                    {Icon ? <Icon size={16} strokeWidth={2.1} /> : view.name.slice(0, 1)}
-                  </span>
-                  <span className="truncate">{view.name}</span>
-                </Link>
-              );
-            })}
+                  >
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${active ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"}`}>
+                      {Icon ? <Icon size={16} strokeWidth={2.1} /> : view.name.slice(0, 1)}
+                    </span>
+                    <span className="truncate">{view.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
           </nav>
           <div className="p-3 border-t border-slate-100 bg-slate-50">
             <UserSwitcher currentUser={currentUser} theme="light" />
