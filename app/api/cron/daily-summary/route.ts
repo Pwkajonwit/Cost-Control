@@ -33,13 +33,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 3. Fetch summary statistics from Supabase PostgreSQL (Bills & Contract Works)
-    const [billsRes, worksRes] = await Promise.all([
+    // 3. Fetch summary statistics from Supabase PostgreSQL (Bills, Tasks & Works)
+    const [billsRes, tasksRes, worksRes] = await Promise.all([
       supabaseAdmin.from("bills").select("amount, status"),
-      supabaseAdmin.from("contract_works").select("*")
+      supabaseAdmin.from("tasks").select("*"),
+      supabaseAdmin.from("works").select("*")
     ]);
 
     const bills = billsRes.data || [];
+    const tasks = tasksRes.data || [];
     const works = worksRes.data || [];
 
     const totalBills = bills.length;
@@ -47,14 +49,14 @@ export async function GET(req: NextRequest) {
     const pendingCount = bills.filter((b) => b.status === "รอตรวจสอบ" || b.status === "รออนุมัติ").length;
     const approvedCount = bills.filter((b) => b.status === "อนุมัติแล้ว" || b.status === "จ่ายแล้ว").length;
 
-    const activeWorks = works.filter(w => !String(w.work_details || "").includes("[เสร็จสิ้น]"));
-    const activeWorksCount = activeWorks.length;
-    const completedWorksCount = works.filter(w => String(w.work_details || "").includes("[เสร็จสิ้น]")).length;
+    const activeTasks = tasks.filter(t => t.status !== "สำเร็จ");
+    const activeWorksCount = activeTasks.length;
+    const completedWorksCount = tasks.filter(t => t.status === "สำเร็จ").length;
 
-    const lateTasks = activeWorks.slice(0, 5).map(w => ({
-      id: w.id,
-      details: w.work_details || w.project_name || "งานค้าง",
-      assignee: w["ชื่อเล่น"] || w.contractor_name || "ทีมงาน"
+    const lateTasks = activeTasks.slice(0, 5).map(t => ({
+      id: t.id,
+      details: t.title || "งานค้าง",
+      assignee: t.assignee_name || "ทีมงาน"
     }));
 
     const todayStr = new Date().toLocaleDateString("th-TH", {

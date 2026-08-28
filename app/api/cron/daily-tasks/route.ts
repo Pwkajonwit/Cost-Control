@@ -33,13 +33,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 3. Fetch active tasks, contract works & pending bills from Supabase PostgreSQL
-    const [worksRes, billsRes] = await Promise.all([
-      supabaseAdmin.from("contract_works").select("*").order("id", { ascending: false }).limit(15),
+    // 3. Fetch active tasks, works (PW) & pending bills from Supabase PostgreSQL
+    const [tasksRes, worksRes, billsRes] = await Promise.all([
+      supabaseAdmin.from("tasks").select("*").neq("status", "สำเร็จ").order("id", { ascending: false }).limit(15),
+      supabaseAdmin.from("works").select("*").order("id", { ascending: false }).limit(10),
       supabaseAdmin.from("bills").select("*").or("status.eq.รออนุมัติ,status.eq.รอตรวจสอบ").limit(10)
     ]);
 
-    const contractWorks = worksRes.data || [];
+    const tasks = tasksRes.data || [];
+    const works = worksRes.data || [];
     const bills = billsRes.data || [];
 
     const todayStr = new Date().toLocaleDateString("th-TH", {
@@ -48,18 +50,18 @@ export async function GET(req: NextRequest) {
       day: "numeric",
     });
 
-    const activeTasks = contractWorks.filter(w => !String(w.work_details || "").includes("[เสร็จสิ้น]")).map(t => ({
+    const activeTasks = tasks.map(t => ({
       id: t.id,
-      details: t.work_details || t.project_name || "งานประจำวัน",
-      status: "กำลังทำ",
-      project: t.project_name || "งานทั่วไป"
+      details: t.title || "งานประจำวัน",
+      status: t.status || "กำลังทำ",
+      project: t.assignee_name ? `ผู้รับ: ${t.assignee_name}` : "งานทั่วไป"
     }));
 
-    const activeWorks = contractWorks.map(w => ({
+    const activeWorks = works.map(w => ({
       id: w.id,
-      details: w.work_details || w.project_name || "งานเปิดจ้าง",
-      contractor: w["ชื่อเล่น"] || w.contractor_name || "-",
-      project: w.project_name || "ทั่วไป"
+      details: `${w.title || "งานรับเหมา"} (${w.status || "รอดูงาน"})`,
+      contractor: w.contact1 || w.company || "-",
+      project: w.team || "PW"
     }));
 
     const pendingBills = bills.map(b => ({

@@ -65,7 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="th" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <PreventZoom />
-        <LineAuthProvider>
+        <LineAuthProvider isAuthenticated={Boolean(currentUser)}>
           <ToastProvider>
             {!currentUser ? (
               <LoginScreen peopleRows={peopleRows} />
