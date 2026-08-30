@@ -54,67 +54,45 @@ export function BillCategoryBudgetGuardrail({ values, projectRows = [] }: BillCa
 
   return (
     <div
-      className={`rounded-lg p-3 border transition-all text-xs font-sans space-y-2 my-2 ${
+      className={`w-full min-w-0 max-w-full h-10 sm:h-9 px-3 rounded-lg border transition-all text-xs font-sans flex items-center justify-between gap-2 shadow-2xs ${
         isOverBudget
-          ? "bg-rose-950/90 border-rose-600/80 text-rose-100 shadow-md animate-pulse"
+          ? "bg-rose-50 border-rose-300 text-rose-900 animate-pulse"
           : isWarning
-          ? "bg-amber-950/80 border-amber-500/70 text-amber-100"
-          : "bg-slate-900 border-slate-800 text-slate-200"
+          ? "bg-amber-50 border-amber-300 text-amber-900"
+          : "bg-emerald-50/90 border-emerald-200/80 text-emerald-900"
       }`}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {isOverBudget ? (
-            <ShieldAlert size={18} className="text-rose-400 shrink-0" />
-          ) : isWarning ? (
-            <AlertTriangle size={18} className="text-amber-400 shrink-0" />
-          ) : (
-            <ShieldCheck size={18} className="text-emerald-400 shrink-0" />
-          )}
+      <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+        {isOverBudget ? (
+          <ShieldAlert size={15} className="text-rose-600 shrink-0" />
+        ) : isWarning ? (
+          <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+        ) : (
+          <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
+        )}
 
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span>คุมงบหมวดงาน: {categoryLabel}</span>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full border ${
-                  isOverBudget
-                    ? "bg-rose-900 border-rose-500 text-rose-200"
-                    : isWarning
-                    ? "bg-amber-900 border-amber-500 text-amber-200"
-                    : "bg-emerald-950 border-emerald-700 text-emerald-300"
-                }`}
-              >
-                {percentUsedAfterBill}%
-              </span>
-            </div>
-            <p className="text-xs opacity-90 mt-0.5">{budgetStatus.message}</p>
-          </div>
-        </div>
-
-        <div className="text-right shrink-0">
-          <span className="text-xs opacity-75 block">วงเงินหมวดงาน:</span>
-          <span className="text-xs">{money(budgetLimit)} ฿</span>
+        <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <span className="font-semibold text-xs truncate">คุมงบ: {categoryLabel}</span>
+          <span
+            className={`text-[10px] font-semibold px-1.5 py-0.2 rounded shrink-0 ${
+              isOverBudget
+                ? "bg-rose-200 text-rose-800"
+                : isWarning
+                ? "bg-amber-200 text-amber-800"
+                : "bg-emerald-200 text-emerald-800"
+            }`}
+          >
+            {percentUsedAfterBill}%
+          </span>
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div className="w-full bg-slate-950/60 rounded-full h-2 overflow-hidden p-0.5 border border-white/10">
-        <div
-          className={`h-full rounded-full transition-all duration-300 ${
-            isOverBudget ? "bg-rose-500" : isWarning ? "bg-amber-400" : "bg-emerald-400"
-          }`}
-          style={{ width: `${Math.min(100, percentUsedAfterBill)}%` }}
-        />
-      </div>
-
-      {/* Additional Stats Line */}
-      <div className="flex items-center justify-between text-xs opacity-80 pt-0.5 border-t border-white/10">
-        <span>ยอดบิลนี้: {money(currentBillAmount)} ฿</span>
-        <span>
-          {remainingAfterBill < 0
-            ? `เกินงบ ${money(Math.abs(remainingAfterBill))} ฿`
-            : `คงเหลือเบิกได้ ${money(remainingAfterBill)} ฿`}
-        </span>
+      <div className="text-right shrink-0 text-xs font-semibold">
+        {remainingAfterBill < 0 ? (
+          <span className="text-rose-700 font-bold">เกิน {money(Math.abs(remainingAfterBill))} ฿</span>
+        ) : (
+          <span className="text-emerald-800">คงเหลือ {money(remainingAfterBill)} ฿</span>
+        )}
       </div>
     </div>
   );

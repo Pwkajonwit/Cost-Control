@@ -835,8 +835,8 @@ export function FormModal({
       {open ? (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/65 backdrop-blur-md sm:backdrop-blur-lg animate-in fade-in duration-150" role="presentation">
           <form
-            className={`w-full bg-white rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300 h-[92vh] sm:h-auto sm:max-h-[92vh] ${
-              relaxed ? "max-w-5xl" : "max-w-3xl"
+            className={`w-full bg-white rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300 h-[92vh] sm:h-auto sm:max-h-[90vh] ${
+              relaxed ? "max-w-4xl" : "max-w-2xl sm:max-w-3xl"
             }`}
             role="dialog"
             aria-modal="true"
@@ -845,20 +845,20 @@ export function FormModal({
             onSubmit={submitForm}
           >
             {/* Clean Mobile App Header */}
-            <header className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white border-b border-slate-200 shrink-0">
+            <header className="flex items-center justify-between px-4 sm:px-5 py-2.5 bg-white border-b border-slate-200 shrink-0">
               <div>
-                <h3 id="form-modal-title" className="text-sm sm:text-base text-slate-900 m-0 tracking-tight">
+                <h3 id="form-modal-title" className="text-sm font-semibold text-slate-900 m-0 tracking-tight">
                   {isEditing ? title.replace(/^เพิ่ม/, "แก้ไข") : title}
                 </h3>
               </div>
               <button
                 type="button"
-                className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                 aria-label="ปิด"
                 disabled={saving}
                 onClick={handleClose}
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </header>
 
@@ -870,7 +870,7 @@ export function FormModal({
             ) : null}
 
             {/* Form Content */}
-            <div ref={formBodyRef} className="p-3.5 sm:p-6 overflow-y-auto overflow-x-hidden flex-1 space-y-3.5 bg-slate-50/70 overscroll-contain w-full min-w-0 max-w-full">
+            <div ref={formBodyRef} className="p-3 sm:p-4 overflow-y-auto overflow-x-hidden flex-1 space-y-3 bg-slate-50/70 overscroll-contain w-full min-w-0 max-w-full">
               {loadingSchema || !activeForm ? (
                 <div className="py-16 flex flex-col items-center justify-center gap-3 text-center">
                   <div className="w-9 h-9 border-3 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
@@ -879,12 +879,12 @@ export function FormModal({
                 </div>
               ) : (
                 <>
-                  <fieldset className={`w-full min-w-0 max-w-full space-y-4 border-0 p-0 m-0 ${saving ? "pointer-events-none opacity-80" : ""}`} disabled={saving}>
+                  <fieldset className={`w-full min-w-0 max-w-full space-y-3 border-0 p-0 m-0 ${saving ? "pointer-events-none opacity-80" : ""}`} disabled={saving}>
                     {/* Top Notification Alerts */}
                     {successMessage ? (
-                      <div className="w-full min-w-0 max-w-full p-3 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs flex items-start justify-between gap-2 animate-in fade-in duration-150 font-normal">
+                      <div className="w-full min-w-0 max-w-full p-2.5 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs flex items-start justify-between gap-2 animate-in fade-in duration-150 font-normal">
                         <div className="flex items-start gap-2 min-w-0 flex-1">
-                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                          <CheckCircle2 size={15} className="text-emerald-600 shrink-0 mt-0.5" />
                           <span className="break-words leading-relaxed flex-1 min-w-0">{successMessage}</span>
                         </div>
                         <button
@@ -893,15 +893,15 @@ export function FormModal({
                           className="text-emerald-600 hover:text-emerald-800 transition cursor-pointer p-0.5 shrink-0 ml-1"
                           title="ปิดการแจ้งเตือน"
                         >
-                          <X size={14} />
+                          <X size={13} />
                         </button>
                       </div>
                     ) : null}
 
                     {error ? (
-                      <div className="w-full min-w-0 max-w-full p-3 bg-rose-50 text-rose-700 rounded-lg border border-rose-200 text-xs font-normal flex items-start justify-between gap-2 animate-in fade-in duration-150">
+                      <div className="w-full min-w-0 max-w-full p-2.5 bg-rose-50 text-rose-700 rounded-lg border border-rose-200 text-xs font-normal flex items-start justify-between gap-2 animate-in fade-in duration-150">
                         <div className="flex items-start gap-2 min-w-0 flex-1">
-                          <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                          <AlertCircle size={15} className="text-rose-600 shrink-0 mt-0.5" />
                           <span className="break-words leading-relaxed flex-1 min-w-0">{error}</span>
                         </div>
                         <button
@@ -909,22 +909,14 @@ export function FormModal({
                           onClick={() => setError("")}
                           className="text-rose-600 hover:text-rose-800 transition cursor-pointer p-0.5 shrink-0 ml-1"
                         >
-                          <X size={14} />
+                          <X size={13} />
                         </button>
                       </div>
                     ) : null}
 
-                    {/* Bill Category Budget Guardrail */}
-                    {isDataForm ? (
-                      <BillCategoryBudgetGuardrail
-                        values={values}
-                        projectRows={(activeForm.refOptions["ID Project"] || activeForm.refOptions["ชื่อ Project"] || []).map(opt => opt.row).filter(Boolean) as SheetRow[]}
-                      />
-                    ) : null}
-
                     {/* Categorized Fields Rendering for DATA form */}
                     {isDataForm ? (
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         {DATA_FORM_SECTIONS.map(section => {
                           const isStoreVendor = values["ร้านค้า/ผู้รับเหมา"] === "ร้านค้า";
                           const sectionFields = visibleFields.filter(f => {
@@ -934,12 +926,24 @@ export function FormModal({
                             return section.fields.includes(f.name);
                           });
                           if (!sectionFields.length && (section.id !== "vendor" || !isStoreVendor || !isMultiItemMode)) return null;
+
+                          const sectionGridClass =
+                            section.id === "basic"
+                              ? "grid grid-cols-1 sm:grid-cols-3 gap-2.5"
+                              : section.id === "vendor"
+                              ? "grid grid-cols-1 sm:grid-cols-3 gap-2.5"
+                              : section.id === "expense"
+                              ? "grid grid-cols-1 sm:grid-cols-2 gap-2.5"
+                              : section.id === "tax"
+                              ? "grid grid-cols-2 sm:grid-cols-4 gap-2.5"
+                              : "grid grid-cols-1 gap-2.5";
+
                           return (
-                            <div key={section.id} className="bg-white rounded-lg p-4 border border-slate-200 shadow-2xs space-y-3">
-                              <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
-                                <div className="flex items-center gap-2">
+                            <div key={section.id} className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/90 shadow-2xs space-y-2.5">
+                              <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100/90">
+                                <div className="flex items-center gap-1.5">
                                   <SectionHeaderIcon name={section.iconName} />
-                                  <h4 className="text-xs text-slate-900 m-0 font-medium">{section.title}</h4>
+                                  <h4 className="text-xs text-slate-800 m-0 font-semibold">{section.title}</h4>
                                 </div>
 
                                 {section.id === "vendor" && isStoreVendor ? (
@@ -955,7 +959,7 @@ export function FormModal({
                                     <button
                                       type="button"
                                       onClick={enableMultiItemMode}
-                                      className="text-[11px] text-emerald-800 hover:text-emerald-950 font-medium flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs"
+                                      className="text-[11px] text-emerald-800 hover:text-emerald-950 font-medium flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs"
                                     >
                                       <span>📦</span>
                                       <span>+ หลายรายการ</span>
@@ -963,7 +967,7 @@ export function FormModal({
                                   )
                                 ) : null}
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                              <div className={sectionGridClass}>
                                 {sectionFields.map(field => (
                                   <MemoizedFormField
                                     key={field.name}
@@ -980,6 +984,18 @@ export function FormModal({
                                     onAttachedFilesChange={files => setAttachedFilesByField(current => ({ ...current, [field.name]: files }))}
                                   />
                                 ))}
+
+                                {section.id === "expense" ? (
+                                  <div className="space-y-1 min-w-0 w-full overflow-hidden">
+                                    <label className="text-xs font-medium text-slate-500 block">
+                                      สถานะคุมงบประมาณ
+                                    </label>
+                                    <BillCategoryBudgetGuardrail
+                                      values={values}
+                                      projectRows={(activeForm.refOptions["ID Project"] || activeForm.refOptions["ชื่อ Project"] || []).map(opt => opt.row).filter(Boolean) as SheetRow[]}
+                                    />
+                                  </div>
+                                ) : null}
 
                                 {section.id === "vendor" && isStoreVendor && isMultiItemMode ? (
                                   <MultiLineItemsBuilder
@@ -1002,12 +1018,12 @@ export function FormModal({
                           const unsectionedFields = visibleFields.filter(f => !assignedNames.has(f.name));
                           if (!unsectionedFields.length) return null;
                           return (
-                            <div className="bg-white rounded-lg p-4 border border-slate-200 shadow-2xs space-y-3">
-                              <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                                <FileText size={16} className="text-slate-600" />
-                                <h4 className="text-xs text-slate-900 m-0">ข้อมูลเพิ่มเติม</h4>
+                            <div className="bg-white rounded-xl p-3 sm:p-3.5 border border-slate-200/90 shadow-2xs space-y-2.5">
+                              <div className="flex items-center gap-1.5 pb-1.5 border-b border-slate-100/90">
+                                <FileText size={15} className="text-slate-600" />
+                                <h4 className="text-xs text-slate-800 m-0 font-semibold">ข้อมูลเพิ่มเติม</h4>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                                 {unsectionedFields.map(field => (
                                   <MemoizedFormField
                                     key={field.name}
@@ -1091,43 +1107,43 @@ export function FormModal({
             </div>
 
             {/* Action Footer Bar (Mobile Full-Width Buttons & Summary) */}
-            <footer className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-t border-slate-200 shrink-0 shadow-lg sm:shadow-none">
+            <footer className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 px-4 sm:px-5 py-2.5 sm:py-3 bg-white border-t border-slate-200 shrink-0 shadow-lg sm:shadow-none">
               {isDataForm && baseAmt > 0 ? (
-                <div className="flex items-center justify-between sm:justify-start gap-2.5 text-xs sm:text-sm bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 font-sans w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
-                  <span className="text-slate-500 font-medium">ยอดเงิน: <strong className="text-slate-900 ">{baseAmt.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</strong></span>
+                <div className="flex items-center justify-between sm:justify-start gap-2 text-xs bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 font-sans w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
+                  <span className="text-slate-500 font-medium">ยอดเงิน: <strong className="text-slate-900 font-semibold">{baseAmt.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</strong></span>
                   {deductAmt > 0 ? (
                     <>
                       <span className="text-slate-300">|</span>
-                      <span className="text-slate-500 font-medium">หัก: <strong className="text-amber-700 ">-{deductAmt.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</strong></span>
+                      <span className="text-slate-500 font-medium">หัก: <strong className="text-amber-700 font-semibold">-{deductAmt.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</strong></span>
                     </>
                   ) : null}
                   <span className="text-slate-300">|</span>
-                  <span className="text-slate-700 ">ยอดโอน: <strong className="text-emerald-700 ">{netTransferAmt.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</strong></span>
+                  <span className="text-slate-700 font-medium">ยอดโอน: <strong className="text-emerald-700 font-semibold">{netTransferAmt.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</strong></span>
                 </div>
               ) : <div />}
 
-              <div className="flex items-center gap-2.5 w-full sm:w-auto sm:ml-auto">
+              <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
                 <button
                   type="button"
                   disabled={saving}
                   onClick={handleClose}
-                  className="w-1/3 sm:w-auto h-11 sm:h-12 px-5 rounded-xl text-sm text-slate-700 hover:bg-slate-100 border border-slate-300 bg-white transition cursor-pointer active:bg-slate-200 flex items-center justify-center"
+                  className="w-1/3 sm:w-auto h-9 sm:h-9.5 px-4 rounded-lg text-xs sm:text-sm text-slate-700 hover:bg-slate-100 border border-slate-300 bg-white transition cursor-pointer active:bg-slate-200 flex items-center justify-center font-medium"
                 >
                   {hasSavedDuringSession.current ? "ปิดฟอร์ม" : "ยกเลิก"}
                 </button>
                 <button
                   type={submitPath ? "submit" : "button"}
                   disabled={saving || loadingSchema || !activeForm || !submitPath}
-                  className="flex-1 sm:flex-initial h-11 sm:h-12 inline-flex items-center justify-center gap-2 px-6 rounded-xl text-sm sm:text-base text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-75 transition cursor-pointer shadow-md active:scale-[0.99]"
+                  className="flex-1 sm:flex-initial h-9 sm:h-9.5 inline-flex items-center justify-center gap-1.5 px-5 rounded-lg text-xs sm:text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-75 transition cursor-pointer shadow-xs active:scale-[0.99]"
                 >
                   {saving ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
-                      <span>กำลังบันทึกข้อมูล...</span>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+                      <span>กำลังบันทึก...</span>
                     </>
                   ) : (
                     <>
-                      <Save size={18} />
+                      <Save size={15} />
                       <span>{isEditing ? "บันทึกการแก้ไข" : (isDataForm ? "บันทึกรายการบิล" : "บันทึกข้อมูล")}</span>
                     </>
                   )}
@@ -2665,10 +2681,13 @@ function isFieldVisible(field: FieldSchema, values: Record<string, string>) {
 }
 
 function getFieldClassName(field: FieldSchema) {
-  if (field.type === "LongText" || field.type === "Image" || field.type === "File" || field.type === "EnumList" || field.name === "ร้านค้า/ผู้รับเหมา") {
+  if (field.type === "LongText" || field.type === "Image" || field.type === "File" || field.type === "EnumList" || field.name === "รายละเอียดงาน") {
     return "col-span-full";
   }
-  return "";
+  if (field.name === "ID Project" || field.name === "ร้านค้า" || field.name === "ผู้รับเหมา" || field.name === "ประเภท") {
+    return "col-span-1 sm:col-span-2";
+  }
+  return "col-span-1";
 }
 
 function getFieldLabel(field: FieldSchema) {
