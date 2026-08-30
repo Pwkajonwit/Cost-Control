@@ -45,6 +45,9 @@ const TABLE_MAP: Record<string, string> = {
   contractWork: "contract_works",
   contractwork: "contract_works",
   contract_works: "contract_works",
+  เปิดจ้าง: "contract_works",
+  "5. เปิดจ้าง": "contract_works",
+  เปิดจ้างงาน: "contract_works",
   Tasks: "tasks",
   Works: "works",
   Plan: "plans",
@@ -564,6 +567,9 @@ export function mapSheetRowToSupabaseRow(tableName: string, row: Record<string, 
     if (hasValue(row["สินค้า"] ?? row.product)) dbRow.product = String(row["สินค้า"] ?? row.product).trim();
     if (hasValue(row["รายละเอียดงาน"] ?? row.work_details)) dbRow.work_details = String(row["รายละเอียดงาน"] ?? row.work_details).trim();
     if (hasValue(row["รายการ"] ?? row.sub_category)) dbRow.sub_category = String(row["รายการ"] ?? row.sub_category).trim();
+    if (row.items !== undefined || row["items"] !== undefined) {
+      dbRow.items = row.items ?? row["items"];
+    }
   } else if (dbTable === "projects") {
     if (row["ID Project"] !== undefined) dbRow.id = row["ID Project"];
     if (row["ชื่อ Project"] !== undefined) dbRow.name = row["ชื่อ Project"];
@@ -1744,6 +1750,7 @@ export async function insertRowToSupabase(tableName: string, rowData: Record<str
 
   const dbTable = getDbTableName(tableName);
   const dbRow = mapSheetRowToSupabaseRow(tableName, rowData);
+  dbRow.data = { ...(rowData.data || {}), ...rowData };
 
   const bankVal = rowData["ธนาคาร"] || rowData["bank_name"];
   const entityId = dbRow.id || rowData["id_store"] || rowData["id_Contractor"] || rowData["รหัสพนักงาน"];

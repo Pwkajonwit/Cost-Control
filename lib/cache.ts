@@ -63,9 +63,18 @@ export function clearCache(prefix?: string) {
     return;
   }
   
-  const normalizedPrefix = prefix.toLowerCase();
+  const rawPrefixLower = prefix.toLowerCase();
+  const basePrefix = rawPrefixLower.replace(/s$/, "");
   for (const key of Array.from(memoryCache.keys())) {
-    if (key === prefix || key.startsWith(prefix) || key.toLowerCase().includes(normalizedPrefix)) {
+    const keyLower = key.toLowerCase();
+    const baseKey = keyLower.replace(/s(?=:|$)/g, "");
+    if (
+      key === prefix ||
+      keyLower.startsWith(rawPrefixLower) ||
+      keyLower.includes(rawPrefixLower) ||
+      baseKey.includes(basePrefix) ||
+      keyLower.includes(basePrefix)
+    ) {
       memoryCache.delete(key);
       inFlightPromises.delete(key);
     }

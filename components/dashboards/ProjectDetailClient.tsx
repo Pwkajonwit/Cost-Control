@@ -2,7 +2,19 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  Package,
+  Hammer,
+  Users,
+  Fuel,
+  Wrench,
+  Truck,
+  FileText,
+  SlidersHorizontal,
+  AlertCircle,
+  CheckCircle2
+} from "lucide-react";
 import { DataTable } from "@/components/tables/DataTable";
 import { ProjectDetailEditor } from "@/components/ProjectDetailEditor";
 import { getProjectColorInfo } from "@/components/dashboards/WorkStatusDashboardClient";
@@ -133,6 +145,62 @@ export function ProjectDetailClient({
     return list;
   }, [hydratedProject, productSpendingMap]);
 
+  // Main Expense Categories Budget Control calculations (8 Categories)
+  const categoryControlRows = useMemo(() => {
+    const productBudgetSum = PRODUCT_BUDGET_FIELDS
+      .filter(p => p.field !== "งบไม่เกินอื่นๆ")
+      .reduce((sum, p) => sum + toNumber(hydratedProject[p.field]), 0);
+
+    return expenseCategories.map(cat => {
+      const spent = expenseBreakdown[cat] || 0;
+      let budget = 0;
+
+      if (cat === "ค่าของ") {
+        budget = toNumber(hydratedProject["งบไม่เกินค่าของ"]);
+        if (budget === 0 && productBudgetSum > 0) {
+          budget = productBudgetSum;
+        }
+      } else if (cat === "ค่าแรง") {
+        budget = toNumber(hydratedProject["งบไม่เกินค่าแรง"]);
+      } else if (cat === "พนักงาน") {
+        budget = toNumber(hydratedProject["งบไม่เกินพนักงาน"]);
+      } else if (cat === "น้ำมัน") {
+        budget = toNumber(hydratedProject["งบไม่เกินน้ำมัน"]);
+      } else if (cat === "ซ่อมรถ") {
+        budget = toNumber(hydratedProject["งบไม่เกินซ่อมรถ"]);
+      } else if (cat === "เครื่องจักร") {
+        budget = toNumber(hydratedProject["งบไม่เกินเครื่องจักร"]);
+      } else if (cat === "เครื่องมือ") {
+        budget = toNumber(hydratedProject["งบไม่เกินเครื่องมือ"]);
+      } else if (cat === "อื่นๆ") {
+        budget = toNumber(hydratedProject["งบไม่เกินอื่นๆ"]);
+      }
+
+      const count = summaryRows.filter(r => toNumber(r[cat]) > 0 || String(r["ประเภท"]).includes(cat)).length;
+      const remaining = budget > 0 ? budget - spent : 0;
+      const percent = budget > 0 ? Math.min(999, Math.round((spent / budget) * 100)) : 0;
+      const isOver = budget > 0 && remaining < 0;
+
+      return {
+        name: cat,
+        budget,
+        spent,
+        remaining,
+        percent,
+        isOver,
+        billCount: count
+      };
+    });
+  }, [hydratedProject, expenseCategories, expenseBreakdown, summaryRows]);
+
+  const totalAllocatedCategoryBudget = useMemo(() => {
+    return categoryControlRows.reduce((sum, r) => sum + r.budget, 0);
+  }, [categoryControlRows]);
+
+  const totalCategorySpent = useMemo(() => {
+    return categoryControlRows.reduce((sum, r) => sum + r.spent, 0);
+  }, [categoryControlRows]);
+
   return (
     <div className="w-full flex flex-col gap-4 p-4 sm:p-5 max-w-[1400px] mx-auto font-sans text-sm text-slate-800">
       {/* 1. HEADER ROW */}
@@ -204,7 +272,7 @@ export function ProjectDetailClient({
           onClick={() => setActiveTab("bills")}
           className={`px-3 py-2 border-b-2 transition shrink-0 cursor-pointer ${
             activeTab === "bills"
-              ? "border-slate-900 text-slate-900 "
+              ? "border-slate-900 text-slate-900 font-semibold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -216,11 +284,11 @@ export function ProjectDetailClient({
           onClick={() => setActiveTab("expenses")}
           className={`px-3 py-2 border-b-2 transition shrink-0 cursor-pointer ${
             activeTab === "expenses"
-              ? "border-slate-900 text-slate-900 "
+              ? "border-slate-900 text-slate-900 font-semibold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
-          สรุปหมวดหมู่ค่าใช้จ่าย
+          สรุปหมวดหมู่ค่าใช้จ่าย ({categoryControlRows.length} หมวด)
         </button>
 
         <button
@@ -228,7 +296,7 @@ export function ProjectDetailClient({
           onClick={() => setActiveTab("products")}
           className={`px-3 py-2 border-b-2 transition shrink-0 cursor-pointer ${
             activeTab === "products"
-              ? "border-slate-900 text-slate-900 "
+              ? "border-slate-900 text-slate-900 font-semibold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -240,7 +308,7 @@ export function ProjectDetailClient({
           onClick={() => setActiveTab("edit")}
           className={`px-3 py-2 border-b-2 transition shrink-0 cursor-pointer ${
             activeTab === "edit"
-              ? "border-slate-900 text-slate-900 "
+              ? "border-slate-900 text-slate-900 font-semibold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -269,20 +337,210 @@ export function ProjectDetailClient({
       )}
 
       {activeTab === "expenses" && (
-        <div className="border border-slate-200 rounded-md bg-white overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-200 bg-slate-50">
-            <h2 className="text-xs text-slate-700">ยอดสรุปค่าใช้จ่ายจำแนกตามประเภท</h2>
+        <div className="space-y-4">
+          {/* Top Summary Banner for Categories */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xs font-semibold text-slate-800 flex items-center gap-2">
+                <SlidersHorizontal size={15} className="text-indigo-600" />
+                <span>สรุปหมวดหมู่ค่าใช้จ่าย & ค่าควบคุมงบประมาณ (Category Budget Control)</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                เปรียบเทียบวงเงินงบประมาณที่ควบคุมไว้กับยอดเบิกจ่ายจริง จำแนกตาม 8 หมวดหมู่หลัก
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+                <span className="text-slate-500">งบควบคุมรวม: </span>
+                <strong className="text-slate-900 font-mono">{money(totalAllocatedCategoryBudget)}</strong>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg">
+                <span className="text-indigo-700">เบิกจ่ายรวม: </span>
+                <strong className="text-indigo-900 font-mono">{money(totalCategorySpent)}</strong>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 text-xs">
-            {expenseCategories.map((cat) => {
-              const amount = expenseBreakdown[cat] || 0;
+
+          {/* Cards Grid Overview */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {categoryControlRows.map((cat) => {
               return (
-                <div key={cat} className="p-3 bg-slate-50 rounded-md border border-slate-200">
-                  <div className="text-slate-400 font-medium text-xs mb-0.5">{cat}</div>
-                  <div className="text-slate-900 text-sm">{money(amount)}</div>
+                <div
+                  key={cat.name}
+                  className={`p-3.5 bg-white rounded-xl border transition shadow-2xs space-y-2.5 ${
+                    cat.isOver ? "border-rose-200 bg-rose-50/20" : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-semibold text-xs text-slate-800 flex items-center gap-1.5">
+                      {getCategoryIcon(cat.name)}
+                      <span>{cat.name}</span>
+                    </span>
+                    <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                      {cat.billCount} บิล
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[11px] text-slate-500">ใช้จริง:</span>
+                      <span className="text-sm font-bold font-mono text-indigo-700">{money(cat.spent)}</span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between text-xs">
+                      <span className="text-[11px] text-slate-500">ค่าควบคุม:</span>
+                      <span className="font-mono text-slate-700 text-xs">
+                        {cat.budget > 0 ? money(cat.budget) : <span className="text-slate-400 font-normal">-</span>}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between text-xs pt-1 border-t border-slate-100">
+                      <span className="text-[11px] text-slate-500">คงเหลือ:</span>
+                      <span className={`font-mono font-semibold text-xs ${cat.isOver ? "text-rose-600" : cat.budget > 0 ? "text-emerald-700" : "text-slate-400"}`}>
+                        {cat.budget > 0 ? (
+                          <>
+                            {money(cat.remaining)} {cat.isOver && <span className="text-[10px] text-rose-500 font-normal">(เกินงบ)</span>}
+                          </>
+                        ) : "-"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {cat.budget > 0 && (
+                    <div className="pt-0.5">
+                      <div className="flex items-center justify-between text-[11px] mb-1">
+                        <span className="text-slate-400 text-[10px]">สัดส่วน</span>
+                        <span className={`font-mono text-[11px] font-medium ${cat.isOver ? "text-rose-600 font-bold" : "text-slate-600"}`}>
+                          {cat.percent}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            cat.isOver ? "bg-rose-500" : cat.percent > 85 ? "bg-amber-500" : "bg-emerald-500"
+                          }`}
+                          style={{ width: `${Math.min(100, cat.percent)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
+          </div>
+
+          {/* Detailed Category vs Control Table */}
+          <div className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-2xs">
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-slate-800">
+                ตารางเปรียบเทียบค่าควบคุมและยอดเบิกจ่ายจริง (8 หมวดหมู่หลัก)
+              </h3>
+              <span className="text-[11px] text-slate-500">
+                รวมทั้งหมด {categoryControlRows.length} หมวด
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-600 text-[11px]">
+                    <th className="py-2.5 px-4 font-semibold">หมวดหมู่ค่าใช้จ่าย</th>
+                    <th className="py-2.5 px-4 text-right font-semibold">ค่าควบคุม (งบประมาณ)</th>
+                    <th className="py-2.5 px-4 text-right font-semibold">เบิกจ่ายจริง</th>
+                    <th className="py-2.5 px-4 text-right font-semibold">ยอดคงเหลือ</th>
+                    <th className="py-2.5 px-4 text-center font-semibold">สัดส่วนการใช้งบ</th>
+                    <th className="py-2.5 px-4 text-center font-semibold">สถานะ</th>
+                    <th className="py-2.5 px-4 text-center font-semibold">จำนวนบิล</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {categoryControlRows.map((cat, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/80 transition">
+                      <td className="py-2.5 px-4 font-medium text-slate-800 flex items-center gap-2">
+                        {getCategoryIcon(cat.name)}
+                        <span>{cat.name}</span>
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-slate-700">
+                        {cat.budget > 0 ? money(cat.budget) : <span className="text-slate-400 font-sans text-xs">ไม่ได้ตั้งงบ</span>}
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono font-semibold text-indigo-700">
+                        {money(cat.spent)}
+                      </td>
+                      <td className={`py-2.5 px-4 text-right font-mono font-semibold ${
+                        cat.isOver ? "text-rose-600" : cat.budget > 0 ? "text-emerald-700" : "text-slate-400"
+                      }`}>
+                        {cat.budget > 0 ? money(cat.remaining) : <span className="text-slate-400 font-sans text-xs">-</span>}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        {cat.budget > 0 ? (
+                          <div className="flex items-center gap-2 justify-center">
+                            <div className="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  cat.isOver ? "bg-rose-500" : cat.percent > 85 ? "bg-amber-500" : "bg-emerald-500"
+                                }`}
+                                style={{ width: `${Math.min(100, cat.percent)}%` }}
+                              />
+                            </div>
+                            <span className={`text-[11px] font-mono ${cat.isOver ? "text-rose-600 font-bold" : "text-slate-600"}`}>
+                              {cat.percent}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">-</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        {cat.budget > 0 ? (
+                          cat.isOver ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                              เกินงบ
+                            </span>
+                          ) : cat.percent >= 85 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                              ใกล้เต็ม
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              ปกติ
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-slate-400 text-[10px]">ทั่วไป</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        <span className="inline-block px-2 py-0.5 rounded-md text-[11px] bg-slate-100 text-slate-700">
+                          {cat.billCount} บิล
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-50/80 border-t border-slate-200 font-semibold text-xs">
+                  <tr>
+                    <td className="py-2.5 px-4 text-slate-900">รวมทั้งหมด</td>
+                    <td className="py-2.5 px-4 text-right font-mono text-slate-900">
+                      {money(totalAllocatedCategoryBudget)}
+                    </td>
+                    <td className="py-2.5 px-4 text-right font-mono text-indigo-700">
+                      {money(totalCategorySpent)}
+                    </td>
+                    <td className={`py-2.5 px-4 text-right font-mono ${
+                      totalAllocatedCategoryBudget - totalCategorySpent < 0 ? "text-rose-600" : "text-emerald-700"
+                    }`}>
+                      {money(totalAllocatedCategoryBudget - totalCategorySpent)}
+                    </td>
+                    <td className="py-2.5 px-4 text-center font-mono text-slate-700">
+                      {totalAllocatedCategoryBudget > 0
+                        ? `${Math.round((totalCategorySpent / totalAllocatedCategoryBudget) * 100)}%`
+                        : "-"}
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -391,4 +649,26 @@ function formatDateThai(value: unknown): string {
   if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   return str;
 }
+
+function getCategoryIcon(name: string) {
+  switch (name) {
+    case "ค่าของ":
+      return <Package size={14} className="text-emerald-600 shrink-0" />;
+    case "ค่าแรง":
+      return <Hammer size={14} className="text-amber-600 shrink-0" />;
+    case "พนักงาน":
+      return <Users size={14} className="text-indigo-600 shrink-0" />;
+    case "น้ำมัน":
+      return <Fuel size={14} className="text-cyan-600 shrink-0" />;
+    case "ซ่อมรถ":
+      return <Wrench size={14} className="text-orange-600 shrink-0" />;
+    case "เครื่องจักร":
+      return <Truck size={14} className="text-blue-600 shrink-0" />;
+    case "เครื่องมือ":
+      return <Wrench size={14} className="text-purple-600 shrink-0" />;
+    default:
+      return <FileText size={14} className="text-slate-500 shrink-0" />;
+  }
+}
+
 

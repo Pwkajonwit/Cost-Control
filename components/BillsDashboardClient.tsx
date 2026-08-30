@@ -76,10 +76,13 @@ export function BillsDashboardClient({
 
   const refreshBillsData = useCallback(async () => {
     try {
-      const res = await fetch("/api/bills?pageSize=500&page=1");
+      const res = await fetch(`/api/bills?pageSize=500&page=1&_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Pragma": "no-cache" }
+      });
       if (res.ok) {
         const payload = await res.json();
-        if (payload && Array.isArray(payload.rows) && payload.rows.length > 0) {
+        if (payload && Array.isArray(payload.rows)) {
           setRows(payload.rows);
         }
       }
@@ -87,13 +90,39 @@ export function BillsDashboardClient({
     router.refresh();
   }, [router]);
 
+  // Instant optimistic update on local form creation / edit events so new bills never flicker or disappear
+  useEffect(() => {
+    const handleBillUpdated = (event: Event) => {
+      const customEvt = event as CustomEvent<{ row?: SheetRow; tableName?: string }>;
+      const newRow = customEvt.detail?.row;
+      if (newRow) {
+        const newSeq = String(newRow["ลำดับ"] || newRow.id || newRow._sheetRow || "");
+        setRows(prev => {
+          const exists = prev.some(r => String(r["ลำดับ"] || r.id || r._sheetRow || "") === newSeq);
+          if (exists) {
+            return prev.map(r => String(r["ลำดับ"] || r.id || r._sheetRow || "") === newSeq ? { ...r, ...newRow } : r);
+          }
+          return [newRow, ...prev];
+        });
+      }
+      refreshBillsData();
+    };
+
+    window.addEventListener("bills-data-updated", handleBillUpdated);
+    window.addEventListener("data-updated", handleBillUpdated);
+    return () => {
+      window.removeEventListener("bills-data-updated", handleBillUpdated);
+      window.removeEventListener("data-updated", handleBillUpdated);
+    };
+  }, [refreshBillsData]);
+
   // High-performance debounced live sync from Supabase PostgreSQL + Local Form Events
   useRealtimeSync({
     channelName: "bills_table_live_sync",
     tables: ["bills"],
     onSync: refreshBillsData,
     debounceMs: 500,
-    customEvents: ["bills-data-updated", "data-updated", "schema-cache-invalidated"],
+    customEvents: ["schema-cache-invalidated"],
   });
 
   // Bill Detail Drawer State

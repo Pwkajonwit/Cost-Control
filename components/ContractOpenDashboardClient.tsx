@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowDownWideNarrow, ArrowUpWideNarrow, ChevronLeft, ChevronRight, Plus, Search, X } from "lucide-react";
 import { FormModal } from "@/components/FormModal";
 import { FORM_SCHEMAS } from "@/lib/schemas";
@@ -24,6 +24,7 @@ export function ContractOpenDashboardClient({
   initialRows,
   form,
 }: ContractOpenDashboardClientProps) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get("search") || "";
   const [searchTerm, setSearchTerm] = useState(urlSearch);
@@ -34,6 +35,18 @@ export function ContractOpenDashboardClient({
   useEffect(() => {
     setSearchTerm(urlSearch);
   }, [urlSearch]);
+
+  useEffect(() => {
+    const handleDataUpdate = () => {
+      router.refresh();
+    };
+    window.addEventListener("data-updated", handleDataUpdate);
+    window.addEventListener("bills-data-updated", handleDataUpdate);
+    return () => {
+      window.removeEventListener("data-updated", handleDataUpdate);
+      window.removeEventListener("bills-data-updated", handleDataUpdate);
+    };
+  }, [router]);
 
   const filteredRows = useMemo(() => {
     let list = initialRows;

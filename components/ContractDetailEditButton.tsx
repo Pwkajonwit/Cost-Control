@@ -44,8 +44,12 @@ export function ContractDetailEditButton({ form, row }: ContractDetailEditButton
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "ลบไม่สำเร็จ");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("data-updated", { detail: { tableName: TABLES.CONTRACT_WORK } }));
+      }
       showToast("success", "ลบสัญญาสำเร็จแล้ว");
       router.push("/contract-open");
+      router.refresh();
     } catch (e: any) {
       showToast("error", `เกิดข้อผิดพลาด: ${e?.message || "ลบไม่สำเร็จ"}`);
     } finally {

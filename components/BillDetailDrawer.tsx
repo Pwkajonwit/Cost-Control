@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { BillImageThumbnail } from "@/components/BillImageThumbnail";
 import { formatDateDisplay } from "@/lib/dates";
-import { money } from "@/lib/numbers";
+import { money, toNumber } from "@/lib/numbers";
 import type { SheetRow } from "@/lib/types";
 
 type BillDetailDrawerProps = {
@@ -112,6 +112,19 @@ export function BillDetailDrawer({
       setLoadingProject(false);
     }
   }
+
+  const lineItems = useMemo<Array<{ category?: string; categoryType?: string; amount?: string | number; name?: string; type?: string }>>(() => {
+    if (!bill) return [];
+    const raw = bill.items || (bill.data as any)?.items;
+    if (Array.isArray(raw) && raw.length > 0) return raw;
+    if (typeof raw === "string" && raw.trim().startsWith("[")) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return [];
+  }, [bill]);
 
   if (!bill) return null;
 
@@ -312,6 +325,47 @@ export function BillDetailDrawer({
                   </span>
                 </div>
               </div>
+
+              {/* Line Items Breakdown Table if present */}
+              {lineItems.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                  <div className="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <span className="font-semibold text-xs text-slate-800 flex items-center gap-1.5">
+                      <Receipt size={14} className="text-emerald-600" />
+                      <span>รายการสินค้าในบิล ({lineItems.length} รายการ)</span>
+                    </span>
+                    <span className="text-xs font-mono font-bold text-slate-900">{money(bill["ยอดเงิน"])}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500 text-[11px]">
+                        <tr>
+                          <th className="px-3 py-1.5 text-left w-8">#</th>
+                          <th className="px-3 py-1.5 text-left">สินค้า / หมวดงาน</th>
+                          <th className="px-3 py-1.5 text-left w-24">ประเภท</th>
+                          <th className="px-3 py-1.5 text-right w-28">จำนวนเงิน</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {lineItems.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50">
+                            <td className="px-3 py-2 text-slate-400 font-mono">{idx + 1}</td>
+                            <td className="px-3 py-2 font-medium text-slate-900">{item.category || item.name || "-"}</td>
+                            <td className="px-3 py-2 text-slate-600">
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px]">
+                                {item.categoryType || item.type || "1.ค่าของ"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900">
+                              {money(toNumber(item.amount))}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Image Preview Box */}
               <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-2xs space-y-2.5">
