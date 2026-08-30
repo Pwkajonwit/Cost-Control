@@ -30,65 +30,39 @@ export async function isLineApproverAuthorized(userId: string, targetId?: string
   if (!userId) return false;
   const cacheKey = `line:auth_approver:${userId}:${targetId || "none"}`;
 
-  return cached(cacheKey, 60_000, async () => {
+  return cached(cacheKey, 10_000, async () => {
     try {
-      const { data: configData } = await supabaseAdmin
-        .from("system_options")
-        .select("data")
-        .eq("id", "line_config")
-        .maybeSingle();
-
-      const cfg = configData?.data || {};
-      const rawIds = [
-        cfg.LINE_USER_ID_APPROVER,
-        cfg.LINE_USER_ID_OWN,
-        process.env.LINE_USER_ID_APPROVER,
-        process.env.LINE_USER_ID_OWN,
-        LINE_CONFIG.USER_ID_APPROVER,
-        LINE_CONFIG.USER_ID_OWN,
-      ];
-      const allowedApprovers: string[] = rawIds
-        .flatMap(v => String(v || "").split(","))
-        .map(v => v.trim())
-        .filter(Boolean);
-
-      if (allowedApprovers.includes(userId) || (targetId && allowedApprovers.includes(targetId))) {
+      const { approverIds, ownerId } = await getLineTargetIds();
+      if (approverIds.includes(userId) || (targetId && approverIds.includes(targetId))) {
         return true;
       }
-
-      // Primary check: master_members table
-      const { data: member } = await supabaseAdmin
-        .from("master_members")
-        .select("*")
-        .or(`line_user_id.eq.${userId},id.eq.${userId}`)
-        .maybeSingle();
-
-      if (member && member.status !== "Inactive") {
-        if (
-          Boolean(member.is_owner) ||
-          Boolean(member.can_approve) ||
-          Boolean(member.can_close_bill) ||
-          member.role === "Admin" ||
-          member.system_role === "Admin" ||
-          member.system_role === "Admin_Approver" ||
-          member.system_role === "Admin_Closer" ||
-          member["สิทธิ์การใช้งาน"] === "Admin"
-        ) {
-          return true;
-        }
-      }
-
-      if (allowedApprovers.length === 0) {
+      if (ownerId && (userId === ownerId || targetId === ownerId)) {
         return true;
       }
     } catch (e) {
       console.warn("⚠️ Warning checking LINE approver authorization:", e);
     }
+    return false;
+  });
+}
 
-    return (
-      userId === LINE_CONFIG.USER_ID_APPROVER ||
-      userId === LINE_CONFIG.USER_ID_OWN
-    );
+export async function isLineCloserAuthorized(userId: string, targetId?: string): Promise<boolean> {
+  if (!userId) return false;
+  const cacheKey = `line:auth_closer:${userId}:${targetId || "none"}`;
+
+  return cached(cacheKey, 10_000, async () => {
+    try {
+      const { closerIds, ownerId } = await getLineTargetIds();
+      if (closerIds.includes(userId) || (targetId && closerIds.includes(targetId))) {
+        return true;
+      }
+      if (ownerId && (userId === ownerId || targetId === ownerId)) {
+        return true;
+      }
+    } catch (e) {
+      console.warn("⚠️ Warning checking LINE closer/finance authorization:", e);
+    }
+    return false;
   });
 }
 
@@ -490,6 +464,16 @@ export function createBillNotificationFlex(bill: {
                 borderColor: "#E2E8F0",
                 spacing: "xs",
                 contents: [
+                  ...(bankInfo.bankName ? [
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      contents: [
+                        { type: "text", text: "ธนาคาร:", size: "xxs", color: "#64748B", flex: 3 },
+                        { type: "text", text: bankInfo.bankName, size: "xxs", color: "#0F172A", weight: "bold", flex: 7, wrap: true }
+                      ]
+                    }
+                  ] : []),
                   ...(bankInfo.accountName ? [
                     {
                       type: "box",
@@ -500,7 +484,7 @@ export function createBillNotificationFlex(bill: {
                       ]
                     }
                   ] : []),
-                  ...(bankInfo.accountNo || bankInfo.bankName ? [
+                  ...(bankInfo.accountNo ? [
                     {
                       type: "box",
                       layout: "baseline",
@@ -508,9 +492,7 @@ export function createBillNotificationFlex(bill: {
                         { type: "text", text: "เลขบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
                         {
                           type: "text",
-                          text: bankInfo.accountNo
-                            ? (bankInfo.bankName ? `${bankInfo.accountNo} (${bankInfo.bankName})` : bankInfo.accountNo)
-                            : (bankInfo.bankName || "-"),
+                          text: bankInfo.accountNo,
                           size: "xxs",
                           color: "#059669",
                           weight: "bold",
@@ -1147,39 +1129,51 @@ export function createBillSearchResultFlex(
                   borderColor: "#E2E8F0",
                   spacing: "xs",
                   contents: [
-                    ...(bankInfo.accountName ? [
-                      {
-                        type: "box",
-                        layout: "baseline",
-                        contents: [
-                          { type: "text", text: "ชื่อบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
-                          { type: "text", text: bankInfo.accountName, size: "xxs", color: "#0F172A", weight: "bold", flex: 7, wrap: true }
-                        ]
-                      }
-                    ] : []),
-                    ...(bankInfo.accountNo || bankInfo.bankName ? [
-                      {
-                        type: "box",
-                        layout: "baseline",
-                        contents: [
-                          { type: "text", text: "เลขบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
-                          {
-                            type: "text",
-                            text: bankInfo.accountNo
-                              ? (bankInfo.bankName ? `${bankInfo.accountNo} (${bankInfo.bankName})` : bankInfo.accountNo)
-                              : (bankInfo.bankName || "-"),
-                            size: "xxs",
-                            color: "#059669",
-                            weight: "bold",
-                            flex: 7,
-                            wrap: true
-                          }
-                        ]
-                      }
-                    ] : [])
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      contents: [
+                        { type: "text", text: "ธนาคาร:", size: "xxs", color: "#64748B", flex: 3 },
+                        { type: "text", text: bankInfo.bankName || "-", size: "xxs", color: bankInfo.bankName ? "#0F172A" : "#94A3B8", weight: "bold", flex: 7, wrap: true }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      contents: [
+                        { type: "text", text: "ชื่อบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
+                        { type: "text", text: bankInfo.accountName || "-", size: "xxs", color: bankInfo.accountName ? "#0F172A" : "#94A3B8", weight: "bold", flex: 7, wrap: true }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      contents: [
+                        { type: "text", text: "เลขบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
+                        {
+                          type: "text",
+                          text: bankInfo.accountNo || "-",
+                          size: "xxs",
+                          color: bankInfo.accountNo ? "#059669" : "#94A3B8",
+                          weight: "bold",
+                          flex: 7,
+                          wrap: true
+                        }
+                      ]
+                    }
                   ]
                 }
-              ] : []),
+              ] : [
+                {
+                  type: "box",
+                  layout: "baseline",
+                  margin: "xs",
+                  contents: [
+                    { type: "text", text: "ธนาคาร:", size: "xxs", color: "#64748B", flex: 3 },
+                    { type: "text", text: "-", size: "xxs", color: "#94A3B8", flex: 7 }
+                  ]
+                }
+              ]),
               ...(b.description && b.description !== "-" && lineItems.length === 0 ? [
                 {
                   type: "box",
@@ -1861,12 +1855,17 @@ export async function getLineUserIdByRequester(requesterKey: string): Promise<st
   return "";
 }
 
-export async function getLineTargetIds(): Promise<{ ownerId: string; approverIds: string[]; closerIds: string[] }> {
-  return cached("line:target_ids", 120_000, async () => {
+export async function getLineTargetIds(): Promise<{
+  ownerId: string;
+  approverIds: string[];
+  closerIds: string[];
+  financeIds: string[];
+}> {
+  return cached("line:target_ids", 2_000, async () => {
     try {
       let ownerId = "";
       const approverSet = new Set<string>();
-      const closerSet = new Set<string>();
+      const financeSet = new Set<string>();
 
       // 1. Primary Source: master_members table
       const { data: members } = await supabaseAdmin.from("master_members").select("*");
@@ -1874,26 +1873,51 @@ export async function getLineTargetIds(): Promise<{ ownerId: string; approverIds
       if (members && Array.isArray(members)) {
         for (const m of members) {
           if (m.status === "Inactive") continue;
-          const lineId = String(m.line_user_id || "").trim();
-          if (!lineId) continue;
+          const lineId = String(m.line_user_id || m["LINE User ID"] || m.data?.line_user_id || m.data?.["LINE User ID"] || "").trim();
+          if (!lineId || lineId === "-") continue;
 
-          if (Boolean(m.is_owner) || (!ownerId && (m.role === "Admin" || m.system_role === "Admin" || m.system_role === "Owner"))) {
-            ownerId = lineId;
+          const d = (m.data && typeof m.data === "object") ? m.data : {};
+          const permStr = String(m["สิทธิ์การใช้งาน"] || d["สิทธิ์การใช้งาน"] || "");
+
+          // 1. เจ้าของระบบ (Owner)
+          const isOwner = (m.is_owner !== undefined && m.is_owner !== null)
+            ? Boolean(m.is_owner)
+            : Boolean(
+                d.is_owner || d["เจ้าของระบบ"] || m["เจ้าของระบบ"] ||
+                m.role === "Owner" || m.system_role === "Owner" ||
+                permStr.includes("Owner") || permStr.includes("เจ้าของระบบ")
+              );
+          if (isOwner) {
+            if (!ownerId) ownerId = lineId;
           }
 
-          // 🟢 Finance (canApprove)
-          if (Boolean(m.can_approve) || m.system_role === "Admin_Approver" || m.role === "Admin_Approver" || m.role === "Approver") {
+          // 2. ผู้อนุมัติบิล (Approver - ตรวจสอบและกดอนุมัติบิล)
+          const isApprover = (m.can_close_bill !== undefined && m.can_close_bill !== null)
+            ? Boolean(m.can_close_bill)
+            : Boolean(
+                d.can_close_bill || d["อนุมัติบิล"] || m["อนุมัติบิล"] ||
+                m.system_role === "Admin_Approver" ||
+                permStr.includes("Approver") || permStr.includes("อนุมัติบิล")
+              );
+          if (isApprover) {
             approverSet.add(lineId);
           }
 
-          // 🔵 Approver (canCloseBill)
-          if (Boolean(m.can_close_bill) || m.system_role === "Admin_Closer" || m.role === "Admin_Closer") {
-            closerSet.add(lineId);
+          // 3. ฝ่ายการเงิน (Finance / Closer - ตรวจสอบจ่ายเงินและกดปิดงาน)
+          const isFinance = (m.can_approve !== undefined && m.can_approve !== null)
+            ? Boolean(m.can_approve)
+            : Boolean(
+                d.can_approve || d["ฝ่ายการเงิน"] || m["ฝ่ายการเงิน"] ||
+                m.system_role === "Admin_Closer" ||
+                permStr.includes("Finance") || permStr.includes("ฝ่ายการเงิน") || permStr.includes("ปิดบิล")
+              );
+          if (isFinance) {
+            financeSet.add(lineId);
           }
         }
       }
 
-      // 3. Fallback to line_config in system_options or env
+      // 2. Fallback to line_config in system_options only when no members are assigned
       const { data: configRow } = await supabaseAdmin
         .from("system_options")
         .select("data")
@@ -1904,20 +1928,33 @@ export async function getLineTargetIds(): Promise<{ ownerId: string; approverIds
       if (!ownerId) {
         ownerId = String(cfg.LINE_USER_ID_OWN || process.env.LINE_USER_ID_OWN || LINE_CONFIG.USER_ID_OWN || "").trim();
       }
-      const rawApprovers = String(cfg.LINE_USER_ID_APPROVER || process.env.LINE_USER_ID_APPROVER || LINE_CONFIG.USER_ID_APPROVER || "").trim();
-      if (rawApprovers) {
-        rawApprovers.split(",").forEach(id => {
-          const clean = id.trim();
-          if (clean) approverSet.add(clean);
-        });
+
+      if (approverSet.size === 0) {
+        const rawApprovers = String(cfg.LINE_USER_ID_APPROVER || process.env.LINE_USER_ID_APPROVER || LINE_CONFIG.USER_ID_APPROVER || "").trim();
+        if (rawApprovers) {
+          rawApprovers.split(",").forEach(id => {
+            const clean = id.trim();
+            if (clean) approverSet.add(clean);
+          });
+        }
+      }
+
+      if (financeSet.size === 0) {
+        const rawClosers = String(cfg.LINE_USER_ID_CLOSER || cfg.LINE_USER_ID_FINANCE || process.env.LINE_USER_ID_CLOSER || "").trim();
+        if (rawClosers) {
+          rawClosers.split(",").forEach(id => {
+            const clean = id.trim();
+            if (clean) financeSet.add(clean);
+          });
+        }
       }
 
       const approverIds = Array.from(approverSet);
-      const closerIds = Array.from(closerSet);
-      return { ownerId, approverIds, closerIds };
+      const closerIds = Array.from(financeSet);
+      return { ownerId, approverIds, closerIds, financeIds: closerIds };
     } catch (e) {
       console.error("Failed fetching LINE target IDs:", e);
-      return { ownerId: "", approverIds: [], closerIds: [] };
+      return { ownerId: "", approverIds: [], closerIds: [], financeIds: [] };
     }
   });
 }
@@ -2031,6 +2068,65 @@ export type BankLookupInfo = {
   bankName?: string;
 };
 
+export const DEFAULT_THAI_BANKS: Record<string, string> = {
+  ba101: "กรุงเทพ",
+  ba102: "กสิกรไทย",
+  ba103: "ไทยพาณิชย์",
+  ba104: "กรุงไทย",
+  ba105: "ทหารไทยธนชาต",
+  ba106: "ออมสิน",
+  ba107: "กรุงศรีอยุธยา",
+  ba108: "เกียรตินาคินภัทร",
+  ba109: "ธนชาต",
+  ba110: "เพื่อการเกษตรและสหกรณ์การเกษตร",
+  ba111: "ยูโอบี",
+  ba112: "ซีไอเอ็มบีไทย",
+  ba113: "ทิสโก้",
+  ba114: "อาคารสงเคราะห์",
+};
+
+export function inferThaiBankFromAccount(accountNo?: string): string {
+  if (!accountNo) return "";
+  const raw = String(accountNo).trim();
+  const digits = raw.replace(/\D/g, "");
+  if (!digits || digits.length < 8) return "";
+
+  if (digits.length === 12 && digits.startsWith("020")) return "ออมสิน";
+  if (raw.startsWith("020-") || raw.startsWith("02-04")) return "ออมสิน";
+  if (digits.length === 12 && digits.startsWith("0101")) return "เพื่อการเกษตรและสหกรณ์การเกษตร";
+
+  if (
+    digits.startsWith("051") || digits.startsWith("009") || digits.startsWith("024") ||
+    digits.startsWith("411") || digits.startsWith("437") || digits.startsWith("984") ||
+    digits.startsWith("563") || digits.startsWith("026") || digits.startsWith("052") ||
+    digits.startsWith("102") || digits.startsWith("115") || digits.startsWith("120")
+  ) {
+    return "กรุงไทย";
+  }
+
+  if (/^\d{3}[-\s]?\d{6}[-\s]?\d$/.test(raw) || digits.startsWith("503") || digits.startsWith("248") || digits.startsWith("399") || digits.startsWith("071")) {
+    return "ไทยพาณิชย์";
+  }
+
+  if (/^\d{3}[-\s]?[03][-\s]?\d{5}[-\s]?\d$/.test(raw) || digits.startsWith("114") || digits.startsWith("119") || digits.startsWith("0718")) {
+    return "กรุงเทพ";
+  }
+
+  if (
+    /^\d{3}[-\s]?[1246][-\s]?\d{5}[-\s]?\d$/.test(raw) ||
+    digits.startsWith("789") || digits.startsWith("725") || digits.startsWith("017") ||
+    digits.startsWith("019") || digits.startsWith("243") || digits.startsWith("322") ||
+    digits.startsWith("649") || digits.startsWith("760") || digits.startsWith("441") ||
+    digits.startsWith("164") || digits.startsWith("720") || digits.startsWith("139") ||
+    digits.startsWith("029") || digits.startsWith("296") || digits.startsWith("334") ||
+    digits.startsWith("983")
+  ) {
+    return "กสิกรไทย";
+  }
+
+  return "";
+}
+
 let cachedBankInfoMap: Map<string, BankLookupInfo> | null = null;
 let cachedBankInfoMapTime = 0;
 
@@ -2043,30 +2139,47 @@ export async function getBankInfoMap(forceRefresh = false): Promise<Map<string, 
   const bankInfoMap = new Map<string, BankLookupInfo>();
 
   try {
-    const [storesRes, contractorsRes, membersRes, banksRes] = await Promise.all([
+    const [storesRes, contractorsRes, membersRes, banksRes, sysOptRes] = await Promise.all([
       supabaseAdmin.from("stores").select("*"),
       supabaseAdmin.from("contractors").select("*"),
       supabaseAdmin.from("master_members").select("*"),
       supabaseAdmin.from("banks").select("*"),
+      supabaseAdmin.from("system_options").select("*").eq("id", "entity_banks").maybeSingle(),
     ]);
 
+    const entityBanksMap: Record<string, string> = (sysOptRes?.data?.data && typeof sysOptRes.data.data === "object")
+      ? sysOptRes.data.data
+      : {};
+
     const bankNameById = new Map<string, string>();
+    for (const [k, v] of Object.entries(DEFAULT_THAI_BANKS)) {
+      bankNameById.set(k.toLowerCase(), v);
+    }
     if (banksRes.data) {
       for (const b of banksRes.data) {
         const id = String(b.id || b.id_bank || "").trim();
         const name = String(b.name || b["ชื่อธนาคาร"] || "").trim();
-        if (id && name) {
+        if (id && name && name !== "non" && name !== "-") {
           bankNameById.set(id.toLowerCase(), name);
         }
       }
     }
 
     const cleanBank = (raw?: string) => {
-      if (!raw) return "";
+      if (!raw || raw === "non" || raw === "-") {
+        return "";
+      }
       const trimmed = String(raw).trim();
-      const mapped = bankNameById.get(trimmed.toLowerCase());
+      const lower = trimmed.toLowerCase();
+      const mapped = bankNameById.get(lower);
       if (mapped) return mapped;
-      return trimmed.replace(/^Ba\d+\s*[-–—]?\s*/i, "").trim() || trimmed;
+      const stripped = trimmed.replace(/^Ba\d+\s*[-–—]?\s*/i, "").replace(/^ธนาคาร\s*/, "").trim();
+      if (stripped && stripped !== "non" && stripped !== "-") {
+        const strippedMapped = bankNameById.get(stripped.toLowerCase());
+        if (strippedMapped) return strippedMapped;
+        return stripped;
+      }
+      return "";
     };
 
     // 1. Stores
@@ -2077,12 +2190,17 @@ export async function getBankInfoMap(forceRefresh = false): Promise<Map<string, 
         const name = String(s.name || s["ชื่อร้านค้า"] || dataObj.name || dataObj["ชื่อร้านค้า"] || "").trim();
         const fullName = String(s.full_name || s["ชื่อเต็ม"] || dataObj.full_name || dataObj["ชื่อเต็ม"] || "").trim();
         const accountNo = String(s.bank_account || s["เลขบัญชี"] || dataObj.bank_account || dataObj["เลขบัญชี"] || "").trim();
-        const bankName = cleanBank(s.bank_name || s.bank || s["ธนาคาร"] || dataObj.bank_name || dataObj["ธนาคาร"]);
+
+        const rawBankVal = s.bank_name || s.bank || s["ธนาคาร"] || dataObj.bank_name || dataObj["ธนาคาร"] ||
+          entityBanksMap[id] || entityBanksMap[id.toLowerCase()] || entityBanksMap[id.toUpperCase()] ||
+          (name ? entityBanksMap[name] : "") || (fullName ? entityBanksMap[fullName] : "");
+
+        const bankName = cleanBank(rawBankVal);
 
         const info: BankLookupInfo = {
           accountName: fullName || name,
-          accountNo,
-          bankName
+          accountNo: accountNo && accountNo !== "non" && accountNo !== "-" ? accountNo : undefined,
+          bankName: bankName || undefined,
         };
 
         if (id) {
@@ -2110,12 +2228,17 @@ export async function getBankInfoMap(forceRefresh = false): Promise<Map<string, 
         const nickname = String(c.nickname || c["ชื่อเล่น"] || dataObj.nickname || dataObj["ชื่อเล่น"] || "").trim();
         const fullName = String(c.full_name || c["ชื่อ-นามสกุล"] || dataObj.full_name || dataObj["ชื่อ-นามสกุล"] || "").trim();
         const accountNo = String(c.bank_account || c["เลขบัญชี"] || dataObj.bank_account || dataObj["เลขบัญชี"] || "").trim();
-        const bankName = cleanBank(c.bank_name || c.bank || c["ธนาคาร"] || dataObj.bank_name || dataObj["ธนาคาร"]);
+
+        const rawBankVal = c.bank_name || c.bank || c["ธนาคาร"] || dataObj.bank_name || dataObj["ธนาคาร"] ||
+          entityBanksMap[id] || entityBanksMap[id.toLowerCase()] || entityBanksMap[id.toUpperCase()] ||
+          (nickname ? entityBanksMap[nickname] : "") || (fullName ? entityBanksMap[fullName] : "");
+
+        const bankName = cleanBank(rawBankVal);
 
         const info: BankLookupInfo = {
           accountName: fullName || nickname,
-          accountNo,
-          bankName
+          accountNo: accountNo && accountNo !== "non" && accountNo !== "-" ? accountNo : undefined,
+          bankName: bankName || undefined,
         };
 
         if (id) {
@@ -2143,12 +2266,17 @@ export async function getBankInfoMap(forceRefresh = false): Promise<Map<string, 
         const nickname = String(m.nickname || m["ชื่อเล่น"] || dataObj.nickname || dataObj["ชื่อเล่น"] || "").trim();
         const fullName = String(m.full_name || m["ชื่อ-นามสกุล"] || dataObj.full_name || dataObj["ชื่อ-นามสกุล"] || "").trim();
         const accountNo = String(m.bank_account || m["เลขบัญชี"] || dataObj.bank_account || dataObj["เลขบัญชี"] || "").trim();
-        const bankName = cleanBank(m.bank_name || m.bank || m["ธนาคาร"] || dataObj.bank_name || dataObj["ธนาคาร"]);
+
+        const rawBankVal = m.bank_name || m.bank || m["ธนาคาร"] || dataObj.bank_name || dataObj["ธนาคาร"] ||
+          entityBanksMap[id] || entityBanksMap[id.toLowerCase()] || entityBanksMap[id.toUpperCase()] ||
+          (nickname ? entityBanksMap[nickname] : "") || (fullName ? entityBanksMap[fullName] : "");
+
+        const bankName = cleanBank(rawBankVal);
 
         const info: BankLookupInfo = {
           accountName: fullName || nickname,
-          accountNo,
-          bankName
+          accountNo: accountNo && accountNo !== "non" && accountNo !== "-" ? accountNo : undefined,
+          bankName: bankName || undefined,
         };
 
         if (id) {
@@ -2204,13 +2332,36 @@ export function resolveBankInfo(
     return undefined;
   };
 
-  const rawVendor = String(bill["ร้านค้า"] || bill["ผู้รับเหมา"] || bill["ร้าน/บุคคล"] || bill["ร้านค้า/ผู้รับเหมา"] || bill.store_id || bill.contractor_id || bill.vendor_or_person || "").trim();
-  const rawRequester = String(bill["ผู้เบิก"] || bill.requester || "").trim();
+  const cleanBankVal = (raw?: string) => {
+    if (!raw || raw === "non" || raw === "-") {
+      return "";
+    }
+    const trimmed = String(raw).trim();
+    const lower = trimmed.toLowerCase();
+    const mapped = DEFAULT_THAI_BANKS[lower];
+    if (mapped) return mapped;
+    const stripped = trimmed.replace(/^Ba\d+\s*[-–—]?\s*/i, "").replace(/^ธนาคาร\s*/, "").trim();
+    if (stripped && stripped !== "non" && stripped !== "-") {
+      const strippedMapped = DEFAULT_THAI_BANKS[stripped.toLowerCase()];
+      if (strippedMapped) return strippedMapped;
+      return stripped;
+    }
+    return "";
+  };
 
-  let vendorInfo = getFromMap(rawVendor);
+  const rawStore = String(bill["ร้านค้า"] || bill.store_id || bill.data?.["ร้านค้า"] || bill.data?.data?.["ร้านค้า"] || "").trim();
+  const rawContractor = String(bill["ผู้รับเหมา"] || bill.contractor_id || bill.data?.["ผู้รับเหมา"] || bill.data?.data?.["ผู้รับเหมา"] || "").trim();
+  const rawVendor = String(bill["ร้าน/บุคคล"] || bill["ร้านค้า/ผู้รับเหมา"] || bill.vendor_or_person || bill.data?.["ร้าน/บุคคล"] || bill.data?.data?.["ร้าน/บุคคล"] || "").trim();
+  const rawRequester = String(bill["ผู้เบิก"] || bill.requester || bill.data?.["ผู้เบิก"] || bill.data?.data?.["ผู้เบิก"] || "").trim();
+
+  let vendorInfo = getFromMap(rawStore) || getFromMap(rawContractor) || getFromMap(rawVendor);
   if (!vendorInfo && rawVendor.includes(" - ")) {
     const parts = rawVendor.split(" - ");
     vendorInfo = getFromMap(parts[0]) || getFromMap(parts[1]);
+  }
+  if (!vendorInfo && rawVendor.includes("/")) {
+    const parts = rawVendor.split("/");
+    vendorInfo = getFromMap(parts[0].trim()) || getFromMap(parts[1].trim());
   }
 
   let requesterInfo = getFromMap(rawRequester);
@@ -2221,13 +2372,13 @@ export function resolveBankInfo(
 
   const fallbackInfo = vendorInfo || requesterInfo;
 
-  const directAccountNo = String(bill["เลขบัญชี"] || bill.bank_account || bill.data?.["เลขบัญชี"] || bill.data?.bank_account || "").trim();
-  const directBankName = String(bill["ธนาคาร"] || bill.bank_name || bill.bank || bill.data?.["ธนาคาร"] || bill.data?.bank_name || "").replace(/^Ba\d+\s*[-–—]?\s*/i, "").trim();
-  const directAccountName = String(bill["ชื่อบัญชี"] || bill.account_name || bill.data?.["ชื่อบัญชี"] || bill.data?.account_name || "").trim();
+  const directAccountNo = String(bill["เลขบัญชี"] || bill.bank_account || bill.data?.["เลขบัญชี"] || bill.data?.bank_account || bill.data?.data?.["เลขบัญชี"] || "").trim();
+  const rawDirectBank = String(bill["ธนาคาร"] || bill.bank_name || bill.bank || bill.data?.["ธนาคาร"] || bill.data?.bank_name || bill.data?.data?.["ธนาคาร"] || "").trim();
+  const directAccountName = String(bill["ชื่อบัญชี"] || bill.account_name || bill.data?.["ชื่อบัญชี"] || bill.data?.account_name || bill.data?.data?.["ชื่อบัญชี"] || "").trim();
 
   const accountNo = directAccountNo || fallbackInfo?.accountNo || "";
-  const bankName = directBankName || fallbackInfo?.bankName || "";
   const accountName = directAccountName || fallbackInfo?.accountName || "";
+  const bankName = cleanBankVal(rawDirectBank || fallbackInfo?.bankName);
 
   if (!accountNo && !bankName && !accountName) return null;
 
@@ -2425,9 +2576,50 @@ export function createMultiBillFlex(
     const imgList = getBillImages(b);
     const hasImages = imgList.length > 0;
 
-    // Build per-role action links
+    // Build per-role & per-status action links
     const actionLinks: any[] = [];
-    if (mode === "requester") {
+    const normStatus = String(status || "").trim();
+    const isAlreadyPaid = normStatus === "เบิกแล้ว" || normStatus === "จ่ายแล้ว" || normStatus.includes("เสร็จ") || normStatus.includes("ปิดงาน");
+    const isApproved = normStatus === "อนุมัติ";
+    const isRejected = normStatus === "ไม่อนุมัติ";
+
+    if (isAlreadyPaid) {
+      actionLinks.push({
+        type: "text",
+        text: "[เบิกสำเร็จ]",
+        size: "xxs",
+        color: "#059669",
+        align: "end",
+        weight: "bold",
+        flex: 3
+      });
+    } else if (isApproved) {
+      // Approved bill -> only allow Finance to close bill (ปิดงาน)
+      actionLinks.push({
+        type: "text",
+        text: "[ปิดงาน]",
+        size: "xxs",
+        color: "#DC2626",
+        align: "end",
+        weight: "bold",
+        flex: 3,
+        action: {
+          type: "message",
+          label: "ปิดงาน",
+          text: `ปิดงานบิลลำดับที่: ${bId}`
+        }
+      });
+    } else if (isRejected) {
+      actionLinks.push({
+        type: "text",
+        text: "[ไม่อนุมัติ]",
+        size: "xxs",
+        color: "#DC2626",
+        align: "end",
+        weight: "bold",
+        flex: 3
+      });
+    } else if (mode === "requester") {
       actionLinks.push({
         type: "text",
         text: "[ส่งอนุมัติ]",
@@ -2473,32 +2665,8 @@ export function createMultiBillFlex(
           }
         }
       );
-    } else if (mode === "approver") {
-      actionLinks.push({
-        type: "text",
-        text: "[ปิดงาน]",
-        size: "xxs",
-        color: "#DC2626",
-        align: "end",
-        weight: "bold",
-        flex: 3,
-        action: {
-          type: "message",
-          label: "ปิดงาน",
-          text: `ปิดงานบิลลำดับที่: ${bId}`
-        }
-      });
-    } else if (mode === "completed") {
-      actionLinks.push({
-        type: "text",
-        text: "[เบิกสำเร็จ]",
-        size: "xxs",
-        color: "#059669",
-        align: "end",
-        weight: "bold",
-        flex: 3
-      });
     } else {
+      // General search / view mode: unapproved bills can only be sent for approval or approved by approvers (NEVER close unapproved bills!)
       actionLinks.push(
         {
           type: "text",
@@ -2526,20 +2694,6 @@ export function createMultiBillFlex(
             type: "message",
             label: "อนุมัติ",
             text: `อนุมัติบิลลำดับที่: ${bId}`
-          }
-        },
-        {
-          type: "text",
-          text: "[ปิดงาน]",
-          size: "xxs",
-          color: "#DC2626",
-          align: "end",
-          weight: "bold",
-          flex: 2,
-          action: {
-            type: "message",
-            label: "ปิดงาน",
-            text: `ปิดงานบิลลำดับที่: ${bId}`
           }
         }
       );
@@ -2607,39 +2761,51 @@ export function createMultiBillFlex(
             borderColor: "#E2E8F0",
             spacing: "xs",
             contents: [
-              ...(bankInfo.accountName ? [
-                {
-                  type: "box",
-                  layout: "baseline",
-                  contents: [
-                    { type: "text", text: "ชื่อบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
-                    { type: "text", text: bankInfo.accountName, size: "xxs", color: "#0F172A", weight: "bold", flex: 7, wrap: true }
-                  ]
-                }
-              ] : []),
-              ...(bankInfo.accountNo || bankInfo.bankName ? [
-                {
-                  type: "box",
-                  layout: "baseline",
-                  contents: [
-                    { type: "text", text: "เลขบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
-                    {
-                      type: "text",
-                      text: bankInfo.accountNo
-                        ? (bankInfo.bankName ? `${bankInfo.accountNo} (${bankInfo.bankName})` : bankInfo.accountNo)
-                        : (bankInfo.bankName || "-"),
-                      size: "xxs",
-                      color: "#059669",
-                      weight: "bold",
-                      flex: 7,
-                      wrap: true
-                    }
-                  ]
-                }
-              ] : [])
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  { type: "text", text: "ธนาคาร:", size: "xxs", color: "#64748B", flex: 3 },
+                  { type: "text", text: bankInfo.bankName || "-", size: "xxs", color: bankInfo.bankName ? "#0F172A" : "#94A3B8", weight: "bold", flex: 7, wrap: true }
+                ]
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  { type: "text", text: "ชื่อบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
+                  { type: "text", text: bankInfo.accountName || "-", size: "xxs", color: bankInfo.accountName ? "#0F172A" : "#94A3B8", weight: "bold", flex: 7, wrap: true }
+                ]
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  { type: "text", text: "เลขบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
+                  {
+                    type: "text",
+                    text: bankInfo.accountNo || "-",
+                    size: "xxs",
+                    color: bankInfo.accountNo ? "#059669" : "#94A3B8",
+                    weight: "bold",
+                    flex: 7,
+                    wrap: true
+                  }
+                ]
+              }
             ]
           }
-        ] : []),
+        ] : [
+          {
+            type: "box",
+            layout: "baseline",
+            margin: "xs",
+            contents: [
+              { type: "text", text: "ธนาคาร:", size: "xxs", color: "#64748B", flex: 3 },
+              { type: "text", text: "-", size: "xxs", color: "#94A3B8", flex: 7 }
+            ]
+          }
+        ]),
         // Product Category Row (Only shown for single-item bills)
         ...(productName && productName !== "-" && lineItems.length === 0 ? [
           {
@@ -2881,9 +3047,19 @@ export function createMultiBillFlex(
     // ไม่มีปุ่มด้านล่างสำหรับการ์ดที่เบิกเงินสำเร็จเรียบร้อยแล้ว
     footerButtons = [];
   } else {
-    // Mode search
-    footerButtons = [
-      {
+    // Mode search: smartly determine footer actions based on bills statuses
+    const hasPendingBills = displayBills.some(b => {
+      const st = String(b["สถานะ"] || b.status || "").trim();
+      return st !== "อนุมัติ" && st !== "เบิกแล้ว" && st !== "จ่ายแล้ว" && !st.includes("ปิดงาน");
+    });
+    const hasApprovedBills = displayBills.some(b => {
+      const st = String(b["สถานะ"] || b.status || "").trim();
+      return st === "อนุมัติ";
+    });
+
+    footerButtons = [];
+    if (hasPendingBills) {
+      footerButtons.push({
         type: "button",
         style: "primary",
         color: "#059669",
@@ -2892,10 +3068,12 @@ export function createMultiBillFlex(
         action: {
           type: "message",
           label: `อนุมัติทั้งหมด (${bills.length})`,
-          text: `อนุมัติทั้งหมด:${firstReq || sheetRowStr}`
+          text: `อนุมัติบิลลำดับที่: ${sheetRowStr}`
         }
-      },
-      {
+      });
+    }
+    if (hasApprovedBills) {
+      footerButtons.push({
         type: "button",
         style: "primary",
         color: "#DC2626",
@@ -2904,10 +3082,10 @@ export function createMultiBillFlex(
         action: {
           type: "message",
           label: `ปิดงานทั้งหมด (${bills.length})`,
-          text: `ปิดงานทั้งหมด:${firstReq || sheetRowStr}`
+          text: `ปิดงานบิลลำดับที่: ${sheetRowStr}`
         }
-      }
-    ];
+      });
+    }
   }
 
     return {

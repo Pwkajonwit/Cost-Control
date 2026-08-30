@@ -10,7 +10,9 @@ import {
   createTaskSummaryFlex,
   createMemberTaskTableFlex,
   createBillSearchResultFlex,
+  createWithdrawApproverFlex,
   isLineApproverAuthorized,
+  isLineCloserAuthorized,
   getOperatorDisplayName,
   getPeopleMap,
   getBankInfoMap
@@ -53,7 +55,7 @@ export async function handleLineCommand(
 
     // 2. Menu & Help Commands
     if (lowerText === "ช่วยด้วย" || lowerText === "ช่วยเหลือ" || lowerText === "ช่วย" || lowerText === "เมนู" || lowerText === "คำสั่ง" || lowerText === "help") {
-      const menuText = `🤖 ระบบ LINE Bot ประจำ CostCode Supabase\n\n📌 คำสั่งที่รองรับทั้งหมด (63 คำสั่ง):\n\n1. 📊 หมวดสรุปการเงิน/เบิกเงิน:\n   - พิมพ์ "สรุป" / "สรุปบิล" / "สรุปวันนี้"\n   - พิมพ์ "รออนุมัติ"\n   - พิมพ์ "บิลหลัก: [ชื่อ]" หรือ "บิลย่อย: [ชื่อ]"\n   - พิมพ์ "อนุมัติบิลหลักของ:" / "อนุมัติเงินสดบิลย่อยของ:"\n   - พิมพ์ "ปิดงานบิลหลักลำดับที่:"\n\n2. 🎯 หมวดงาน & PW มอบหมาย:\n   - พิมพ์ "งาน2: [ชื่อพนักงาน]" (ดูตารางงานแผนงาน)\n   - พิมพ์ "งาน: [รายละเอียดงาน]" (สร้างงานใหม่)\n   - พิมพ์ "งานด่วน:" / "ปิดงาน:" / "ยืนยันปิดงาน:" / "s:" (ค้นหา)\n   - พิมพ์ "มอบหมาย:" / "กิจกรรม:" / "PW:" / "PW1:work" / "PWALL:work"\n\n3. ⚡ หมวดคำสั่งลัด (Shortcuts):\n   - พิมพ์ "copy" / "add1" / "add3" / "addp" / "doo"\n\n4. ⚙️ หมวดตรวจสอบระบบ:\n   - พิมพ์ "testbot" / "check" / "getid"`;
+      const menuText = `🤖 ระบบ LINE Bot ประจำ CostCode Supabase\n\n📌 คำสั่งที่รองรับทั้งหมด:\n\n1. 📊 หมวดสรุปการเงิน/เบิกเงิน:\n   - พิมพ์ "สรุป" / "สรุปบิล" / "สรุปวันนี้"\n   - พิมพ์ "รออนุมัติ" (ดูบิลที่รอพิจารณาอนุมัติ)\n   - พิมพ์ "รอปิดงาน" / "รอจ่าย" / "อนุมัติแล้ว" (ดูบิลที่อนุมัติแล้ว รอการเงินปิดงาน)\n   - พิมพ์ "บิลหลัก: [ชื่อ]" หรือ "บิลย่อย: [ชื่อ]"\n   - พิมพ์ "ส่งไปเพื่ออนุมัติ" (ส่งแจ้งเตือนหาผู้อนุมัติ)\n   - พิมพ์ "อนุมัติบิลหลักของ:" / "อนุมัติเงินสดบิลย่อยของ:"\n   - พิมพ์ "ปิดงานบิลหลักลำดับที่:" / "ปิดงานเงินสดบิลย่อยลำดับที่:"\n\n2. 🎯 หมวดงาน & PW มอบหมาย:\n   - พิมพ์ "งาน2: [ชื่อพนักงาน]" (ดูตารางงานแผนงาน)\n   - พิมพ์ "งาน: [รายละเอียดงาน]" (สร้างงานใหม่)\n   - พิมพ์ "งานด่วน:" / "ปิดงาน:" / "ยืนยันปิดงาน:" / "s:" (ค้นหา)\n   - พิมพ์ "มอบหมาย:" / "กิจกรรม:" / "PW:" / "PW1:work" / "PWALL:work"\n\n3. ⚡ หมวดคำสั่งลัด (Shortcuts):\n   - พิมพ์ "copy" / "add1" / "add3" / "addp" / "doo"\n\n4. ⚙️ หมวดตรวจสอบระบบ:\n   - พิมพ์ "testbot" / "check" / "getid"`;
       await replyTextMessage(replyToken, menuText);
       return true;
     }
@@ -514,25 +516,32 @@ export async function handleLineCommand(
       }
 
       const targetIdList = sheetRowStr.split(/[,,\s]+/).map(id => id.trim()).filter(Boolean);
+      const isExplicitIdList = (
+        rawText.startsWith("ส่งไปเพื่ออนุมัติบิลลำดับที่:") ||
+        rawText.startsWith("ส่งอนุมัติบิลลำดับที่:") ||
+        (targetIdList.length > 0 && targetIdList.every(id => /^\d+$/.test(id)))
+      );
 
       let targetBills = rawBills.filter(b => {
         const st = normalizeBillStatus(b["สถานะ"] || b.status);
         // Only select bills that are pending approval
         if (st === "อนุมัติ" || st === "เบิกแล้ว") return false;
 
+        const bId = String(b["ลำดับ"] || b.id || b._sheetRow || "").trim();
+
+        if (isExplicitIdList) {
+          return targetIdList.includes(bId);
+        }
+
         if (!sheetRowStr || sheetRowStr === "ทั้งหมด" || sheetRowStr === "บิล") {
           return true;
         }
-
-        const bId = String(b["ลำดับ"] || b.id || b._sheetRow || "").trim();
-        if (targetIdList.includes(bId)) return true;
 
         const bReq = String(b["ผู้เบิก"] || b.requester || "").trim();
         const bReqName = peopleMap.get(bReq) || bReq;
         const matchedEmpId = nameToEmpIdMap.get(sheetRowStr) || sheetRowStr;
 
         return (
-          targetIdList.includes(bReq) ||
           bReq === sheetRowStr ||
           bReq === matchedEmpId ||
           bReqName.toLowerCase().includes(sheetRowStr.toLowerCase())
@@ -564,12 +573,14 @@ export async function handleLineCommand(
       }
 
       const { ownerId, approverIds } = await getLineConfigIds();
-      const targetApprovers = Array.from(new Set([ownerId, ...(approverIds || [])].filter(Boolean)));
+      const targetApprovers = (approverIds && approverIds.length > 0)
+        ? approverIds
+        : (ownerId ? [ownerId] : []);
 
       if (targetApprovers.length === 0) {
         await replyTextMessage(
           replyToken,
-          "⚠️ ยังไม่ได้ระบุ LINE User ID เจ้าของระบบ (OWN) หรือผู้อนุมัติ (Approver) ในการตั้งค่า LINE System กรุณาตรวจสอบที่เมนูตั้งค่า LINE ครับ"
+          "⚠️ ยังไม่ได้ระบุ LINE User ID ผู้อนุมัติ (Approver) หรือ เจ้าของระบบ (OWN) ในการตั้งค่า LINE System กรุณาตรวจสอบที่เมนูตั้งค่า LINE ครับ"
         );
         return true;
       }
@@ -637,14 +648,26 @@ export async function handleLineCommand(
         return true;
       }
 
-      // Check LINE Approver Authorization
-      const isAuthorized = await isLineApproverAuthorized(userId, targetId);
-      if (!isAuthorized) {
-        await replyTextMessage(
-          replyToken,
-          `⛔ ขออภัยครับ บัญชี LINE ของคุณไม่มีสิทธิ์ในการ${isReject ? "ไม่อนุมัติ" : isApprove ? "อนุมัติ" : "ปิดงาน"}บิล\n\n(สิทธิ์นี้สงวนไว้เฉพาะผู้ดูแลระบบ Admin หรือ ผู้อนุมัติที่ได้รับอนุญาตเท่านั้น)`
-        );
-        return true;
+      // Check LINE Authorization based on specific action (Approval vs Close)
+      if (isApprove || isReject) {
+        const isAuthorized = await isLineApproverAuthorized(userId, targetId);
+        if (!isAuthorized) {
+          await replyTextMessage(
+            replyToken,
+            `⛔ ขออภัยครับ บัญชี LINE ของคุณไม่มีสิทธิ์ในการ${isReject ? "ไม่อนุมัติ" : "อนุมัติ"}บิล\n\n(สิทธิ์การอนุมัติสงวนไว้เฉพาะผู้อนุมัติบิล หรือ ผู้ดูแลระบบเท่านั้น ฝ่ายการเงินไม่มีสิทธิ์อนุมัติบิล)`
+          );
+          return true;
+        }
+      } else {
+        // ปิดงาน / จ่ายเงิน
+        const isAuthorized = await isLineCloserAuthorized(userId, targetId);
+        if (!isAuthorized) {
+          await replyTextMessage(
+            replyToken,
+            `⛔ ขออภัยครับ บัญชี LINE ของคุณไม่มีสิทธิ์ในการปิดงาน/จ่ายเงินบิล\n\n(สิทธิ์การปิดงานสงวนไว้เฉพาะฝ่ายการเงิน หรือ ผู้ดูแลระบบเท่านั้น)`
+          );
+          return true;
+        }
       }
 
       const newStatus = isReject ? "ไม่อนุมัติ" : isApprove ? "อนุมัติ" : "เบิกแล้ว";
@@ -652,6 +675,17 @@ export async function handleLineCommand(
       const isMainBatch = rawText.includes("หลัก") || rawTarget.includes("หลัก");
       const cleanTarget = rawTarget.replace(/^หลัก:|^ย่อย:|^บิลหลัก:|^บิลย่อย:|^บิล:|^ลำดับที่:|^บิลลำดับที่:|^หลักลำดับที่:|^ย่อยลำดับที่:/i, "").trim();
       const targetIdList = cleanTarget.split(/[,,\s]+/).map(id => id.trim()).filter(Boolean);
+      const isExplicitIdList = (
+        rawText.startsWith("อนุมัติบิลลำดับที่:") ||
+        rawText.startsWith("อนุมัติบิลหลักลำดับที่:") ||
+        rawText.startsWith("อนุมัติเงินสดบิลย่อยลำดับที่:") ||
+        rawText.startsWith("ปิดงานบิลลำดับที่:") ||
+        rawText.startsWith("ปิดงานบิลหลักลำดับที่:") ||
+        rawText.startsWith("ปิดงานเงินสดบิลย่อยลำดับที่:") ||
+        rawText.startsWith("ปิดงานบิลย่อยลำดับที่:") ||
+        rawText.startsWith("ไม่อนุมัติบิลลำดับที่:") ||
+        (targetIdList.length > 0 && targetIdList.every(id => /^\d+$/.test(id)))
+      );
 
       const { normalizeBillStatus } = await import("@/lib/bill-status");
       const { updateRowInSupabase } = await import("@/lib/supabase-db");
@@ -689,11 +723,11 @@ export async function handleLineCommand(
         const normSt = normalizeBillStatus(currentSt);
 
         // Skip bills that are already approved or finished when performing approval
-        if (isApprove && (normSt === "อนุมัติ" || normSt === "เบิกแล้ว" || currentSt.includes("เสร็จ") || currentSt.includes("ปิดงาน") || currentSt.includes("จ่ายแล้ว"))) {
+        if ((isApprove || isReject) && (normSt === "อนุมัติ" || normSt === "เบิกแล้ว" || currentSt.includes("เสร็จ") || currentSt.includes("ปิดงาน") || currentSt.includes("จ่ายแล้ว"))) {
           return false;
         }
-        // Skip bills that are already completed/closed when performing close
-        if (!isApprove && (normSt === "เบิกแล้ว" || currentSt.includes("เสร็จ") || currentSt.includes("ปิดงาน"))) {
+        // When performing close, only bills that are ALREADY APPROVED ("อนุมัติ") can be closed!
+        if (!isApprove && !isReject && normSt !== "อนุมัติ") {
           return false;
         }
 
@@ -702,8 +736,10 @@ export async function handleLineCommand(
 
         const bId = String(b["ลำดับ"] || b.id || b._sheetRow || "").trim();
 
-        // Exact match by Bill ID or ID in targetIdList takes priority (for single/multi bill button actions)
-        if (targetIdList.length > 0 && targetIdList.includes(bId)) return true;
+        // Exact match by Bill ID takes absolute priority for single/multi bill ID actions
+        if (isExplicitIdList) {
+          return targetIdList.includes(bId);
+        }
 
         if (!target || target === "ทั้งหมด" || target === "หลัก" || target === "ย่อย") return true;
 
@@ -713,7 +749,6 @@ export async function handleLineCommand(
         const bDesc = String(b["สินค้า/ทำงาน"] || b.description || "").trim();
 
         return (
-          targetIdList.includes(bReq) ||
           bReq === target ||
           bReq === matchedEmpId ||
           bReqName.toLowerCase().includes(target.toLowerCase()) ||
@@ -723,6 +758,21 @@ export async function handleLineCommand(
       });
 
       if (targetBills.length === 0) {
+        if (!isApprove && !isReject && isExplicitIdList) {
+          const unapprovedMatches = rawBills.filter(b => {
+            const bId = String(b["ลำดับ"] || b.id || b._sheetRow || "").trim();
+            return targetIdList.includes(bId);
+          });
+          if (unapprovedMatches.length > 0) {
+            const stList = unapprovedMatches.map(b => `#${b["ลำดับ"] || b.id || b._sheetRow} (${b["สถานะ"] || b.status || "ตั้งเบิก"})`).join(", ");
+            await replyTextMessage(
+              replyToken,
+              `⚠️ ไม่สามารถปิดงานได้ เนื่องจากบิล ${stList} ยังไม่ได้รับการอนุมัติจากผู้อนุมัติบิล\n\n(ฝ่ายการเงินสามารถปิดงานได้เฉพาะบิลที่มีสถานะ "อนุมัติ" แล้วเท่านั้นครับ)`
+            );
+            return true;
+          }
+        }
+
         await replyTextMessage(
           replyToken,
           `🔍 ไม่พบรายการบิล${isSubBatch ? "ย่อย" : isMainBatch ? "หลัก" : ""}ที่สามารถ${isApprove ? "อนุมัติ" : "ปิดงาน"}ได้สำหรับ "${rawTarget || "รายการที่เลือก"}"`
@@ -731,7 +781,9 @@ export async function handleLineCommand(
       }
 
       let totalAmount = 0;
-      const { approverIds } = await getLineConfigIds();
+      const { ownerId, closerIds, financeIds } = await getLineConfigIds();
+      const rawFinanceList = Array.from(new Set([...(closerIds || []), ...(financeIds || [])].filter(Boolean)));
+      const targetFinanceList = rawFinanceList.length > 0 ? rawFinanceList : (ownerId ? [ownerId] : []);
 
       for (const b of targetBills) {
         const bId = b.id || b["ลำดับ"] || b._sheetRow;
@@ -744,21 +796,21 @@ export async function handleLineCommand(
         b.status = newStatus;
       }
 
-      // When Owner Approves successfully, forward Multi-Item Flex Message to Approvers (LINE_USER_ID_APPROVER list)
-      if (isApprove && approverIds.length > 0) {
+      // When Approver Approves successfully, forward Multi-Item Flex Message to Finance / Closers to pay & close job
+      if (isApprove && targetFinanceList.length > 0) {
         const [peopleMap, bankInfoMap] = await Promise.all([getPeopleMap(), getBankInfoMap()]);
-        const flexForApprover = createWithdrawApproverFlex(targetBills, peopleMap, bankInfoMap);
+        const flexForFinance = createWithdrawApproverFlex(targetBills, peopleMap, bankInfoMap);
         const totalAmtStr = totalAmount.toLocaleString("th-TH");
         const altText = targetBills.length === 1
           ? `✅ รายการอนุมัติสำเร็จ (รอปิดงาน) #${targetBills[0]["ลำดับ"] || targetBills[0].id || ""} (฿${totalAmtStr})`
           : `✅ รายการอนุมัติสำเร็จ ${targetBills.length} รายการ (รวม ฿${totalAmtStr})`;
 
-        for (const approverId of approverIds) {
-          await sendFlexMessageDetailed(approverId, altText, flexForApprover);
+        for (const financeId of targetFinanceList) {
+          await sendFlexMessageDetailed(financeId, altText, flexForFinance);
         }
       }
 
-      // When Approver Closes bills successfully (!isApprove && !isReject), notify each Requester via LINE Flex Message
+      // When Finance Closes bills successfully (!isApprove && !isReject), notify each Requester via LINE Flex Message
       if (!isApprove && !isReject && targetBills.length > 0) {
         const { getLineUserIdByRequester, getLineTargetGroup, createWithdrawCompletedRequesterFlex, sendFlexMessageDetailed } = await import("@/lib/line");
 
@@ -810,13 +862,13 @@ export async function handleLineCommand(
 
       await replyTextMessage(
         replyToken,
-        `✅ ${isApprove ? "อนุมัติ" : "ปิดงาน"}บิล${isSubBatch ? "ย่อย" : isMainBatch ? "หลัก" : ""}ของ "${rawTarget}" เรียบร้อยแล้ว!\n\n📊 จำนวน: ${targetBills.length} รายการ\n💰 ยอดเงินรวม: ฿${formattedTotal}\n👮‍♂️ ผู้ดำเนินการ: ${operatorName}${isApprove && approverIds.length > 0 ? `\n📲 ส่ง Flex ต่อไปยังผู้อนุมัติ (${approverIds.length} ท่าน) เพื่อปิดงานแล้ว` : ""}`
+        `✅ ${isApprove ? "อนุมัติ" : "ปิดงาน"}บิล${isSubBatch ? "ย่อย" : isMainBatch ? "หลัก" : ""}ของ "${rawTarget}" เรียบร้อยแล้ว!\n\n📊 จำนวน: ${targetBills.length} รายการ\n💰 ยอดเงินรวม: ฿${formattedTotal}\n👮‍♂️ ผู้ดำเนินการ: ${operatorName}${isApprove && targetFinanceList.length > 0 ? `\n📲 ส่ง Flex ต่อไปยังฝ่ายการเงิน (${targetFinanceList.length} ท่าน) เพื่อปิดงานแล้ว` : ""}`
       );
       return true;
     }
 
     // 6. Query Bills Specific Commands
-    // "หลัก", "ย่อย", "บิลหลัก", "บิลย่อย", "หลัก:", "บิลหลัก:", "ย่อย:", "บิลย่อย:", "ทั้งหมด:", "รออนุมัติ", "ตั้งเบิก"
+    // "หลัก", "ย่อย", "บิลหลัก", "บิลย่อย", "หลัก:", "บิลหลัก:", "ย่อย:", "บิลย่อย:", "ทั้งหมด:", "รออนุมัติ", "ตั้งเบิก", "รอปิดงาน", "รอจ่าย", "อนุมัติแล้ว"
     // "บิล:", "bill:" — ค้นหาทั่วไป (ทั้งบิลหลักและย่อย)
     if (
       rawText === "หลัก" ||
@@ -832,19 +884,42 @@ export async function handleLineCommand(
       rawText.toLowerCase().startsWith("bill:") ||
       lowerText === "รอตั้งเบิก" ||
       lowerText === "รออนุมัติ" ||
-      lowerText === "ตั้งเบิก"
+      lowerText === "ตั้งเบิก" ||
+      lowerText === "รอปิดงาน" ||
+      lowerText === "รอจ่าย" ||
+      lowerText === "รอโอน" ||
+      lowerText === "อนุมัติแล้ว" ||
+      lowerText === "รอปิดบิล" ||
+      rawText.startsWith("รอปิดงาน:") ||
+      rawText.startsWith("รอจ่าย:") ||
+      rawText.startsWith("รอโอน:") ||
+      rawText.startsWith("อนุมัติแล้ว:") ||
+      rawText.startsWith("รอปิดบิล:")
     ) {
       const isSub = rawText.includes("ย่อย");
       const isMain = rawText.includes("หลัก");
-      const isPendingFilter = isMain || isSub || lowerText === "รอตั้งเบิก" || lowerText === "รออนุมัติ" || lowerText === "ตั้งเบิก";
+      const isApprovedFilter = (
+        lowerText === "รอปิดงาน" ||
+        lowerText === "รอจ่าย" ||
+        lowerText === "รอโอน" ||
+        lowerText === "อนุมัติแล้ว" ||
+        lowerText === "รอปิดบิล" ||
+        rawText.startsWith("รอปิดงาน:") ||
+        rawText.startsWith("รอจ่าย:") ||
+        rawText.startsWith("รอโอน:") ||
+        rawText.startsWith("อนุมัติแล้ว:") ||
+        rawText.startsWith("รอปิดบิล:")
+      );
+      const isPendingFilter = !isApprovedFilter && (isMain || isSub || lowerText === "รอตั้งเบิก" || lowerText === "รออนุมัติ" || lowerText === "ตั้งเบิก");
 
       const filterQuery = rawText
-        .replace(/^หลัก:|^ย่อย:|^บิลหลัก:|^บิลย่อย:|^ทั้งหมด:|^บิล:|^bill:|^หลัก$|^ย่อย$|^บิลหลัก$|^บิลย่อย$/i, "")
+        .replace(/^หลัก:|^ย่อย:|^บิลหลัก:|^บิลย่อย:|^ทั้งหมด:|^บิล:|^bill:|^รอปิดงาน:|^รอจ่าย:|^รอโอน:|^อนุมัติแล้ว:|^รอปิดบิล:|^หลัก$|^ย่อย$|^บิลหลัก$|^บิลย่อย$|^รอปิดงาน$|^รอจ่าย$|^รอโอน$|^อนุมัติแล้ว$|^รอปิดบิล$/i, "")
         .trim();
 
       // ดึงข้อมูลบิลและตารางอ้างอิงทั้งหมดผ่าน In-Memory Cache เพื่อความเร็วสูงสุด (< 2ms)
       const { getRows } = await import("@/lib/db");
       const { hydrateBillRows } = await import("@/lib/formulas");
+      const { normalizeBillStatus } = await import("@/lib/bill-status");
 
       const [rawBills, peopleRows, projectRows, storeRows, contractRows, contractorRows] = await Promise.all([
         getRows("Data", 60_000, 1000),
@@ -875,8 +950,15 @@ export async function handleLineCommand(
 
       let filtered = hydratedBills;
 
-      // ✅ กรองเฉพาะบิลสถานะ "รอตั้งเบิก", "ตั้งเบิก" และ "รออนุมัติ" เมื่อพิมพ์ หลัก หรือ ย่อย
-      if (isPendingFilter && !rawText.startsWith("ทั้งหมด:")) {
+      // ✅ กรองสถานะบิลตามประเภทคำสั่ง
+      if (isApprovedFilter) {
+        // กรองเฉพาะบิลที่ "อนุมัติแล้ว" แต่ยังไม่ได้ "ปิดงาน/เบิกแล้ว"
+        filtered = filtered.filter(b => {
+          const st = normalizeBillStatus(b["สถานะ"] || b.status);
+          return st === "อนุมัติ";
+        });
+      } else if (isPendingFilter && !rawText.startsWith("ทั้งหมด:")) {
+        // กรองเฉพาะบิลสถานะ "รอตั้งเบิก", "ตั้งเบิก" และ "รออนุมัติ" เมื่อพิมพ์ หลัก หรือ ย่อย หรือ รออนุมัติ
         filtered = filtered.filter(b => {
           const st = String(b["สถานะ"] || b.status || "").trim();
           return (
@@ -936,32 +1018,46 @@ export async function handleLineCommand(
           vendor_or_person: String(b["ร้าน/บุคคล"] || b.vendor_or_person || "-"),
           description: String(b["สินค้า/ทำงาน"] || b.description || "-"),
           amount: Number(b["ยอดเงิน"] || b.amount || 0),
-          status: String(b["สถานะ"] || b.status || "ตั้งเบิก"),
+          status: String(b["สถานะ"] || b.status || (isApprovedFilter ? "อนุมัติแล้ว" : "ตั้งเบิก")),
           requester: String(resolvedRequester),
           image_url: String(b["รูปถ่ายบิล"] || b.image_url || ""),
-          image_urls: typeof b["รูปถ่ายบิล"] === "string" ? b["รูปถ่ายบิล"].split(",") : undefined
+          image_urls: typeof b["รูปถ่ายบิล"] === "string" ? b["รูปถ่ายบิล"].split(",") : undefined,
+          bank_name: b["ธนาคาร"] || b.bank_name,
+          account_no: b["เลขบัญชี"] || b.account_no,
+          account_name: b["ชื่อบัญชี"] || b.account_name,
+          items: b.items || b["รายการสินค้า"]
         };
       });
 
       // ✅ FIX: ลบ hardcoded fallback — แสดง "ไม่พบรายการ" แทนข้อมูลปลอม
       if (!bills || bills.length === 0) {
-        const noResultMsg = lowerText === "รออนุมัติ"
-          ? "✅ ไม่มีรายการรออนุมัติในขณะนี้ครับ\n\nบิลทั้งหมดได้รับการอนุมัติหรือดำเนินการแล้ว"
-          : filterQuery
-            ? `🔍 ไม่พบรายการบิล${isSub ? "ย่อย" : isMain ? "หลัก" : ""}ที่ตรงกับ "${filterQuery}"\n\nกรุณาตรวจสอบชื่อผู้เบิกหรือรายละเอียดที่ค้นหาอีกครั้งครับ`
-            : "ไม่พบรายการบิลในระบบ";
+        const noResultMsg = isApprovedFilter
+          ? (filterQuery
+              ? `✅ ไม่พบรายการบิลที่รอปิดงาน/จ่ายเงินสำหรับ "${filterQuery}"\n\n(บิลทั้งหมดได้รับการปิดงานเรียบร้อยแล้ว หรือยังไม่ผ่านการอนุมัติ)`
+              : "✅ ไม่มีรายการบิลที่รอปิดงาน/จ่ายเงินในขณะนี้ครับ\n\nบิลทั้งหมดได้รับการปิดงานและโอนเงินเรียบร้อยแล้ว")
+          : lowerText === "รออนุมัติ"
+            ? "✅ ไม่มีรายการรออนุมัติในขณะนี้ครับ\n\nบิลทั้งหมดได้รับการอนุมัติหรือดำเนินการแล้ว"
+            : filterQuery
+              ? `🔍 ไม่พบรายการบิล${isSub ? "ย่อย" : isMain ? "หลัก" : ""}ที่ตรงกับ "${filterQuery}"\n\nกรุณาตรวจสอบชื่อผู้เบิกหรือรายละเอียดที่ค้นหาอีกครั้งครับ`
+              : "ไม่พบรายการบิลในระบบ";
         await replyTextMessage(replyToken, noResultMsg);
         return true;
       }
 
-      const flexTitle = lowerText === "รออนุมัติ"
-        ? `รายการรออนุมัติ`
-        : filterQuery
-          ? `ผลการค้นหาบิล${isSub ? "ย่อย" : isMain ? "หลัก" : ""}ของ "${filterQuery}"`
-          : `รายการเบิกเงิน${isSub ? "บิลย่อย" : isMain ? "บิลหลัก" : "บิล"}`;
+      const flexTitle = isApprovedFilter
+        ? (filterQuery ? `รายการอนุมัติแล้วของ "${filterQuery}" (รอปิดงาน)` : `รายการอนุมัติแล้ว (รอปิดงาน/จ่ายเงิน)`)
+        : lowerText === "รออนุมัติ"
+          ? `รายการรออนุมัติ`
+          : filterQuery
+            ? `ผลการค้นหาบิล${isSub ? "ย่อย" : isMain ? "หลัก" : ""}ของ "${filterQuery}"`
+            : `รายการเบิกเงิน${isSub ? "บิลย่อย" : isMain ? "บิลหลัก" : "บิล"}`;
 
       const bankInfoMap = await getBankInfoMap();
-      const flexPayload = createBillSearchResultFlex(flexTitle, bills, isSub, isMain, totalCount, totalSumAmount, filterQuery, peopleMap, bankInfoMap);
+
+      // For approved bills awaiting finance closing, use createWithdrawApproverFlex with close buttons & bank details
+      const flexPayload = isApprovedFilter
+        ? createWithdrawApproverFlex(bills, peopleMap, bankInfoMap)
+        : createBillSearchResultFlex(flexTitle, bills, isSub, isMain, totalCount, totalSumAmount, filterQuery, peopleMap, bankInfoMap);
 
       const sent = await replyFlexMessage(replyToken, `🧾 ${flexTitle} (${bills.length} รายการ)`, flexPayload);
       if (!sent && replyToken) {

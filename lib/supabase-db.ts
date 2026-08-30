@@ -325,17 +325,28 @@ export function mapSupabaseRowToSheetRow(dbTable: string, row: Record<string, an
     res["เลขที่บัตรประชาชน"] = row.id_card ?? row["เลขที่บัตรประชาชน"];
 
     const d = (row.data && typeof row.data === "object") ? row.data : {};
-    const isOwner = Boolean(row.is_owner ?? d.is_owner ?? d["เจ้าของระบบ"] ?? row["เจ้าของระบบ"]);
-    const canClose = Boolean(row.can_close_bill ?? d.can_close_bill ?? d["อนุมัติบิล"] ?? row["อนุมัติบิล"]);
-    const canApprove = Boolean(row.can_approve ?? d.can_approve ?? d["ฝ่ายการเงิน"] ?? row["ฝ่ายการเงิน"]);
-    const canDelete = Boolean(row.can_delete ?? d.can_delete ?? d["สิทธิ์ลบข้อมูล"] ?? row["สิทธิ์ลบข้อมูล"]);
+    const isOwner = (row.is_owner !== undefined && row.is_owner !== null)
+      ? Boolean(row.is_owner)
+      : Boolean(d.is_owner ?? d["เจ้าของระบบ"] ?? row["เจ้าของระบบ"]);
+
+    const canClose = (row.can_close_bill !== undefined && row.can_close_bill !== null)
+      ? Boolean(row.can_close_bill)
+      : Boolean(d.can_close_bill ?? d["อนุมัติบิล"] ?? row["อนุมัติบิล"]);
+
+    const canApprove = (row.can_approve !== undefined && row.can_approve !== null)
+      ? Boolean(row.can_approve)
+      : Boolean(d.can_approve ?? d["ฝ่ายการเงิน"] ?? row["ฝ่ายการเงิน"]);
+
+    const canDelete = (row.can_delete !== undefined && row.can_delete !== null)
+      ? Boolean(row.can_delete)
+      : Boolean(d.can_delete ?? d["สิทธิ์ลบข้อมูล"] ?? row["สิทธิ์ลบข้อมูล"]);
 
     const rawPermStr = String(row["สิทธิ์การใช้งาน"] ?? d["สิทธิ์การใช้งาน"] ?? "");
     const activePerms: string[] = [];
-    if (isOwner || rawPermStr.includes("Owner") || rawPermStr.includes("เจ้าของระบบ")) activePerms.push("เจ้าของระบบ (Owner)");
-    if (canClose || rawPermStr.includes("Approver") || rawPermStr.includes("อนุมัติบิล")) activePerms.push("อนุมัติบิล (Approver)");
-    if (canApprove || rawPermStr.includes("Finance") || rawPermStr.includes("ฝ่ายการเงิน") || rawPermStr.includes("ปิดบิล")) activePerms.push("ฝ่ายการเงิน (Finance)");
-    if (canDelete || rawPermStr.includes("Delete") || rawPermStr.includes("ลบข้อมูล")) activePerms.push("ลบข้อมูล (Delete)");
+    if (isOwner) activePerms.push("เจ้าของระบบ (Owner)");
+    if (canClose) activePerms.push("อนุมัติบิล (Approver)");
+    if (canApprove) activePerms.push("ฝ่ายการเงิน (Finance)");
+    if (canDelete) activePerms.push("ลบข้อมูล (Delete)");
 
     res["สิทธิ์การใช้งาน"] = activePerms.join(", ");
     const lineId = row.line_user_id ?? d.line_user_id ?? row["LINE User ID"] ?? d["LINE User ID"] ?? row["LINE"] ?? d["LINE"] ?? "";
@@ -691,6 +702,22 @@ export function mapSheetRowToSupabaseRow(tableName: string, row: Record<string, 
     if (row["pictureUrl"] !== undefined || row["pictureurl"] !== undefined) {
       dbRow.pictureurl = row["pictureUrl"] ?? row["pictureurl"];
     }
+    const rawData = (row.data && typeof row.data === "object") ? row.data : {};
+    dbRow.data = {
+      ...rawData,
+      can_close_bill: dbRow.can_close_bill ?? rawData.can_close_bill ?? false,
+      can_approve: dbRow.can_approve ?? rawData.can_approve ?? false,
+      is_owner: dbRow.is_owner ?? rawData.is_owner ?? false,
+      can_delete: dbRow.can_delete ?? rawData.can_delete ?? false,
+      system_role: dbRow.system_role || rawData.system_role || "User",
+      role: dbRow.role || rawData.role || "User",
+      "อนุมัติบิล": dbRow.can_close_bill ?? rawData.can_close_bill ?? false,
+      "ฝ่ายการเงิน": dbRow.can_approve ?? rawData.can_approve ?? false,
+      "เจ้าของระบบ": dbRow.is_owner ?? rawData.is_owner ?? false,
+      "สิทธิ์ลบข้อมูล": dbRow.can_delete ?? rawData.can_delete ?? false,
+      "สิทธิ์การใช้งาน": row["สิทธิ์การใช้งาน"] ?? rawData["สิทธิ์การใช้งาน"] ?? "",
+      "LINE User ID": dbRow.line_user_id || row["LINE User ID"] || row["LINE"] || rawData["LINE User ID"] || rawData.line_user_id || ""
+    };
   } else if (dbTable === "contract_works") {
     if (row["id_Conwork"] !== undefined || row["id"] !== undefined) {
       dbRow.id = row["id_Conwork"] ?? row["id"];

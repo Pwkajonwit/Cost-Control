@@ -22,6 +22,8 @@ type BillsDashboardClientProps = {
   form?: any;
   isAdmin: boolean;
   peopleRows: SheetRow[];
+  authEmpId?: string;
+  authName?: string;
   search: string;
   page: number;
   pageSize: number;
@@ -30,12 +32,58 @@ type BillsDashboardClientProps = {
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 
+function getTodayIso(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function resolveMatchingRequesterKey(
+  peopleRows: SheetRow[],
+  authEmpId?: string,
+  authName?: string
+): string {
+  let empId = String(authEmpId || "").trim();
+  let name = String(authName || "").trim();
+
+  if (!empId && !name && typeof document !== "undefined") {
+    const empMatch = document.cookie.match(/auth_employee_id=([^;]+)/);
+    const nameMatch = document.cookie.match(/auth_name=([^;]+)/);
+    empId = empMatch ? decodeURIComponent(empMatch[1]).trim() : "";
+    name = nameMatch ? decodeURIComponent(nameMatch[1]).trim() : "";
+  }
+
+  if (!empId && !name) return "";
+
+  const cleanEmpId = empId.toLowerCase();
+  const cleanName = name.toLowerCase();
+
+  const matched = peopleRows.find(p => {
+    const pId = String(p["รหัสพนักงาน"] || p.id || "").trim().toLowerCase();
+    const pNick = String(p["ชื่อเล่น"] || "").trim().toLowerCase();
+    const pFull = String(p["ชื่อ-นามสกุล"] || "").trim().toLowerCase();
+    return (
+      (cleanEmpId && (pId === cleanEmpId || pNick === cleanEmpId || pFull === cleanEmpId)) ||
+      (cleanName && (pNick === cleanName || pFull === cleanName || pId === cleanName))
+    );
+  });
+
+  if (matched) {
+    return String(matched["รหัสพนักงาน"] || matched["ชื่อเล่น"] || matched.id || "");
+  }
+  return empId || name || "";
+}
+
 export function BillsDashboardClient({
   columns,
   initialRows,
   form,
   isAdmin,
   peopleRows,
+  authEmpId,
+  authName,
   search: initialSearch = "",
   page: initialPage = 1,
   pageSize: initialPageSize = 20,
@@ -48,14 +96,31 @@ export function BillsDashboardClient({
     setRows(initialRows);
   }, [initialRows]);
 
+  const initialRequester = useMemo(() => {
+    return resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
+  }, [peopleRows, authEmpId, authName]);
+
+  const todayIso = useMemo(() => getTodayIso(), []);
+
   const [searchInput, setSearchInput] = useState(initialSearch);
-  const [filters, setFilters] = useState({
-    requester: "",
-    date: "",
+  const [filters, setFilters] = useState(() => ({
+    requester: initialRequester,
+    date: todayIso,
     bill: "",
     status: "",
     search: initialSearch,
-  });
+  }));
+
+  // Ensure default requester and date are initialized if peopleRows load later
+  useEffect(() => {
+    const resolvedReq = resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
+    const currentToday = getTodayIso();
+    setFilters(prev => ({
+      ...prev,
+      requester: prev.requester || resolvedReq,
+      date: prev.date || currentToday,
+    }));
+  }, [peopleRows, authEmpId, authName]);
 
   useEffect(() => {
     setSearchInput(initialSearch);
@@ -166,9 +231,13 @@ export function BillsDashboardClient({
     const bill = filters.bill.trim();
     const status = filters.status.trim();
     const filterDateIso = filters.date.trim();
+    const reqName = requester ? (requesterNames[requester] || requester) : "";
 
     return rows.filter(row => {
-      if (requester && String(row["ผู้เบิก"] || "").trim() !== requester) return false;
+      if (requester) {
+        const rowReq = String(row["ผู้เบิก"] || "").trim();
+        if (rowReq !== requester && rowReq !== reqName) return false;
+      }
       if (bill && String(row["บิล"] || "").trim() !== bill) return false;
       if (status && String(row["สถานะ"] || "").trim() !== status) return false;
       if (filterDateIso) {
@@ -195,7 +264,7 @@ export function BillsDashboardClient({
       const seqB = Number(b._sheetRow || b["ลำดับ"] || b.id || 0);
       return sortDesc ? seqB - seqA : seqA - seqB;
     });
-  }, [rows, filters, sortDesc]);
+  }, [rows, filters, sortDesc, requesterNames]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -218,6 +287,15 @@ export function BillsDashboardClient({
     }
     return { totalAmount: tot, approvedAmount: app, pendingAmount: tot - app };
   }, [filteredRows]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.requester) count++;
+    if (filters.date) count++;
+    if (filters.bill) count++;
+    if (filters.status) count++;
+    return count;
+  }, [filters]);
 
   useEffect(() => {
     setPage(1);
@@ -258,7 +336,7 @@ export function BillsDashboardClient({
 
       {/* 2. MOBILE QUICK TOOLBAR & STATUS CHIPS (Visible only on Mobile) */}
       <div className="flex md:hidden flex-col gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-        {/* Search + Sort row */}
+        {/* Search + Filter + Sort row */}
         <div className="flex items-center gap-2">
           <div className="relative flex-1 flex items-center">
             <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
@@ -275,12 +353,20 @@ export function BillsDashboardClient({
           </div>
           <button
             type="button"
-            disabled={isExporting || filteredRows.length === 0}
-            onClick={handleExportCsv}
-            className="p-1.5 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-300 flex items-center gap-1 text-xs shrink-0 cursor-pointer active:bg-emerald-100 disabled:opacity-50"
-            title="ส่งออก Excel"
+            onClick={() => setShowMobileFilters(cur => !cur)}
+            className={`p-1.5 rounded-lg border flex items-center gap-1 text-xs shrink-0 cursor-pointer transition-all ${
+              showMobileFilters || activeFilterCount > 0
+                ? "bg-emerald-800 text-white border-emerald-800 shadow-xs"
+                : "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200"
+            }`}
+            title="ตัวกรอง"
           >
-            <FileSpreadsheet size={14} className="text-emerald-700" />
+            <Filter size={14} />
+            {activeFilterCount > 0 ? (
+              <span className="w-4 h-4 bg-emerald-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                {activeFilterCount}
+              </span>
+            ) : null}
           </button>
           <button
             type="button"
@@ -291,6 +377,80 @@ export function BillsDashboardClient({
             {sortDesc ? <ArrowDownWideNarrow size={14} /> : <ArrowUpWideNarrow size={14} />}
           </button>
         </div>
+
+        {/* Expandable Mobile Filter Panel */}
+        {showMobileFilters ? (
+          <div className="pt-2 border-t border-slate-100 space-y-2.5 animate-in slide-in-from-top duration-150">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-xs text-slate-800 flex items-center gap-1.5">
+                <Filter size={13} className="text-emerald-700" />
+                <span>ตัวกรองข้อมูล</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilters({ requester: "", date: "", bill: "", status: "", search: searchInput })}
+                className="text-[11px] text-rose-600 hover:underline cursor-pointer"
+              >
+                ล้างตัวกรองทั้งหมด
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {/* Requester Filter */}
+              <div className="col-span-2 space-y-1">
+                <label className="text-[11px] font-medium text-slate-600">ผู้เบิก:</label>
+                <select
+                  value={filters.requester}
+                  onChange={event => updateFilter("requester", event.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 text-xs text-slate-800 px-2.5 py-1.5 rounded-lg focus:outline-none focus:bg-white focus:border-slate-800 cursor-pointer"
+                >
+                  <option value="">ทั้งหมด (ทุกคน)</option>
+                  {peopleRows.map(row => {
+                    const key = String(row["รหัสพนักงาน"] || row["ชื่อเล่น"] || row._sheetRow || "");
+                    const label = row["ชื่อเล่น"] ? `${key} - ${row["ชื่อเล่น"]}` : key;
+                    return key ? <option key={key} value={key}>{label}</option> : null;
+                  })}
+                </select>
+              </div>
+
+              {/* Date Filter */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-slate-600">วันที่:</label>
+                  {filters.date ? (
+                    <button
+                      type="button"
+                      onClick={() => updateFilter("date", "")}
+                      className="text-[10px] text-slate-400 hover:text-slate-700 underline"
+                    >
+                      ล้าง
+                    </button>
+                  ) : null}
+                </div>
+                <input
+                  type="date"
+                  value={filters.date}
+                  onChange={event => updateFilter("date", event.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 text-xs text-slate-800 px-2 py-1.5 rounded-lg focus:outline-none focus:bg-white focus:border-slate-800 cursor-pointer"
+                />
+              </div>
+
+              {/* Bill Type Filter */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-slate-600">ประเภทบิล:</label>
+                <select
+                  value={filters.bill}
+                  onChange={event => updateFilter("bill", event.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 text-xs text-slate-800 px-2.5 py-1.5 rounded-lg focus:outline-none focus:bg-white focus:border-slate-800 cursor-pointer"
+                >
+                  <option value="">ทั้งหมด</option>
+                  <option value="หลัก">หลัก</option>
+                  <option value="ย่อย">ย่อย</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Quick Filter Chips (Horizontal Scrollable) */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 text-xs font-medium">

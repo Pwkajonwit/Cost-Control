@@ -42,12 +42,12 @@ const MASTER_TABLES = new Set([
 
 function getTableDefaultTtl(tableName: string): number {
   if (MASTER_TABLES.has(tableName) || MASTER_TABLES.has(tableName.toLowerCase())) {
-    return 300_000; // 5 minutes for master data
+    return 2_000; // 2 seconds for master data to guarantee instant freshness across all Vercel lambdas
   }
   if (tableName === "Project" || tableName === "projects" || tableName === "PROJECT") {
-    return 180_000; // 3 minutes for projects
+    return 2_000; // 2 seconds for projects
   }
-  return 180_000; // 3 minutes for transactions (bills, contracts, tasks) with instant write-invalidation
+  return 1_000; // 1 second for transactions (bills, contracts, tasks)
 }
 
 export function invalidateTableCache(tableName: string) {
@@ -107,6 +107,8 @@ export function invalidateTableCache(tableName: string) {
     clearCache("headers:master_members");
     clearCache("sys_opt:entity_banks");
     clearCache("sys_opt:users_list");
+    clearCache("line:");
+    clearCache("line:target_ids");
   } else if (canonical === "banks" || normalized === "ธนาคาร" || normalized === "banks" || normalized === "BANK") {
     clearCache("rows:banks");
     clearCache("rows:ธนาคาร");
@@ -167,13 +169,13 @@ export const fetchTableRows = getRows;
  * Fetch bills with active withdraw status directly using database index
  */
 export async function getWithdrawBills(maxRows = 3_000): Promise<TableRow[]> {
-  return cached(`bills:withdraw:${maxRows}`, 180_000, async () => {
+  return cached(`bills:withdraw:${maxRows}`, 1_000, async () => {
     try {
       const rows = await getWithdrawBillsFromSupabase(maxRows);
       return rows || [];
     } catch (e) {
       console.warn("getWithdrawBills failed, falling back to full table:", e);
-      const allRows = await getRows("Data", 180_000, maxRows);
+      const allRows = await getRows("Data", 1_000, maxRows);
       return allRows;
     }
   });
@@ -183,13 +185,13 @@ export async function getWithdrawBills(maxRows = 3_000): Promise<TableRow[]> {
  * Fetch bills with active VAT, withholding tax, or credit directly using database index
  */
 export async function getBillFollowBills(maxRows = 3_000): Promise<TableRow[]> {
-  return cached(`bills:bill_follow:${maxRows}`, 180_000, async () => {
+  return cached(`bills:bill_follow:${maxRows}`, 1_000, async () => {
     try {
       const rows = await getBillFollowRowsFromSupabase(maxRows);
       return rows || [];
     } catch (e) {
       console.warn("getBillFollowBills failed, falling back to full table:", e);
-      const allRows = await getRows("Data", 180_000, maxRows);
+      const allRows = await getRows("Data", 1_000, maxRows);
       return allRows;
     }
   });
@@ -200,7 +202,7 @@ export async function getBillFollowBills(maxRows = 3_000): Promise<TableRow[]> {
  */
 export async function getDashboardFinancialSummary(startDate?: string, endDate?: string, projectId?: string) {
   const cacheKey = `summary:fin:${startDate || "all"}:${endDate || "all"}:${projectId || "all"}`;
-  return cached(cacheKey, 180_000, async () => {
+  return cached(cacheKey, 2_000, async () => {
     return getDashboardFinancialSummaryFromSupabase(startDate, endDate, projectId);
   });
 }

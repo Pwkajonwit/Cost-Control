@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   Image as ImageIcon,
   RotateCw,
   X,
@@ -323,17 +322,6 @@ export function BillImageThumbnail({ value, compact = false, large = false }: Bi
                     </button>
                   )}
                 </div>
-
-                <a
-                  href={currentImageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="เปิดรูปภาพขนาดใหญ่ในแท็บใหม่"
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs shadow-2xs transition cursor-pointer"
-                >
-                  <ExternalLink size={13} />
-                  <span>เปิดรูปจริง</span>
-                </a>
 
                 <button
                   type="button"

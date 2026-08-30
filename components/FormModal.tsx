@@ -11,6 +11,7 @@ import {
   Camera,
   Check,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   Coins,
   CreditCard,
@@ -22,6 +23,7 @@ import {
   Receipt,
   Save,
   Scissors,
+  Search,
   Store,
   Trash2,
   X
@@ -203,42 +205,41 @@ function MultiLineItemsBuilder({
 
             {/* Product Category Dropdown */}
             <div className="flex-1 min-w-0">
-              <select
+              <SearchableRefSelect
+                name={`product_category_${item.id}`}
                 value={item.category}
-                onChange={(e) => onUpdate(item.id, "category", e.target.value)}
-                className="w-full bg-white border border-slate-300 text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-slate-800 text-slate-900 cursor-pointer font-normal"
-              >
-                <option value="">-- เลือกสินค้า ({idx + 1}) --</option>
-                {productOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                options={productOptions}
+                readOnly={false}
+                placeholder={`เลือกสินค้า (${idx + 1})...`}
+                onChange={(val) => onUpdate(item.id, "category", val)}
+              />
             </div>
 
             {/* Cost Type Pill Select */}
-            <div className="w-28 shrink-0">
-              <select
+            <div className="w-full sm:w-32 shrink-0">
+              <SearchableRefSelect
+                name={`product_cost_type_${item.id}`}
                 value={item.categoryType}
-                onChange={(e) => onUpdate(item.id, "categoryType", e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 text-xs px-2 py-1.5 rounded-lg focus:outline-none focus:border-slate-800 text-slate-700 cursor-pointer font-normal"
-              >
-                <option value="1.ค่าของ">1.ค่าของ</option>
-                <option value="7.เครื่องมือ">7.เครื่องมือ</option>
-                <option value="8.อื่นๆ">8.อื่นๆ</option>
-              </select>
+                options={[
+                  { label: "1.ค่าของ", value: "1.ค่าของ" },
+                  { label: "7.เครื่องมือ", value: "7.เครื่องมือ" },
+                  { label: "8.อื่นๆ", value: "8.อื่นๆ" }
+                ]}
+                readOnly={false}
+                placeholder="ประเภท..."
+                onChange={(val) => onUpdate(item.id, "categoryType", val)}
+              />
             </div>
 
             {/* Amount Input */}
-            <div className="w-36 shrink-0 relative">
+            <div className="w-full sm:w-36 shrink-0 relative">
               <input
                 type="number"
                 step="any"
                 value={item.amount}
                 onChange={(e) => onUpdate(item.id, "amount", e.target.value)}
                 placeholder="0.00"
-                className="w-full bg-white border border-slate-300 text-xs px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-slate-800 text-right font-mono font-semibold text-slate-900 placeholder:text-slate-400"
+                className="w-full h-10 sm:h-9 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm px-2.5 py-1.5 focus:outline-none focus:border-slate-800 text-right font-mono font-semibold text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
@@ -783,7 +784,7 @@ export function FormModal({
         setError("");
         setSuccessMessage(
           prevSeq
-            ? `บันทึกรายการบิลลำดับที่ ${prevSeq} สำเร็จเรียบร้อย! ระบบเตรียมเลขลำดับถัดไป (#${nextSeq || Number(prevSeq) + 1}) ให้พร้อมกรอกต่อแล้ว`
+            ? `บันทึกบิลลำดับที่ ${prevSeq} สำเร็จเรียบร้อย! ระบบเตรียมเลขถัดไป (#${nextSeq || Number(prevSeq) + 1}) พร้อมกรอกต่อแล้ว`
             : "บันทึกรายการเรียบร้อยแล้ว สามารถสร้างรายการถัดไปต่อได้เลย"
         );
         setResetKey(k => k + 1);
@@ -869,7 +870,7 @@ export function FormModal({
             ) : null}
 
             {/* Form Content */}
-            <div ref={formBodyRef} className="p-3.5 sm:p-6 overflow-y-auto flex-1 space-y-3.5 bg-slate-50/70 overscroll-contain">
+            <div ref={formBodyRef} className="p-3.5 sm:p-6 overflow-y-auto overflow-x-hidden flex-1 space-y-3.5 bg-slate-50/70 overscroll-contain w-full min-w-0 max-w-full">
               {loadingSchema || !activeForm ? (
                 <div className="py-16 flex flex-col items-center justify-center gap-3 text-center">
                   <div className="w-9 h-9 border-3 border-slate-200 border-t-slate-800 rounded-full animate-spin" />
@@ -878,18 +879,18 @@ export function FormModal({
                 </div>
               ) : (
                 <>
-                  <fieldset className={`space-y-4 border-0 p-0 m-0 ${saving ? "pointer-events-none opacity-80" : ""}`} disabled={saving}>
+                  <fieldset className={`w-full min-w-0 max-w-full space-y-4 border-0 p-0 m-0 ${saving ? "pointer-events-none opacity-80" : ""}`} disabled={saving}>
                     {/* Top Notification Alerts */}
                     {successMessage ? (
-                      <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs flex items-center justify-between gap-2 animate-in fade-in duration-150 font-normal">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                          <span className="truncate sm:whitespace-normal">{successMessage}</span>
+                      <div className="w-full min-w-0 max-w-full p-3 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200 text-xs flex items-start justify-between gap-2 animate-in fade-in duration-150 font-normal">
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                          <span className="break-words leading-relaxed flex-1 min-w-0">{successMessage}</span>
                         </div>
                         <button
                           type="button"
                           onClick={() => setSuccessMessage("")}
-                          className="text-emerald-600 hover:text-emerald-800 transition cursor-pointer p-0.5 ml-auto"
+                          className="text-emerald-600 hover:text-emerald-800 transition cursor-pointer p-0.5 shrink-0 ml-1"
                           title="ปิดการแจ้งเตือน"
                         >
                           <X size={14} />
@@ -898,15 +899,15 @@ export function FormModal({
                     ) : null}
 
                     {error ? (
-                      <div className="p-3 bg-rose-50 text-rose-700 rounded-lg border border-rose-200 text-xs font-normal flex items-center justify-between animate-in fade-in duration-150">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle size={16} className="text-rose-600 shrink-0" />
-                          <span>{error}</span>
+                      <div className="w-full min-w-0 max-w-full p-3 bg-rose-50 text-rose-700 rounded-lg border border-rose-200 text-xs font-normal flex items-start justify-between gap-2 animate-in fade-in duration-150">
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                          <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                          <span className="break-words leading-relaxed flex-1 min-w-0">{error}</span>
                         </div>
                         <button
                           type="button"
                           onClick={() => setError("")}
-                          className="text-rose-600 hover:text-rose-800 transition cursor-pointer p-0.5"
+                          className="text-rose-600 hover:text-rose-800 transition cursor-pointer p-0.5 shrink-0 ml-1"
                         >
                           <X size={14} />
                         </button>
@@ -1092,7 +1093,7 @@ export function FormModal({
             {/* Action Footer Bar (Mobile Full-Width Buttons & Summary) */}
             <footer className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-t border-slate-200 shrink-0 shadow-lg sm:shadow-none">
               {isDataForm && baseAmt > 0 ? (
-                <div className="flex items-center justify-between sm:justify-start gap-2.5 text-xs sm:text-sm bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 font-sans">
+                <div className="flex items-center justify-between sm:justify-start gap-2.5 text-xs sm:text-sm bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 font-sans w-full sm:w-auto min-w-0 max-w-full overflow-hidden">
                   <span className="text-slate-500 font-medium">ยอดเงิน: <strong className="text-slate-900 ">{baseAmt.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ฿</strong></span>
                   {deductAmt > 0 ? (
                     <>
@@ -1157,7 +1158,8 @@ function ImageFileFieldInput({
   onAttachedFilesChange: (files: File[]) => void;
   resetKey?: number;
 }) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Existing image URLs from database (comma-separated string)
   const existingUrls = value
@@ -1186,9 +1188,8 @@ function ImageFileFieldInput({
   const handleFilesAdded = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawFiles = Array.from(e.target.files || []);
     if (!rawFiles.length) return;
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
     setCompressing(true);
     try {
       const compressed = await compressImageFiles(rawFiles, 1920, 0.82);
@@ -1215,12 +1216,24 @@ function ImageFileFieldInput({
 
   return (
     <div className="space-y-2.5">
-      {/* Hidden File Input for triggering native camera / file picker */}
+      {/* 1. Direct Native Camera Input (Opens Camera on Android & iOS) */}
       <input
-        ref={fileInputRef}
+        ref={cameraInputRef}
         type="file"
-        name={field.name}
-        accept={field.type === "Image" ? "image/*" : undefined}
+        name={`${field.name}_camera`}
+        accept="image/*"
+        capture="environment"
+        disabled={readOnly || compressing}
+        onChange={handleFilesAdded}
+        className="hidden"
+      />
+
+      {/* 2. Media / Photo Gallery Input (Allows multi-image picking) */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        name={`${field.name}_gallery`}
+        accept="image/*"
         multiple
         disabled={readOnly || compressing}
         onChange={handleFilesAdded}
@@ -1307,52 +1320,58 @@ function ImageFileFieldInput({
               </div>
             ))}
 
-            {/* Quick Add More Tile inside the grid */}
+            {/* Quick Action Tiles inside the grid */}
             {!readOnly && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-square rounded-md border-2 border-dashed border-slate-300 hover:border-slate-800 hover:bg-white bg-slate-100/60 flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-slate-900 transition cursor-pointer active:scale-95"
-                title="กดเพื่อแนบรูปเพิ่มอีก"
-              >
-                <Plus size={18} />
-                <span className="text-[10px] text-center leading-tight font-normal">แนบเพิ่ม</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="aspect-square rounded-md border-2 border-dashed border-slate-300 hover:border-slate-800 hover:bg-white bg-slate-100/60 flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-slate-900 transition cursor-pointer active:scale-95"
+                  title="ถ่ายรูปจากกล้อง"
+                >
+                  <Camera size={16} />
+                  <span className="text-[10px] text-center leading-tight font-normal">ถ่ายรูป</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="aspect-square rounded-md border-2 border-dashed border-slate-300 hover:border-slate-800 hover:bg-white bg-slate-100/60 flex flex-col items-center justify-center gap-1 text-slate-500 hover:text-slate-900 transition cursor-pointer active:scale-95"
+                  title="เลือกรูปเพิ่มจากเครื่อง"
+                >
+                  <Plus size={16} />
+                  <span className="text-[10px] text-center leading-tight font-normal">แนบเพิ่ม</span>
+                </button>
+              </>
             )}
           </div>
         </div>
       ) : null}
 
-      {/* Main Upload Dropzone / Button (Shown when no images attached yet) */}
+      {/* Main Upload Buttons (Shown when no images attached yet) */}
       {!readOnly && totalImageCount === 0 && (
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-slate-300 hover:border-slate-700 hover:bg-slate-50 rounded-lg p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group active:scale-[0.99]"
-        >
-          <div className="w-10 h-10 rounded-full bg-slate-100 group-hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors">
-            <Camera size={20} />
-          </div>
-          <div>
-            <div className="text-xs text-slate-800 font-normal">
-              กดเพื่อถ่ายรูป หรือเลือกรูปภาพจากเครื่อง
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5 font-normal">
-              สามารถแนบทีละรูป หรือเลือกหลายรูปพร้อมกันได้
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Action button when images already exist */}
-      {!readOnly && totalImageCount > 0 && (
-        <div className="flex items-center gap-2 pt-0.5">
+        <div className="grid grid-cols-2 gap-2.5">
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex-1 py-2 px-3 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-md text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 font-normal"
+            onClick={() => cameraInputRef.current?.click()}
+            className="p-3.5 bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-800 rounded-xl flex flex-col items-center justify-center gap-1.5 transition cursor-pointer active:scale-98 text-slate-800 shadow-2xs group"
           >
-            <ImagePlus size={14} className="text-slate-600" />
-            <span>ถ่ายรูป / แนบรูปเพิ่มอีก</span>
+            <div className="w-9 h-9 rounded-full bg-slate-100 group-hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors">
+              <Camera size={18} />
+            </div>
+            <span className="text-xs font-normal">ถ่ายรูปจากกล้อง</span>
+            <span className="text-[10px] text-slate-400 font-normal">เปิดกล้องถ่ายสด</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => galleryInputRef.current?.click()}
+            className="p-3.5 bg-white hover:bg-slate-50 border border-slate-300 hover:border-slate-800 rounded-xl flex flex-col items-center justify-center gap-1.5 transition cursor-pointer active:scale-98 text-slate-800 shadow-2xs group"
+          >
+            <div className="w-9 h-9 rounded-full bg-slate-100 group-hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors">
+              <ImagePlus size={18} />
+            </div>
+            <span className="text-xs font-normal">เลือกรูปจากเครื่อง</span>
+            <span className="text-[10px] text-slate-400 font-normal">เลือกรูปเดี่ยว/หลายรูป</span>
           </button>
         </div>
       )}
@@ -1605,20 +1624,14 @@ function renderField(
 
     if (field.type === "Enum") {
       return (
-        <select
+        <SearchableRefSelect
           name={field.name}
           value={value}
-          disabled={readOnly}
-          onChange={e => onChange(e.target.value)}
-          className="w-full min-w-0 max-w-full box-border h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 transition-all cursor-pointer"
-        >
-          <option value="">เลือก{field.name}...</option>
-          {options.map((option, index) => (
-            <option key={`${option.value}-${index}`} value={String(option.value)}>
-              {String(option.label)}
-            </option>
-          ))}
-        </select>
+          options={options}
+          readOnly={readOnly}
+          placeholder={`เลือก${field.name}...`}
+          onChange={onChange}
+        />
       );
     }
 
@@ -1707,110 +1720,296 @@ function SearchableRefSelect({
       Object.values(option.row).some(v => v !== null && v !== undefined && String(v).trim() !== "" && String(v) === value)
     ))
   ) : undefined;
+
   const rawLabel = selectedOption ? optionLabel(selectedOption, name) : value;
   const selectedLabel = (name === "id_Contractor" || name === "id_contractor" || name === "ผู้รับเหมา" || name === "ช่าง") && rawLabel.includes(" - ")
     ? rawLabel.split(" - ").slice(1).join(" - ").trim() || rawLabel
     : rawLabel;
   const selectedImgUrl = (selectedOption?.row?.image || selectedOption?.row?.image_url || "") as string;
 
-  const [query, setQuery] = useState(selectedLabel);
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [brokenSelectedImg, setBrokenSelectedImg] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [brokenImg, setBrokenImg] = useState(false);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredOptions = normalizedQuery
-    ? options.filter(option => optionSearchText(option, name).includes(normalizedQuery)).slice(0, 80)
-    : options.slice(0, 80);
+  // Detect mobile screen width (< 640px)
+  useEffect(() => {
+    function checkMobile() {
+      setIsMobile(typeof window !== "undefined" && window.innerWidth < 640);
+    }
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
-  useEffect(() => { setQuery(selectedLabel); }, [selectedLabel, value]);
-  useEffect(() => { setBrokenSelectedImg(false); }, [selectedImgUrl]);
+  useEffect(() => {
+    setBrokenImg(false);
+  }, [selectedImgUrl]);
 
-  function openMenu() {
+  // Filter options based on search text
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredOptions = normalizedSearch
+    ? options.filter(option => optionSearchText(option, name).includes(normalizedSearch))
+    : options;
+
+  function handleOpen() {
     if (readOnly) return;
-    if (wrapRef.current) {
-      const rect = wrapRef.current.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    setSearch("");
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const fitsBelow = window.innerHeight - rect.bottom >= 220;
+      setMenuPos({
+        top: fitsBelow ? rect.bottom + 4 : Math.max(8, rect.top - 248),
+        left: rect.left,
+        width: rect.width,
+      });
     }
     setOpen(true);
   }
 
-  function updateQuery(nextQuery: string) {
-    setQuery(nextQuery);
-    openMenu();
-    const exact = options.find(option => {
-      const optionValue = String(option.value);
-      const label = optionLabel(option, name);
-      return optionValue.toLowerCase() === nextQuery.toLowerCase() || label.toLowerCase() === nextQuery.toLowerCase();
-    });
-    onChange(exact ? String(exact.value) : nextQuery);
-  }
-
-  function selectOption(option: RefOption) {
+  function handleSelect(option: RefOption) {
     onChange(String(option.value));
-    setQuery(optionLabel(option, name));
     setOpen(false);
+    setSearch("");
   }
 
-  const showSelectedImg = isValidImgUrl(selectedImgUrl) && !brokenSelectedImg;
+  function handleClear(e: React.MouseEvent) {
+    e.stopPropagation();
+    onChange("");
+    setSearch("");
+  }
 
-  const menuEl = open && !readOnly && menuPos ? (
-    <div
-      className="bg-white border border-slate-300 rounded-lg shadow-xl max-h-60 overflow-y-auto p-1 font-sans animate-in fade-in zoom-in-95 duration-100"
-      role="listbox"
-      aria-label={name}
-      style={{
-        position: "fixed",
-        top: menuPos.top,
-        left: menuPos.left,
-        width: menuPos.width,
-        zIndex: 9999,
-      }}
-    >
-      {filteredOptions.length ? (
-        filteredOptions.map((option, index) => {
-          const optionValue = String(option.value);
-          const rawImg = option.row?.image || option.row?.image_url || "";
-          const imgUrl = isValidImgUrl(typeof rawImg === "string" ? rawImg.trim() : "");
-          return (
-            <DropdownOption
-              key={`${optionValue}-${index}`}
-              option={option}
-              fieldName={name}
-              optionValue={optionValue}
-              imgUrl={imgUrl}
-              isActive={optionValue === value}
-              onSelect={selectOption}
-            />
-          );
-        })
-      ) : (
-        <div className="p-3 text-center text-slate-400 text-xs font-normal">ไม่พบข้อมูล</div>
-      )}
-    </div>
-  ) : null;
+  const showSelectedImg = isValidImgUrl(selectedImgUrl) && !brokenImg;
+  const hasValue = Boolean(value && selectedLabel);
 
   return (
-    <div
-      ref={wrapRef}
-      className="relative w-full min-w-0 max-w-full"
-      onBlur={event => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
-      }}
-    >
+    <div className="relative w-full min-w-0 max-w-full">
       <input type="hidden" name={name} value={value} />
-      <input
-        type="text"
-        className="w-full min-w-0 max-w-full box-border h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400 transition-all"
-        value={query}
-        readOnly={readOnly}
-        placeholder={placeholder}
-        autoComplete="off"
-        onFocus={openMenu}
-        onChange={event => updateQuery(event.target.value)}
-      />
-      {typeof document !== "undefined" ? createPortal(menuEl, document.body) : null}
+
+      {/* Standardized Trigger Box */}
+      <div
+        ref={triggerRef}
+        onClick={handleOpen}
+        className={`w-full min-w-0 max-w-full box-border h-10 sm:h-9 px-3 bg-white border rounded-lg text-xs sm:text-sm font-normal flex items-center justify-between gap-2 transition-all select-none ${
+          readOnly
+            ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
+            : open
+            ? "border-slate-800 ring-2 ring-slate-800/10 cursor-pointer"
+            : "border-slate-300 hover:border-slate-400 text-slate-800 cursor-pointer active:bg-slate-50"
+        }`}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+          {showSelectedImg ? (
+            <img
+              src={selectedImgUrl}
+              alt=""
+              className="w-5 h-5 rounded object-cover border border-slate-200 shrink-0"
+              onError={() => setBrokenImg(true)}
+            />
+          ) : null}
+          <span className={`truncate ${hasValue ? "text-slate-800 font-normal" : "text-slate-400 font-normal"}`}>
+            {hasValue ? selectedLabel : placeholder}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0 text-slate-400">
+          {!readOnly && hasValue ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="w-5 h-5 rounded-full hover:bg-slate-100 hover:text-slate-700 flex items-center justify-center transition cursor-pointer"
+              title="ล้างค่า"
+            >
+              <X size={12} />
+            </button>
+          ) : null}
+          <ChevronDown
+            size={16}
+            className={`transition-transform duration-200 ${open ? "rotate-180 text-slate-700" : "text-slate-400"}`}
+          />
+        </div>
+      </div>
+
+      {/* Overlay & Dropdown / Bottom Sheet Menu */}
+      {open && !readOnly && typeof document !== "undefined"
+        ? createPortal(
+            isMobile ? (
+              /* MOBILE BOTTOM SHEET */
+              <div
+                className="fixed inset-0 z-[99999] bg-slate-900/50 backdrop-blur-xs flex flex-col justify-end animate-in fade-in duration-150"
+                onClick={() => setOpen(false)}
+              >
+                <div
+                  className="bg-white rounded-t-2xl max-h-[82vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-200 overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Top drag handle */}
+                  <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mt-2.5 mb-1" />
+
+                  {/* Mobile Header */}
+                  <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm text-slate-800">
+                      {placeholder.replace(/\.\.\.$/, "") || `เลือก${name}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setOpen(false)}
+                      className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  {/* Search bar inside sheet (if > 3 options) */}
+                  {options.length > 3 ? (
+                    <div className="px-3 pt-2.5 pb-1">
+                      <div className="relative">
+                        <input
+                          ref={searchInputRef}
+                          type="text"
+                          value={search}
+                          onChange={e => setSearch(e.target.value)}
+                          placeholder={`พิมพ์ค้นหา${placeholder.replace(/^เลือก/, "").replace(/\.\.\.$/, "")}...`}
+                          className="w-full h-10 pl-9 pr-8 bg-slate-100 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-slate-800 focus:outline-none transition-all"
+                        />
+                        <Search size={15} className="absolute left-3 top-3 text-slate-400 pointer-events-none" />
+                        {search ? (
+                          <button
+                            type="button"
+                            onClick={() => setSearch("")}
+                            className="absolute right-2.5 top-2.5 w-5 h-5 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition"
+                          >
+                            <X size={11} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Scrollable list */}
+                  <div className="flex-1 overflow-y-auto px-2 py-2 divide-y divide-slate-100 space-y-0.5">
+                    {filteredOptions.length ? (
+                      filteredOptions.map((option, index) => {
+                        const optionValue = String(option.value);
+                        const rawImg = option.row?.image || option.row?.image_url || "";
+                        const imgUrl = isValidImgUrl(typeof rawImg === "string" ? rawImg.trim() : "");
+                        const isActive = optionValue === value;
+                        const label = optionLabel(option, name);
+                        return (
+                          <button
+                            key={`${optionValue}-${index}`}
+                            type="button"
+                            onClick={() => handleSelect(option)}
+                            className={`w-full min-h-[46px] py-2.5 px-3 rounded-xl flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] ${
+                              isActive
+                                ? "bg-slate-100 text-slate-900 font-semibold"
+                                : "hover:bg-slate-50 text-slate-800 font-normal"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              {imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt=""
+                                  className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0"
+                                />
+                              ) : null}
+                              <span className="text-xs sm:text-sm truncate">{label}</span>
+                            </div>
+                            {isActive ? (
+                              <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0">
+                                <Check size={12} />
+                                <span>เลือกอยู่</span>
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="p-8 text-center text-slate-400 text-xs">
+                        🔍 ไม่พบข้อมูลที่ตรงกับคำค้นหา
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* DESKTOP FLOATING DROPDOWN */
+              <div
+                className="fixed inset-0 z-[9999]"
+                onClick={() => setOpen(false)}
+              >
+                <div
+                  className="bg-white border border-slate-300 rounded-xl shadow-2xl max-h-64 overflow-y-auto p-1.5 font-sans animate-in fade-in zoom-in-95 duration-100 flex flex-col"
+                  style={{
+                    position: "fixed",
+                    top: menuPos?.top ?? 0,
+                    left: menuPos?.left ?? 0,
+                    width: menuPos?.width ?? 280,
+                    zIndex: 99999,
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  {options.length > 5 ? (
+                    <div className="p-1 pb-1.5 border-b border-slate-100">
+                      <div className="relative">
+                        <input
+                          ref={searchInputRef}
+                          autoFocus
+                          type="text"
+                          value={search}
+                          onChange={e => setSearch(e.target.value)}
+                          placeholder="พิมพ์ค้นหา..."
+                          className="w-full h-8 pl-7 pr-6 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-slate-800 focus:outline-none transition-all"
+                        />
+                        <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" />
+                        {search ? (
+                          <button
+                            type="button"
+                            onClick={() => setSearch("")}
+                            className="absolute right-2 top-2 text-slate-400 hover:text-slate-700"
+                          >
+                            <X size={12} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="overflow-y-auto max-h-52 space-y-0.5 pt-1">
+                    {filteredOptions.length ? (
+                      filteredOptions.map((option, index) => {
+                        const optionValue = String(option.value);
+                        const rawImg = option.row?.image || option.row?.image_url || "";
+                        const imgUrl = isValidImgUrl(typeof rawImg === "string" ? rawImg.trim() : "");
+                        const isActive = optionValue === value;
+                        return (
+                          <DropdownOption
+                            key={`${optionValue}-${index}`}
+                            option={option}
+                            fieldName={name}
+                            optionValue={optionValue}
+                            imgUrl={imgUrl}
+                            isActive={isActive}
+                            onSelect={handleSelect}
+                          />
+                        );
+                      })
+                    ) : (
+                      <div className="p-3 text-center text-slate-400 text-xs font-normal">
+                        ไม่พบข้อมูล
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ),
+            document.body
+          )
+        : null}
     </div>
   );
 }
@@ -1837,10 +2036,9 @@ function DropdownOption({
       }`}
       role="option"
       aria-selected={isActive}
-      onMouseDown={e => e.preventDefault()}
       onClick={() => onSelect(option)}
     >
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
         {showImg ? (
           <img
             src={imgUrl}
@@ -1851,7 +2049,7 @@ function DropdownOption({
         ) : null}
         <span className="truncate text-slate-800 font-normal">{optionLabel(option, fieldName)}</span>
       </div>
-      {isActive ? <Check size={14} className="text-slate-600 shrink-0 ml-1" /> : null}
+      {isActive ? <Check size={14} className="text-emerald-600 shrink-0 ml-1" /> : null}
     </button>
   );
 }
