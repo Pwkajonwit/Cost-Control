@@ -8,6 +8,8 @@ import type { SheetRow } from "@/lib/types";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 type ProjectDetailPageProps = {
   params: Promise<{ projectId: string }>;

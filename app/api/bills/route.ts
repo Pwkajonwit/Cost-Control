@@ -56,7 +56,8 @@ export async function GET(request: NextRequest) {
       rows: mapped
     }, {
       headers: {
-        "Cache-Control": "private, max-age=15, stale-while-revalidate=30"
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Pragma": "no-cache"
       }
     });
   } catch (err: any) {
@@ -66,22 +67,37 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const row = await readBillRow(request);
-    ensureBillVendorType(row);
-    sanitizeBySchema(row, TABLES.DATA);
-    validateRequiredBySchema(row, TABLES.DATA);
-    await validateBillRelations(row);
-    const output = await applyBillFormulas(row);
-    applyAppSheetBillSystemFields(output);
-    const pdfWarning = await attachBillPdf(output);
-    await appendRow(TABLES.DATA, output);
-    await appendAuditLog({
-      action: "CREATE",
-      tableName: TABLES.DATA,
-      key: firstRowValue(output, SEQUENCE_COLUMNS),
-      actor: request.headers.get("x-user-email") || "web",
-      details: { projectId: output["ID Project"] || "", status: output["สถานะ"] || "" }
-    }).catch(() => undefined);
+    const { rows } = await readBillRows(request);
+    if (!rows || rows.length === 0) {
+      throw new Error("ไม่พบข้อมูลบิลสำหรับบันทึก");
+    }
+
+    const outputRows: SheetRow[] = [];
+    let firstPdfWarning = "";
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      ensureBillVendorType(row);
+      sanitizeBySchema(row, TABLES.DATA);
+      validateRequiredBySchema(row, TABLES.DATA);
+      await validateBillRelations(row);
+      const output = await applyBillFormulas(row);
+      applyAppSheetBillSystemFields(output);
+      const pdfWarning = await attachBillPdf(output);
+      if (pdfWarning && !firstPdfWarning) firstPdfWarning = pdfWarning;
+
+      await appendRow(TABLES.DATA, output);
+      outputRows.push(output);
+
+      await appendAuditLog({
+        action: "CREATE",
+        tableName: TABLES.DATA,
+        key: firstRowValue(output, SEQUENCE_COLUMNS),
+        actor: request.headers.get("x-user-email") || "web",
+        details: { projectId: output["ID Project"] || "", status: output["สถานะ"] || "" }
+      }).catch(() => undefined);
+    }
+
     invalidateTableCache(TABLES.DATA);
     try {
       revalidatePath("/bills");
@@ -89,48 +105,128 @@ export async function POST(request: NextRequest) {
       revalidatePath("/dashboards");
       revalidatePath("/");
     } catch {}
-    return NextResponse.json({ ok: true, row: output, pdfWarning });
+
+    return NextResponse.json({
+      ok: true,
+      row: outputRows[0],
+      rows: outputRows,
+      count: outputRows.length,
+      pdfWarning: firstPdfWarning
+    });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
   }
 }
 
-async function readBillRow(request: NextRequest): Promise<SheetRow> {
+async function readBillRows(request: NextRequest): Promise<{ rows: SheetRow[]; images: string[] }> {
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("multipart/form-data")) {
-    return ensureUniqueBillSequence(ensureBillStatus(await request.json()));
+    const body = await request.json();
+    if (Array.isArray(body.rows) && body.rows.length > 0) {
+      let startSeq = toSequenceNumber(body.rows[0]["ลำดับ"]);
+      if (startSeq <= 0) {
+        const sysOptions = await getSystemOptions();
+        const configuredStart = Number((sysOptions as any)?.bill_start_sequence || (sysOptions as any)?.["ลำดับบิลเริ่มต้น"] || 1);
+        startSeq = await getNextBillSequence(configuredStart);
+      }
+
+      const rows: SheetRow[] = [];
+      for (let i = 0; i < body.rows.length; i++) {
+        const r = { ...body.rows[i] };
+        r["ลำดับ"] = String(startSeq + i);
+        ensureBillStatus(r);
+        rows.push(r);
+      }
+      return { rows, images: [] };
+    }
+    const single = ensureBillStatus(body);
+    await ensureUniqueBillSequence(single);
+    return { rows: [single], images: [] };
   }
 
   const formData = await request.formData();
-  const row: SheetRow = {};
-
-  for (const [key, value] of formData.entries()) {
-    if (isFile(value)) continue;
-    row[key] = value;
+  const rawRowsStr = formData.get("rows");
+  let parsedRows: SheetRow[] | null = null;
+  if (typeof rawRowsStr === "string" && rawRowsStr.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(rawRowsStr);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        parsedRows = parsed;
+      }
+    } catch {}
   }
 
-  await ensureUniqueBillSequence(row);
+  const baseRow: SheetRow = {};
+  for (const [key, value] of formData.entries()) {
+    if (isFile(value)) continue;
+    if (key === "rows") continue;
+    baseRow[key] = value;
+  }
 
   const billImageField = findFileField(formData, BILL_IMAGE_COLUMNS);
   const billImages = billImageField ? formData.getAll(billImageField).filter(isUsableFile) : [];
+  let uploadedUrls: string[] = [];
+
   if (billImageField && billImages.length) {
-    const uploadedUrls = await Promise.all(
+    const startSeq = parsedRows?.[0] ? firstRowValue(parsedRows[0], SEQUENCE_COLUMNS) : firstRowValue(baseRow, SEQUENCE_COLUMNS);
+    uploadedUrls = await Promise.all(
       billImages.map((billImage, index) =>
         uploadBillImage(billImage, {
-          sequence: sequenceWithIndex(firstRowValue(row, SEQUENCE_COLUMNS), index, billImages.length),
-          projectId: String(row["ID Project"] || ""),
-          billDate: firstRowValue(row, BILL_DATE_COLUMNS)
+          sequence: sequenceWithIndex(startSeq, index, billImages.length),
+          projectId: String(baseRow["ID Project"] || ""),
+          billDate: firstRowValue(baseRow, BILL_DATE_COLUMNS)
         })
       )
     );
-    const existingVal = String(row[billImageField] || "").trim();
-    const existingUrls = existingVal
-      ? existingVal.split(",").map(u => u.trim()).filter(Boolean)
-      : [];
-    row[billImageField] = [...existingUrls, ...uploadedUrls].join(", ");
   }
 
-  return ensureBillStatus(row);
+  const existingVal = String(baseRow[billImageField || "รูปถ่ายบิล"] || "").trim();
+  const existingUrls = existingVal
+    ? existingVal.split(",").map(u => u.trim()).filter(Boolean)
+    : [];
+  const allImagesStr = [...existingUrls, ...uploadedUrls].join(", ");
+
+  if (parsedRows && parsedRows.length > 0) {
+    let startSeq = toSequenceNumber(parsedRows[0]["ลำดับ"] || baseRow["ลำดับ"]);
+    if (startSeq <= 0) {
+      const sysOptions = await getSystemOptions();
+      const configuredStart = Number((sysOptions as any)?.bill_start_sequence || (sysOptions as any)?.["ลำดับบิลเริ่มต้น"] || 1);
+      startSeq = await getNextBillSequence(configuredStart);
+    }
+
+    const rows: SheetRow[] = [];
+    for (let i = 0; i < parsedRows.length; i++) {
+      const itemRow = { ...baseRow, ...parsedRows[i] };
+      itemRow["ลำดับ"] = String(startSeq + i);
+      itemRow["ค่าของ"] = parsedRows[i]["ค่าของ"] ?? "";
+      itemRow["เครื่องมือ"] = parsedRows[i]["เครื่องมือ"] ?? "";
+      itemRow["อื่นๆ"] = parsedRows[i]["อื่นๆ"] ?? "";
+      itemRow["ค่าแรง"] = parsedRows[i]["ค่าแรง"] ?? "";
+      itemRow["พนักงาน"] = parsedRows[i]["พนักงาน"] ?? "";
+      itemRow["น้ำมัน"] = parsedRows[i]["น้ำมัน"] ?? "";
+      itemRow["ซ่อมรถ"] = parsedRows[i]["ซ่อมรถ"] ?? "";
+      itemRow["เครื่องจักร"] = parsedRows[i]["เครื่องจักร"] ?? "";
+      itemRow["ยอดเงิน"] = parsedRows[i]["ยอดเงิน"] ?? "";
+      itemRow["ยอดโอน"] = parsedRows[i]["ยอดโอน"] ?? "";
+      itemRow["สินค้า"] = parsedRows[i]["สินค้า"] ?? "";
+      itemRow["สินค้า/ทำงาน"] = parsedRows[i]["สินค้า/ทำงาน"] || parsedRows[i]["สินค้า"] || "";
+      itemRow["ประเภท"] = parsedRows[i]["ประเภท"] || "1.ค่าของ";
+      itemRow["items"] = parsedRows[i]["items"] || "";
+      if (allImagesStr) {
+        itemRow[billImageField || "รูปถ่ายบิล"] = allImagesStr;
+      }
+      ensureBillStatus(itemRow);
+      rows.push(itemRow);
+    }
+    return { rows, images: uploadedUrls };
+  }
+
+  if (allImagesStr) {
+    baseRow[billImageField || "รูปถ่ายบิล"] = allImagesStr;
+  }
+  await ensureUniqueBillSequence(baseRow);
+  ensureBillStatus(baseRow);
+  return { rows: [baseRow], images: uploadedUrls };
 }
 
 function ensureBillStatus(row: SheetRow) {
@@ -139,6 +235,12 @@ function ensureBillStatus(row: SheetRow) {
       row[column] = "รอตั้งเบิก";
     }
   });
+  if (!row["ประเภท"] && !row.category) {
+    if (Number(row["ค่าของ"] || row.material_cost || 0) > 0) row["ประเภท"] = "1.ค่าของ";
+    else if (Number(row["เครื่องมือ"] || row.tool_cost || 0) > 0) row["ประเภท"] = "7.เครื่องมือ";
+    else if (Number(row["อื่นๆ"] || row.other_cost || 0) > 0) row["ประเภท"] = "8.อื่นๆ";
+    else row["ประเภท"] = "1.ค่าของ";
+  }
   return row;
 }
 

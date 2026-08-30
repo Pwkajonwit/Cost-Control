@@ -8,8 +8,9 @@ import { uploadTableImage } from "@/lib/drive";
 import { applyBillFormulas, applyContractFormulas, applyProjectFormulas } from "@/lib/formulas";
 import { getFormSchema } from "@/lib/schemas";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
-import { appendAuditLog, appendRow, bulkAppendRows, deleteRows, getRows, invalidateTableCache, updateRow } from "@/lib/db";
+import { appendAuditLog, appendRow, bulkAppendRows, deleteRows, getRows, getSystemOptions, invalidateTableCache, updateRow } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getNextBillSequence } from "@/lib/supabase-db";
 import type { SheetRow } from "@/lib/types";
 
 async function verifyDeletePermission(request: NextRequest): Promise<boolean> {
@@ -102,9 +103,22 @@ export async function POST(request: NextRequest) {
       const rows = body.rows as SheetRow[];
       const actor = actorFromRequest(request);
       const processedRows: SheetRow[] = [];
-      for (const r of rows) {
-        const itemRow = { ...r };
+
+      let startSeq = Number(rows[0]["ลำดับ"] || 0);
+      if (startSeq <= 0 && (tableName === TABLES.DATA || tableName === "Data" || tableName === "bills")) {
+        try {
+          const sysOptions = await getSystemOptions();
+          const configuredStart = Number((sysOptions as any)?.bill_start_sequence || (sysOptions as any)?.["ลำดับบิลเริ่มต้น"] || 1);
+          startSeq = await getNextBillSequence(configuredStart);
+        } catch {}
+      }
+
+      for (let i = 0; i < rows.length; i++) {
+        const itemRow = { ...rows[i] };
         if (tableName === TABLES.DATA || tableName === "Data" || tableName === "bills") {
+          if (startSeq > 0) {
+            itemRow["ลำดับ"] = String(startSeq + i);
+          }
           if (!itemRow["ผู้สร้างบิล"] && !itemRow["created_by"]) {
             itemRow["ผู้สร้างบิล"] = actor;
             itemRow["created_by"] = actor;
