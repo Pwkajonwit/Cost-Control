@@ -4,6 +4,7 @@ import { isCommittedBill } from "@/lib/bill-status";
 import { ProjectAnalyticsDashboardClient } from "@/components/dashboards/ProjectAnalyticsDashboardClient";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function ProjectAnalyticsPage() {
   const [dataRows, projectRows, storeRows, contractorRows, peopleRows] = await Promise.all([

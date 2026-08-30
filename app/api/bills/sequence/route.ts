@@ -6,6 +6,7 @@ import { invalidateTableCache } from "@/lib/db";
 import { TABLES } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -32,6 +33,11 @@ export async function GET() {
       maxBillId: maxFromRows,
       configuredStartSequence: configuredStart,
       nextSequence
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+        "Pragma": "no-cache"
+      }
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

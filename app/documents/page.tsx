@@ -4,6 +4,7 @@ import { hydrateBillRows } from "@/lib/formulas";
 import { DocumentsManagerClient } from "@/components/documents/DocumentsManagerClient";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function DocumentsPage() {
   const [rawBills, rawProjects, rawContractors, rawCompanies, rawStores] = await Promise.all([

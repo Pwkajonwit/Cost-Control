@@ -4,6 +4,9 @@ import { TABLES } from "@/lib/config";
 import { getRows } from "@/lib/db";
 import { isCommittedBill } from "@/lib/bill-status";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   const isRefresh = request.nextUrl.searchParams.get("refresh") === "1";
   if (isRefresh) {
@@ -25,11 +28,11 @@ export async function GET(request: NextRequest) {
     projectRowsCount: projectRows.length
   });
 
-  // Add Cache-Control header to enable fast client/edge caching while allowing revalidation
   response.headers.set(
     "Cache-Control",
-    isRefresh ? "no-store, no-cache, must-revalidate" : "private, max-age=30, stale-while-revalidate=60"
+    "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
   );
+  response.headers.set("Pragma", "no-cache");
 
   return response;
 }

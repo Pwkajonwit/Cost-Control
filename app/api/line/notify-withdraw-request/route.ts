@@ -30,10 +30,12 @@ export async function POST(req: NextRequest) {
     const totalAmount = bills.reduce((sum: number, b: any) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
     const amountStr = totalAmount.toLocaleString("th-TH");
 
-    if (targetRole === "approver") {
-      const { approverIds } = await getLineConfigIds();
-      if (approverIds.length === 0) {
-        return NextResponse.json({ error: "No Approver LINE User IDs configured" }, { status: 400 });
+    if (targetRole === "approver" || targetRole === "finance" || targetRole === "closer") {
+      const { ownerId, closerIds, financeIds } = await getLineConfigIds();
+      const rawFinanceList = Array.from(new Set([...(closerIds || []), ...(financeIds || [])].filter(Boolean)));
+      const targetFinanceList = rawFinanceList.length > 0 ? rawFinanceList : (ownerId ? [ownerId] : []);
+      if (targetFinanceList.length === 0) {
+        return NextResponse.json({ error: "No Finance/Closer LINE User IDs configured" }, { status: 400 });
       }
 
       const flex = createWithdrawApproverFlex(bills, peopleMap, bankInfoMap);
@@ -42,16 +44,19 @@ export async function POST(req: NextRequest) {
         : `✅ รายการอนุมัติสำเร็จ ${bills.length} รายการ (รวม ฿${amountStr})`;
 
       const results = await Promise.all(
-        approverIds.map(approverId => sendFlexMessageDetailed(approverId, altText, flex))
+        targetFinanceList.map(financeId => sendFlexMessageDetailed(financeId, altText, flex))
       );
 
-      return NextResponse.json({ success: true, count: approverIds.length, results });
+      return NextResponse.json({ success: true, count: targetFinanceList.length, results });
     }
 
-    if (targetRole === "owner") {
-      const { ownerId } = await getLineConfigIds();
-      if (!ownerId) {
-        return NextResponse.json({ error: "No Owner LINE User ID configured" }, { status: 400 });
+    if (targetRole === "owner" || targetRole === "request_approval") {
+      const { ownerId, approverIds } = await getLineConfigIds();
+      const targetApprovers = (approverIds && approverIds.length > 0)
+        ? approverIds
+        : (ownerId ? [ownerId] : []);
+      if (targetApprovers.length === 0) {
+        return NextResponse.json({ error: "No Owner/Approver LINE User ID configured" }, { status: 400 });
       }
 
       const flex = createWithdrawOwnerFlex(bills, peopleMap, bankInfoMap);
@@ -59,8 +64,10 @@ export async function POST(req: NextRequest) {
         ? `📋 คำขออนุมัติเบิกเงิน #${bills[0]._sheetRow || bills[0].id || bills[0]["ลำดับ"] || ""} (฿${amountStr})`
         : `📋 คำขออนุมัติเบิกเงิน ${bills.length} รายการ (รวม ฿${amountStr})`;
 
-      const result = await sendFlexMessageDetailed(ownerId, altText, flex);
-      return NextResponse.json({ success: result.success, error: result.error, target: ownerId });
+      const results = await Promise.all(
+        targetApprovers.map(approverId => sendFlexMessageDetailed(approverId, altText, flex))
+      );
+      return NextResponse.json({ success: true, count: targetApprovers.length, results });
     }
 
     if (targetRole === "completed" || targetRole === "closed") {

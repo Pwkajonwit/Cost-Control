@@ -3,6 +3,7 @@ import { getMultipleBillsDocumentData } from "@/lib/bill-document";
 import { BatchBillDocumentPrintClient } from "@/components/documents/BatchBillDocumentPrintClient";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type PrintPageProps = {
   searchParams: Promise<{

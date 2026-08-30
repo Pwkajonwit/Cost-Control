@@ -1,6 +1,7 @@
 import { MasterTableView } from "@/components/views/MasterTableView";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type PageProps = {
   params: Promise<{ viewId: string }>;

@@ -1,6 +1,7 @@
 import { WithdrawDashboard } from "@/components/Dashboards";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type WithdrawRequestPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

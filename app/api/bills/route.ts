@@ -11,6 +11,9 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getNextBillSequence, mapSupabaseRowToSheetRow } from "@/lib/supabase-db";
 import type { SheetRow } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const BILL_IMAGE_COLUMNS = ["รูปถ่ายบิล"];
 const SEQUENCE_COLUMNS = ["ลำดับ", "ลำดับtest"];
 const BILL_DATE_COLUMNS = ["ว/ด/ป"];

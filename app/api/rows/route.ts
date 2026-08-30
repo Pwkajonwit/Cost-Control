@@ -13,6 +13,17 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getNextBillSequence } from "@/lib/supabase-db";
 import type { SheetRow } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  "Pragma": "no-cache",
+  "Expires": "0",
+  "CDN-Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store"
+};
+
 async function verifyDeletePermission(request: NextRequest): Promise<boolean> {
   const role = request.cookies.get("auth_role")?.value;
   const empId = request.cookies.get("auth_employee_id")?.value;
@@ -89,7 +100,7 @@ export async function GET(request: NextRequest) {
     totalCount,
     totalPages,
     rows: paginatedRows
-  });
+  }, { headers: NO_CACHE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
