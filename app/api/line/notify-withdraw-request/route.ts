@@ -71,25 +71,28 @@ export async function POST(req: NextRequest) {
     }
 
     if (targetRole === "completed" || targetRole === "closed") {
-      const firstBill = bills[0];
-      const requesterKey = String(firstBill["ผู้เบิก"] || firstBill.requester || "").trim();
-      const creatorKey = String(firstBill["ผู้สร้างบิล"] || firstBill.created_by || firstBill["ผู้บันทึก"] || "").trim();
+      const requesterKeys: string[] = Array.from(new Set<string>(
+        bills.map((b: any) => String(b["ผู้เบิก"] || b.requester || "").trim()).filter(Boolean)
+      ));
+      const creatorKeys: string[] = Array.from(new Set<string>(
+        bills.map((b: any) => String(b["ผู้สร้างบิล"] || b.created_by || b["ผู้บันทึก"] || "").trim()).filter(Boolean)
+      ));
 
-      const [targetUserId, creatorUserId, fallbackGroup] = await Promise.all([
-        requesterKey ? getLineUserIdByRequester(requesterKey) : Promise.resolve(""),
-        creatorKey ? getLineUserIdByRequester(creatorKey) : Promise.resolve(""),
+      const [resolvedRequesters, resolvedCreators, fallbackGroup] = await Promise.all([
+        Promise.all(requesterKeys.map(k => getLineUserIdByRequester(k))),
+        Promise.all(creatorKeys.map(k => getLineUserIdByRequester(k))),
         getLineTargetGroup("finance")
       ]);
 
       const validGroup = fallbackGroup && fallbackGroup.startsWith("C") ? fallbackGroup : "";
       const recipients = new Set<string>();
-      if (targetUserId) recipients.add(targetUserId);
-      if (creatorUserId) recipients.add(creatorUserId);
+      resolvedRequesters.forEach(id => { if (id) recipients.add(id); });
+      resolvedCreators.forEach(id => { if (id) recipients.add(id); });
       if (recipients.size === 0 && validGroup) recipients.add(validGroup);
 
       if (recipients.size === 0) {
         return NextResponse.json({
-          error: `ไม่พบบัญชี LINE ของผู้เบิก "${requesterKey || "-"}" หรือผู้สร้างบิล "${creatorKey || "-"}" ในระบบ`
+          error: `ไม่พบบัญชี LINE ของผู้เบิก (${requesterKeys.join(", ") || "-"}) หรือผู้สร้างบิล (${creatorKeys.join(", ") || "-"}) ในระบบ`
         }, { status: 400 });
       }
 
@@ -108,13 +111,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Default: requester & creator
-    const firstBill = bills[0];
-    const requesterKey = String(firstBill["ผู้เบิก"] || firstBill.requester || "").trim();
-    const creatorKey = String(firstBill["ผู้สร้างบิล"] || firstBill.created_by || firstBill["ผู้บันทึก"] || "").trim();
+    const requesterKeys: string[] = Array.from(new Set<string>(
+      bills.map((b: any) => String(b["ผู้เบิก"] || b.requester || "").trim()).filter(Boolean)
+    ));
+    const creatorKeys: string[] = Array.from(new Set<string>(
+      bills.map((b: any) => String(b["ผู้สร้างบิล"] || b.created_by || b["ผู้บันทึก"] || "").trim()).filter(Boolean)
+    ));
 
-    const [targetUserId, creatorUserId, fallbackGroup] = await Promise.all([
-      requesterKey ? getLineUserIdByRequester(requesterKey) : Promise.resolve(""),
-      creatorKey ? getLineUserIdByRequester(creatorKey) : Promise.resolve(""),
+    const [resolvedRequesters, resolvedCreators, fallbackGroup] = await Promise.all([
+      Promise.all(requesterKeys.map(k => getLineUserIdByRequester(k))),
+      Promise.all(creatorKeys.map(k => getLineUserIdByRequester(k))),
       getLineTargetGroup("finance")
     ]);
 
@@ -122,14 +128,14 @@ export async function POST(req: NextRequest) {
     const sessionLineUserId = req.cookies.get("auth_line_user_id")?.value;
 
     const recipients = new Set<string>();
-    if (targetUserId) recipients.add(targetUserId);
-    if (creatorUserId) recipients.add(creatorUserId);
+    resolvedRequesters.forEach(id => { if (id) recipients.add(id); });
+    resolvedCreators.forEach(id => { if (id) recipients.add(id); });
     if (sessionLineUserId && sessionLineUserId.startsWith("U")) recipients.add(sessionLineUserId);
     if (recipients.size === 0 && validGroup) recipients.add(validGroup);
 
     if (recipients.size === 0) {
       return NextResponse.json({
-        error: `ไม่พบบัญชี LINE ของผู้เบิก "${requesterKey || "-"}" หรือผู้สร้างบิล "${creatorKey || "-"}" ในระบบ`
+        error: `ไม่พบบัญชี LINE ของผู้เบิก (${requesterKeys.join(", ") || "-"}) หรือผู้สร้างบิล (${creatorKeys.join(", ") || "-"}) ในระบบ`
       }, { status: 400 });
     }
 

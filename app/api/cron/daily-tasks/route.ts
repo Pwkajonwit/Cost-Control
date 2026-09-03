@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendTextMessageDetailed, sendFlexMessageDetailed, createMorningTasksCarouselFlex } from "@/lib/line";
+import { sendTextMessageDetailed, sendFlexMessageDetailed, createMorningTasksCarouselFlex, getLineTargetIds } from "@/lib/line";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -9,26 +9,33 @@ export async function GET(req: NextRequest) {
     // 1. Check custom target query parameter ?target=...
     const searchTarget = req.nextUrl.searchParams.get("target")?.trim();
 
-    // 2. Fetch dynamic LINE config from Supabase system_options
-    const { data: configRow } = await supabaseAdmin
-      .from("system_options")
-      .select("data")
-      .eq("id", "line_config")
-      .maybeSingle();
+    // 2. Fetch dynamic LINE config & Owner ID from Supabase
+    const [{ data: configRow }, { ownerId }] = await Promise.all([
+      supabaseAdmin
+        .from("system_options")
+        .select("data")
+        .eq("id", "line_config")
+        .maybeSingle(),
+      getLineTargetIds()
+    ]);
 
     const config = configRow?.data || {};
     const configuredTime = config.CRON_TIME_MORNING || "07:30";
 
-    // Dynamic resolution of target LINE group / User ID
-    const targetGroup =
-      searchTarget ||
-      config.LINE_GROUP_ID_TASK ||
-      config.LINE_GROUP_ID_PW ||
-      config.LINE_USER_ID_OWN;
+    // Dynamic resolution of target LINE group & Owner User ID (Owner always receives daily schedule)
+    const recipients = new Set<string>();
+    if (searchTarget) {
+      recipients.add(searchTarget);
+    } else {
+      if (config.LINE_GROUP_ID_TASK) recipients.add(config.LINE_GROUP_ID_TASK);
+      if (config.LINE_GROUP_ID_PW) recipients.add(config.LINE_GROUP_ID_PW);
+      if (ownerId) recipients.add(ownerId);
+      if (config.LINE_USER_ID_OWN) recipients.add(config.LINE_USER_ID_OWN);
+    }
 
-    if (!targetGroup) {
+    if (recipients.size === 0) {
       return NextResponse.json(
-        { error: "ไม่พบรหัสปลายทาง! กรุณาระบุรหัสกลุ่มไลน์หรือ User ID ในช่องทดสอบ หรือบันทึกในหน้าตั้งค่าก่อนครับ" },
+        { error: "ไม่พบรหัสปลายทาง! กรุณาระบุรหัสกลุ่มไลน์หรือผูก LINE User ID ของเจ้าของระบบ (Owner) ในเมนู 6. ชื่อพนักงาน" },
         { status: 400 }
       );
     }
@@ -78,31 +85,30 @@ export async function GET(req: NextRequest) {
       pendingBills
     });
 
-    const sendResult = await sendFlexMessageDetailed(
-      targetGroup,
-      `☀️ รายงานสรุปงานเช้า Multi-Tab Carousel (${todayStr})`,
-      flexCarousel
-    );
-
-    if (!sendResult.success) {
-      // Fallback to text message
-      let textMsg = `☀️ รายงานสรุปงานเช้า (${todayStr} - ${configuredTime} น.)\n\n📋 งานค้างทั้งหมด ${activeTasks.length} รายการ:\n\n`;
-      activeTasks.slice(0, 8).forEach((w, i) => {
-        textMsg += `${i + 1}. [CW${w.id}] ${w.details}\n`;
-      });
-      const textResult = await sendTextMessageDetailed(targetGroup, textMsg);
-      return NextResponse.json({
-        success: textResult.success,
-        targetGroup,
-        configuredTime,
-        fallbackText: true,
-        activeCount: activeTasks.length,
-      });
+    const results = [];
+    for (const sendTo of recipients) {
+      const res = await sendFlexMessageDetailed(
+        sendTo,
+        `☀️ รายงานสรุปงานเช้า Multi-Tab Carousel (${todayStr})`,
+        flexCarousel
+      );
+      if (!res.success) {
+        let textMsg = `☀️ รายงานสรุปงานเช้า (${todayStr} - ${configuredTime} น.)\n\n📋 งานค้างทั้งหมด ${activeTasks.length} รายการ:\n\n`;
+        activeTasks.slice(0, 8).forEach((w, i) => {
+          textMsg += `${i + 1}. [CW${w.id}] ${w.details}\n`;
+        });
+        const textRes = await sendTextMessageDetailed(sendTo, textMsg);
+        results.push({ target: sendTo, success: textRes.success, fallbackText: true });
+      } else {
+        results.push({ target: sendTo, success: true });
+      }
     }
 
     return NextResponse.json({
       success: true,
-      targetGroup,
+      count: recipients.size,
+      recipients: Array.from(recipients),
+      results,
       configuredTime,
       todayStr,
       activeCount: activeTasks.length,

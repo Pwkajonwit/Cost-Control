@@ -24,82 +24,85 @@ export async function POST(request: Request) {
       }
 
       // 1. Search in master_members (Primary Table)
-      const { data: member, error: memberErr } = await supabaseAdmin
+      const { data: members, error: memberErr } = await supabaseAdmin
         .from("master_members")
-        .select("*")
-        .eq("line_user_id", lineUserId)
-        .maybeSingle();
+        .select("*");
 
       if (memberErr) {
-        console.warn("⚠️ Query master_members by line_user_id error:", memberErr.message);
+        console.warn("⚠️ Query master_members error:", memberErr.message);
       }
 
       let matchedUser: any = null;
 
-      if (member) {
-        matchedUser = {
-          id: member.id,
-          username: member.id,
-          displayName: member.nickname || member.full_name || member.id,
-          fullName: member.full_name || "",
-          phone: member.phone || "",
-          role: member.system_role || member.role || "User",
-          status: member.status || "Active",
-          isOwner: Boolean(member.is_owner),
-          canApprove: Boolean(member.can_approve),
-          canCloseBill: Boolean(member.can_close_bill),
-          canDelete: Boolean(member.can_delete),
-          lineUserId: lineUserId,
-          pictureUrl: pictureUrl || member.pictureurl || "",
-        };
+      if (members && Array.isArray(members)) {
+        const foundMember = members.find((m: any) => {
+          const d = (m.data && typeof m.data === "object") ? m.data : {};
+          const mLineId = String(
+            m.line_user_id ||
+            m["LINE User ID"] ||
+            m["LINE"] ||
+            d.line_user_id ||
+            d.lineUserId ||
+            d["LINE User ID"] ||
+            d["LINE"] ||
+            ""
+          ).trim();
+          return mLineId && mLineId === lineUserId;
+        });
 
-        // Update profile picture if newer from LINE
-        if (pictureUrl && member.pictureurl !== pictureUrl) {
-          await supabaseAdmin
-            .from("master_members")
-            .update({ pictureurl: pictureUrl })
-            .eq("id", member.id);
+        if (foundMember) {
+          const d = (foundMember.data && typeof foundMember.data === "object") ? foundMember.data : {};
+          const isOwner = (foundMember.is_owner !== undefined && foundMember.is_owner !== null)
+            ? Boolean(foundMember.is_owner)
+            : Boolean(d.is_owner || d["เจ้าของระบบ"] || foundMember["เจ้าของระบบ"] || foundMember.role === "Owner" || foundMember.system_role === "Owner");
+
+          const canCloseBill = (foundMember.can_close_bill !== undefined && foundMember.can_close_bill !== null)
+            ? Boolean(foundMember.can_close_bill)
+            : Boolean(d.can_close_bill || d["อนุมัติบิล"] || foundMember["อนุมัติบิล"]);
+
+          const canApprove = (foundMember.can_approve !== undefined && foundMember.can_approve !== null)
+            ? Boolean(foundMember.can_approve)
+            : Boolean(d.can_approve || d["ฝ่ายการเงิน"] || foundMember["ฝ่ายการเงิน"]);
+
+          const canDelete = (foundMember.can_delete !== undefined && foundMember.can_delete !== null)
+            ? Boolean(foundMember.can_delete)
+            : Boolean(d.can_delete || d["สิทธิ์ลบข้อมูล"] || foundMember["สิทธิ์ลบข้อมูล"]);
+
+          const userRole = isOwner
+            ? "Owner"
+            : (canCloseBill ? "Approver" : (canApprove ? "Finance" : (foundMember.system_role || foundMember.role || d.role || "User")));
+
+          matchedUser = {
+            id: foundMember.id || d.id || "",
+            username: foundMember.id || d.id || "",
+            displayName: foundMember.nickname || d.nickname || foundMember.full_name || d.full_name || foundMember.id,
+            fullName: foundMember.full_name || d.full_name || "",
+            phone: foundMember.phone || d.phone || foundMember["เบอร์โทร"] || d["เบอร์โทร"] || "",
+            role: userRole,
+            status: foundMember.status || d.status || "Active",
+            isOwner,
+            canApprove,
+            canCloseBill,
+            canDelete,
+            lineUserId: lineUserId,
+            pictureUrl: pictureUrl || foundMember.pictureurl || d.pictureurl || "",
+          };
+
+          // Update profile picture if newer from LINE
+          if (pictureUrl && foundMember.pictureurl !== pictureUrl) {
+            await supabaseAdmin
+              .from("master_members")
+              .update({ pictureurl: pictureUrl })
+              .eq("id", foundMember.id);
+          }
         }
       }
 
-      // Fallback: Check system_options.users_list cache
       if (!matchedUser) {
-        try {
-          const { data: usersOpt } = await supabaseAdmin
-            .from("system_options")
-            .select("data")
-            .eq("id", "users_list")
-            .maybeSingle();
-
-          const list = usersOpt?.data || [];
-          const found = list.find((u: any) =>
-            u.status !== "Inactive" && (
-              u.lineUserId === lineUserId ||
-              u.line_user_id === lineUserId
-            )
-          );
-
-          if (found) {
-            matchedUser = {
-              id: found.id || found.username,
-              username: found.username || found.id,
-              displayName: found.displayName || found.name || found.id,
-              role: found.role || "User",
-              status: found.status || "Active",
-              phone: found.phone || "",
-              isOwner: Boolean(found.isOwner),
-              canApprove: Boolean(found.canApprove),
-              canCloseBill: Boolean(found.canCloseBill),
-              canDelete: Boolean(found.canDelete),
-              lineUserId: lineUserId,
-              pictureUrl: pictureUrl || found.pictureUrl || "",
-            };
-          }
-        } catch (e) {}
-      }
-
-      if (!matchedUser) {
-        return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+        return NextResponse.json({
+          success: false,
+          error: "ไม่พบบัญชีพนักงานที่ผูกกับ LINE ID นี้ในตาราง 6. ชื่อพนักงาน กรุณายืนยันตัวตนด้วยเบอร์โทรศัพท์ หรือติดต่อผู้ดูแลระบบ"
+        }, { status: 404 });
       }
 
       if (matchedUser.status === "Inactive") {

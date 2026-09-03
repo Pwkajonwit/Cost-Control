@@ -15,26 +15,72 @@ export async function GET() {
       return NextResponse.json({ success: true, users: [] });
     }
 
-    const users = (data || []).map((m: any) => ({
-      id: m.id,
-      username: m.id,
-      displayName: m.nickname || m.full_name || m.id,
-      fullName: m.full_name || "",
-      phone: m.phone || "",
-      lineUserId: m.line_user_id || "",
-      pictureUrl: m.pictureurl || "",
-      role: m.system_role || m.role || "User",
-      status: m.status || "Active",
-      isOwner: Boolean(m.is_owner),
-      canApprove: Boolean(m.can_approve),
-      canCloseBill: Boolean(m.can_close_bill),
-      canDelete: Boolean(m.can_delete),
-      bankName: m.bank_name || "",
-      bankAccount: m.bank_account || "",
-      idCard: m.id_card || "",
-      address: m.address || "",
-      createdAt: m.created_at || ""
-    }));
+    const users = (data || []).map((m: any) => {
+      const d = (m.data && typeof m.data === "object") ? m.data : {};
+      const isOwner = (m.is_owner !== undefined && m.is_owner !== null)
+        ? Boolean(m.is_owner)
+        : Boolean(d.is_owner || d["เจ้าของระบบ"] || m["เจ้าของระบบ"] || m.role === "Owner" || m.system_role === "Owner");
+
+      const canCloseBill = (m.can_close_bill !== undefined && m.can_close_bill !== null)
+        ? Boolean(m.can_close_bill)
+        : Boolean(d.can_close_bill || d["อนุมัติบิล"] || m["อนุมัติบิล"]);
+
+      const canApprove = (m.can_approve !== undefined && m.can_approve !== null)
+        ? Boolean(m.can_approve)
+        : Boolean(d.can_approve || d["ฝ่ายการเงิน"] || m["ฝ่ายการเงิน"]);
+
+      const canDelete = (m.can_delete !== undefined && m.can_delete !== null)
+        ? Boolean(m.can_delete)
+        : Boolean(d.can_delete || d["สิทธิ์ลบข้อมูล"] || m["สิทธิ์ลบข้อมูล"]);
+
+      const lineUserId = String(
+        m.line_user_id ||
+        m["LINE User ID"] ||
+        m["LINE"] ||
+        d.line_user_id ||
+        d.lineUserId ||
+        d["LINE User ID"] ||
+        d["LINE"] ||
+        ""
+      ).trim();
+
+      const role = isOwner
+        ? "Owner"
+        : (canCloseBill ? "Approver" : (canApprove ? "Finance" : (m.system_role || m.role || d.role || "User")));
+
+      return {
+        id: m.id || d.id || "",
+        username: m.id || d.id || "",
+        displayName: m.nickname || d.nickname || m.full_name || d.full_name || m.id,
+        nickname: m.nickname || d.nickname || "",
+        fullName: m.full_name || d.full_name || "",
+        phone: m.phone || d.phone || m["เบอร์โทร"] || d["เบอร์โทร"] || m["เบอร์โทรศัพท์"] || d["เบอร์โทรศัพท์"] || "",
+        lineUserId,
+        pictureUrl: m.pictureurl || d.pictureurl || "",
+        role,
+        status: m.status || d.status || "Active",
+        isOwner,
+        canApprove,
+        canCloseBill,
+        canDelete,
+        bankName: m.bank_name || m.bank || d.bank_name || d.bank || m["ธนาคาร"] || d["ธนาคาร"] || "",
+        bankAccount: m.bank_account || d.bank_account || m["เลขบัญชี"] || d["เลขบัญชี"] || "",
+        idCard: m.id_card || d.id_card || m["เลขที่บัตรประชาชน"] || d["เลขที่บัตรประชาชน"] || "",
+        address: m.address || d.address || m["ที่อยู่"] || d["ที่อยู่"] || "",
+        createdAt: m.created_at || ""
+      };
+    });
+
+    // Auto-synchronize and purge stale users in system_options.users_list cache
+    try {
+      await supabaseAdmin.from("system_options").upsert({
+        id: "users_list",
+        data: users,
+        updated_at: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn("⚠️ Warning syncing users_list from master_members:", e);
+    }
 
     return NextResponse.json({ success: true, users });
   } catch (error: any) {
@@ -113,15 +159,15 @@ export async function POST(req: NextRequest) {
           ownerLineId = lineId;
         }
 
-        // 🟢 Finance (canApprove)
-        if (Boolean(u.canApprove) || u.role === "Admin_Approver" || u.role === "Approver") {
+        // 🟢 Approver (canCloseBill / isOwner)
+        if (Boolean(u.canCloseBill) || u.isOwner || u.role === "Admin_Approver" || u.role === "Approver") {
           if (!approverLineIds.includes(lineId)) {
             approverLineIds.push(lineId);
           }
         }
 
-        // 🔵 Approver (canCloseBill)
-        if (Boolean(u.canCloseBill) || u.role === "Admin_Closer") {
+        // 🔵 Closer / Finance (canApprove)
+        if (Boolean(u.canApprove) || u.role === "Admin_Closer" || u.role === "Finance") {
           if (!closerLineIds.includes(lineId)) {
             closerLineIds.push(lineId);
           }

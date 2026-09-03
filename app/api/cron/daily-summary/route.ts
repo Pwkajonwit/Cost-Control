@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendFlexMessageDetailed, sendTextMessageDetailed, createEveningSummaryCarouselFlex } from "@/lib/line";
+import { sendFlexMessageDetailed, sendTextMessageDetailed, createEveningSummaryCarouselFlex, getLineTargetIds } from "@/lib/line";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -9,26 +9,33 @@ export async function GET(req: NextRequest) {
     // 1. Check custom target query parameter ?target=...
     const searchTarget = req.nextUrl.searchParams.get("target")?.trim();
 
-    // 2. Fetch dynamic LINE config from Supabase system_options
-    const { data: configRow } = await supabaseAdmin
-      .from("system_options")
-      .select("data")
-      .eq("id", "line_config")
-      .maybeSingle();
+    // 2. Fetch dynamic LINE config & Owner ID from Supabase
+    const [{ data: configRow }, { ownerId }] = await Promise.all([
+      supabaseAdmin
+        .from("system_options")
+        .select("data")
+        .eq("id", "line_config")
+        .maybeSingle(),
+      getLineTargetIds()
+    ]);
 
     const config = configRow?.data || {};
     const configuredTime = config.CRON_TIME_EVENING || "17:00";
 
-    // Dynamic resolution of target LINE group / User ID
-    const targetGroup =
-      searchTarget ||
-      config.LINE_GROUP_ID_SUMMARY ||
-      config.LINE_GROUP_ID_FINANCE ||
-      config.LINE_USER_ID_OWN;
+    // Dynamic resolution of target LINE group & Owner User ID (Owner always receives daily summary)
+    const recipients = new Set<string>();
+    if (searchTarget) {
+      recipients.add(searchTarget);
+    } else {
+      if (config.LINE_GROUP_ID_SUMMARY) recipients.add(config.LINE_GROUP_ID_SUMMARY);
+      if (config.LINE_GROUP_ID_FINANCE) recipients.add(config.LINE_GROUP_ID_FINANCE);
+      if (ownerId) recipients.add(ownerId);
+      if (config.LINE_USER_ID_OWN) recipients.add(config.LINE_USER_ID_OWN);
+    }
 
-    if (!targetGroup) {
+    if (recipients.size === 0) {
       return NextResponse.json(
-        { error: "ไม่พบรหัสปลายทาง! กรุณาระบุรหัสกลุ่มไลน์หรือ User ID ในช่องทดสอบ หรือบันทึกในหน้าตั้งค่าก่อนครับ" },
+        { error: "ไม่พบรหัสปลายทาง! กรุณาระบุรหัสกลุ่มไลน์หรือผูก LINE User ID ของเจ้าของระบบ (Owner) ในเมนู 6. ชื่อพนักงาน" },
         { status: 400 }
       );
     }
@@ -77,31 +84,31 @@ export async function GET(req: NextRequest) {
       lateTasks
     });
 
-    const sendResult = await sendFlexMessageDetailed(
-      targetGroup,
-      `📊 สรุปรายงานเย็น Multi-Tab Carousel (${todayStr})`,
-      flexCarousel
-    );
+    const results = [];
+    for (const sendTo of recipients) {
+      const res = await sendFlexMessageDetailed(
+        sendTo,
+        `📊 สรุปรายงานเย็น Multi-Tab Carousel (${todayStr})`,
+        flexCarousel
+      );
+      if (!res.success) {
+        let teamSummaryText = `📊 สรุปภาพรวมการเงิน & ผลงานทีม (${todayStr} - ${configuredTime} น.)\n\n`;
+        teamSummaryText += `🧾 รายการบิล: ${totalBills} รายการ (รออนุมัติ: ${pendingCount}, อนุมัติแล้ว: ${approvedCount})\n`;
+        teamSummaryText += `💰 ยอดเงินรวม: ฿${totalAmount.toLocaleString("th-TH")}\n`;
+        teamSummaryText += `👷‍♂️ งานรับเหมา/PW: กำลังทำ ${activeWorksCount} รายการ, เสร็จแล้ว ${completedWorksCount} รายการ`;
 
-    if (!sendResult.success) {
-      let teamSummaryText = `📊 สรุปภาพรวมการเงิน & ผลงานทีม (${todayStr} - ${configuredTime} น.)\n\n`;
-      teamSummaryText += `🧾 รายการบิล: ${totalBills} รายการ (รออนุมัติ: ${pendingCount}, อนุมัติแล้ว: ${approvedCount})\n`;
-      teamSummaryText += `💰 ยอดเงินรวม: ฿${totalAmount.toLocaleString("th-TH")}\n`;
-      teamSummaryText += `👷‍♂️ งานรับเหมา/PW: กำลังทำ ${activeWorksCount} รายการ, เสร็จแล้ว ${completedWorksCount} รายการ`;
-
-      const textResult = await sendTextMessageDetailed(targetGroup, teamSummaryText);
-      return NextResponse.json({
-        success: textResult.success,
-        targetGroup,
-        configuredTime,
-        fallbackText: true,
-        summary: { dateStr: todayStr, totalBills, totalAmount, pendingCount, approvedCount, activeWorksCount, completedWorksCount },
-      });
+        const textRes = await sendTextMessageDetailed(sendTo, teamSummaryText);
+        results.push({ target: sendTo, success: textRes.success, fallbackText: true });
+      } else {
+        results.push({ target: sendTo, success: true });
+      }
     }
 
     return NextResponse.json({
       success: true,
-      targetGroup,
+      count: recipients.size,
+      recipients: Array.from(recipients),
+      results,
       configuredTime,
       todayStr,
       summary: { dateStr: todayStr, totalBills, totalAmount, pendingCount, approvedCount, activeWorksCount, completedWorksCount },
