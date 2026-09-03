@@ -397,11 +397,15 @@ export function LineSystemDashboardClient() {
   });
 
   const detectedApprovers = systemUsers.filter(
-    (u) => Boolean(u.canApprove) || u.role === "Admin_Approver" || u.role === "Approver"
+    (u) => Boolean(u.isOwner) || Boolean(u.canCloseBill) || u.role === "Owner" || u.role === "Approver" || u.role === "Admin_Approver" || u.role === "Admin"
   );
 
   const detectedClosers = systemUsers.filter(
-    (u) => Boolean(u.canCloseBill) || u.role === "Admin_Closer"
+    (u) => Boolean(u.canApprove) || u.role === "Admin_Closer" || u.role === "Finance"
+  );
+
+  const detectedOwners = systemUsers.filter(
+    (u) => Boolean(u.isOwner) || u.role === "Owner"
   );
 
   return (
@@ -792,40 +796,92 @@ export function LineSystemDashboardClient() {
                       <Users size={13} />
                     </div>
                     <span className="text-xs font-semibold text-slate-900">
-                      ผู้มีสิทธิ์อนุมัติตั้งเบิก & ปิดงานบิล (ซิงค์อัตโนมัติจากหน้า จัดการผู้ใช้)
+                      สิทธิ์ผู้รับการแจ้งเตือน LINE Bot (ซิงค์อัตโนมัติจาก 6. ชื่อพนักงาน)
                     </span>
                   </div>
                   <a
-                    href="/settings/users"
+                    href="/views/people"
                     className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline shrink-0"
                   >
-                    <span>⚙️ จัดการสิทธิ์ที่หน้า จัดการผู้ใช้</span>
+                    <span>⚙️ จัดการสิทธิ์ที่หน้า 6. ชื่อพนักงาน (People)</span>
                     <ExternalLink size={11} />
                   </a>
                 </div>
 
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  ระบบจะดึง LINE User ID ของ <strong>ผู้ที่อนุมัติตั้งเบิกได้</strong> และ <strong>ผู้ที่ปิดงานได้</strong> จากหน้าจัดการผู้ใช้ระบบโดยอัตโนมัติ
+                  ระบบจะดึง LINE User ID ของ <strong>เจ้าของระบบ (Owner)</strong>, <strong>ผู้อนุมัติ (Approvers)</strong>, และ <strong>ผู้ปิดงาน/การเงิน (Closers)</strong> จากตาราง <strong>6. ชื่อพนักงาน (master_members)</strong> โดยอัตโนมัติ
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                  {/* 🟢 Box 1: Approvers (อนุมัติตั้งเบิก) */}
-                  <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60 space-y-1.5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+                  {/* 👑 Box 1: Owner (เจ้าของระบบ) */}
+                  <div className="p-2.5 rounded-lg border border-amber-300 bg-amber-50/60 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-emerald-900 flex items-center gap-1">
-                        <Check size={12} className="text-emerald-600" />
-                        <span>1. ผู้ที่อนุมัติตั้งเบิกได้ (Approvers)</span>
+                      <span className="text-[11px] font-bold text-amber-950 flex items-center gap-1">
+                        <span>👑</span>
+                        <span>1. เจ้าของระบบ (Owner)</span>
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-mono font-semibold">
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono font-semibold">
+                        {detectedOwners.length} ท่าน
+                      </span>
+                    </div>
+                    {detectedOwners.length > 0 ? (
+                      <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                        {detectedOwners.map((u, i) => (
+                          <div key={i} className="text-xs text-slate-800 flex items-center justify-between gap-1.5 p-1.5 bg-white/90 rounded-md border border-amber-200">
+                            <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                              <span className="truncate font-medium text-slate-900">{u.displayName || u.username}</span>
+                              <span className="px-1 py-0.2 rounded text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-semibold shrink-0">
+                                👑 เจ้าของ
+                              </span>
+                              {u.canCloseBill && (
+                                <span className="px-1 py-0.2 rounded text-[9px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-semibold shrink-0">
+                                  ✓ อนุมัติ
+                                </span>
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-mono shrink-0 px-1.5 py-0.5 rounded ${u.lineUserId ? "text-emerald-700 bg-emerald-50 border border-emerald-200 font-semibold" : "text-slate-400 bg-slate-50 border border-slate-200"}`}>
+                              {u.lineUserId ? "✓ ผูก LINE แล้ว" : "✕ ยังไม่ผูก LINE"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 py-1">
+                        ยังไม่มีผู้ใช้ที่ได้รับสิทธิ์เจ้าของระบบ (Owner)
+                      </div>
+                    )}
+                    <p className="text-[10px] text-amber-800/90 leading-tight">
+                      รับสรุปผลงานประจำวัน (เช้า-เย็น) & สิทธิ์สูงสุด
+                    </p>
+                  </div>
+
+                  {/* 🟢 Box 2: Approvers (อนุมัติตั้งเบิก) */}
+                  <div className="p-2.5 rounded-lg border border-emerald-300 bg-emerald-50/60 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-emerald-950 flex items-center gap-1">
+                        <Check size={12} className="text-emerald-600" />
+                        <span>2. ผู้อนุมัติตั้งเบิก (Approvers)</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono font-semibold">
                         {detectedApprovers.length} ท่าน
                       </span>
                     </div>
                     {detectedApprovers.length > 0 ? (
-                      <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                      <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
                         {detectedApprovers.map((u, i) => (
-                          <div key={i} className="text-xs text-slate-800 flex items-center justify-between gap-1 p-1 bg-white/80 rounded border border-emerald-100">
-                            <span className="truncate font-medium">{u.displayName || u.username}</span>
-                            <span className={`text-[10px] font-mono shrink-0 ${u.lineUserId ? "text-emerald-700 font-semibold" : "text-slate-400"}`}>
+                          <div key={i} className="text-xs text-slate-800 flex items-center justify-between gap-1.5 p-1.5 bg-white/90 rounded-md border border-emerald-200">
+                            <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                              <span className="truncate font-medium text-slate-900">{u.displayName || u.username}</span>
+                              <span className="px-1 py-0.2 rounded text-[9px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-semibold shrink-0">
+                                ✓ อนุมัติ
+                              </span>
+                              {u.isOwner && (
+                                <span className="px-1 py-0.2 rounded text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-semibold shrink-0">
+                                  👑 เจ้าของ
+                                </span>
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-mono shrink-0 px-1.5 py-0.5 rounded ${u.lineUserId ? "text-emerald-700 bg-emerald-50 border border-emerald-200 font-semibold" : "text-slate-400 bg-slate-50 border border-slate-200"}`}>
                               {u.lineUserId ? "✓ ผูก LINE แล้ว" : "✕ ยังไม่ผูก LINE"}
                             </span>
                           </div>
@@ -833,31 +889,41 @@ export function LineSystemDashboardClient() {
                       </div>
                     ) : (
                       <div className="text-[11px] text-slate-500 py-1">
-                        ยังไม่มีผู้ใช้ที่มีสิทธิ์อนุมัติตั้งเบิก (ไปที่หน้าจัดการผู้ใช้เพื่อเปิดสิทธิ์)
+                        ยังไม่มีผู้ใช้ที่มีสิทธิ์อนุมัติตั้งเบิก (ไปที่ 6. ชื่อพนักงาน เพื่อเปิดสิทธิ์)
                       </div>
                     )}
-                    <p className="text-[10px] text-emerald-700/80 leading-tight">
+                    <p className="text-[10px] text-emerald-800/90 leading-tight">
                       รับการ์ด Flex ขออนุมัติและกดอนุมัติตั้งเบิกผ่าน LINE
                     </p>
                   </div>
 
-                  {/* 🔵 Box 2: Closers (ปิดงาน / ปิดบิล) */}
-                  <div className="p-2.5 rounded-lg border border-blue-200 bg-blue-50/60 space-y-1.5">
+                  {/* 🔵 Box 3: Closers (ปิดงาน / ปิดบิล) */}
+                  <div className="p-2.5 rounded-lg border border-blue-300 bg-blue-50/60 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-blue-900 flex items-center gap-1">
+                      <span className="text-[11px] font-bold text-blue-950 flex items-center gap-1">
                         <CheckCheck size={12} className="text-blue-600" />
-                        <span>2. ผู้ที่ปิดงาน / ปิดบิลได้ (Closers)</span>
+                        <span>3. ผู้ปิดงาน / การเงิน (Closers)</span>
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-mono font-semibold">
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-300 font-mono font-semibold">
                         {detectedClosers.length} ท่าน
                       </span>
                     </div>
                     {detectedClosers.length > 0 ? (
-                      <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                      <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
                         {detectedClosers.map((u, i) => (
-                          <div key={i} className="text-xs text-slate-800 flex items-center justify-between gap-1 p-1 bg-white/80 rounded border border-blue-100">
-                            <span className="truncate font-medium">{u.displayName || u.username}</span>
-                            <span className={`text-[10px] font-mono shrink-0 ${u.lineUserId ? "text-blue-700 font-semibold" : "text-slate-400"}`}>
+                          <div key={i} className="text-xs text-slate-800 flex items-center justify-between gap-1.5 p-1.5 bg-white/90 rounded-md border border-blue-200">
+                            <div className="flex items-center gap-1 min-w-0 flex-wrap">
+                              <span className="truncate font-medium text-slate-900">{u.displayName || u.username}</span>
+                              <span className="px-1 py-0.2 rounded text-[9px] bg-blue-100 text-blue-900 border border-blue-300 font-semibold shrink-0">
+                                ✓ การเงิน
+                              </span>
+                              {u.isOwner && (
+                                <span className="px-1 py-0.2 rounded text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-semibold shrink-0">
+                                  👑 เจ้าของ
+                                </span>
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-mono shrink-0 px-1.5 py-0.5 rounded ${u.lineUserId ? "text-blue-700 bg-blue-50 border border-blue-200 font-semibold" : "text-slate-400 bg-slate-50 border border-slate-200"}`}>
                               {u.lineUserId ? "✓ ผูก LINE แล้ว" : "✕ ยังไม่ผูก LINE"}
                             </span>
                           </div>
@@ -865,11 +931,11 @@ export function LineSystemDashboardClient() {
                       </div>
                     ) : (
                       <div className="text-[11px] text-slate-500 py-1">
-                        ยังไม่มีผู้ใช้ที่มีสิทธิ์ปิดงานบิล (ไปที่หน้าจัดการผู้ใช้เพื่อเปิดสิทธิ์)
+                        ยังไม่มีผู้ใช้ที่มีสิทธิ์ปิดงานบิล (ไปที่ 6. ชื่อพนักงาน เพื่อเปิดสิทธิ์)
                       </div>
                     )}
-                    <p className="text-[10px] text-blue-700/80 leading-tight">
-                      รับการ์ด Flex แจ้งเตือนปิดงานและกดยืนยันจ่ายเงินสำเร็จผ่าน LINE
+                    <p className="text-[10px] text-blue-800/90 leading-tight">
+                      รับการ์ด Flex แจ้งเตือนปิดงานและกดยืนยันจ่ายเงินสำเร็จ
                     </p>
                   </div>
                 </div>
@@ -995,6 +1061,28 @@ export function LineSystemDashboardClient() {
               <h2 className="text-xs font-medium text-slate-900 m-0">⏰ กำหนดเวลาแจ้งเตือนสรุปผลงานประจำวัน (Daily Schedules)</h2>
               <p className="text-xs text-slate-500 m-0">ระบบ Serverless Cron จะยิงการ์ด Flex สรุปงานเช้าและเย็นตามเวลาที่กำหนด</p>
             </div>
+
+            {/* Owner Recipient Info Badge */}
+            {detectedOwners.length > 0 && (
+              <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">👑</span>
+                  <div>
+                    <span className="font-semibold text-amber-950">
+                      ผู้รับการแจ้งเตือนสรุปผลงานประจำวัน (Daily Schedules):
+                    </span>{" "}
+                    <span className="text-amber-900 font-medium">
+                      {detectedOwners.map(o => o.displayName || o.username).join(", ")}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${detectedOwners.some(o => o.lineUserId) ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+                    {detectedOwners.some(o => o.lineUserId) ? "✓ ผูก LINE รับสรุปเช้า/เย็นแล้ว" : "✕ ยังไม่ผูก LINE User ID"}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Morning Schedule */}

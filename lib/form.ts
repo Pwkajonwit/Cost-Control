@@ -298,7 +298,7 @@ export async function getInitialValues(tableName: string): Promise<SheetRow> {
     if (column.initialValue === "nextBankId") values[column.name] = await nextBankId();
     if (column.initialValue === "nextStoreId") values[column.name] = await nextPrefixedId(TABLES.STORE, "id_store", "ST", 100);
     if (column.initialValue === "nextContractorId") values[column.name] = await nextPrefixedId(TABLES.CONTRACTOR, "id_Contractor", "CT", 100);
-    if (column.initialValue === "nextPeopleId") values[column.name] = await nextPrefixedId(TABLES.PEOPLE, "รหัสพนักงาน", "PE", 100);
+    if (column.initialValue === "nextPeopleId") values[column.name] = await nextPeopleId();
     if (column.initialValue === "nextCarId") values[column.name] = await nextPrefixedId(TABLES.CAR, "id_car", "CAR", 100);
     if (column.initialValue === "nextCustomerId") values[column.name] = await nextPrefixedId(TABLES.CUSTOMER, "id_cus", "C", 100);
     if (column.initialValue === "nextCompanyId") values[column.name] = await nextPrefixedId(TABLES.COMPANY, "id_Company", "CO", 100);
@@ -308,6 +308,22 @@ export async function getInitialValues(tableName: string): Promise<SheetRow> {
     if (!values[column.name]) values[column.name] = column.initialValue;
   }
   return values;
+}
+
+async function nextPeopleId() {
+  const rows = await getRows(TABLES.PEOPLE, 15_000).catch(() => []);
+  const maxNum = rows.reduce((max, row) => {
+    const idStr = String(row["รหัสพนักงาน"] || row["id"] || "");
+    const match = idStr.match(/^P(\d+)$/i);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      return Number.isFinite(num) ? Math.max(max, num) : max;
+    }
+    return max;
+  }, 0);
+
+  const nextNum = maxNum + 1;
+  return `P${String(nextNum).padStart(3, "0")}`;
 }
 
 async function nextDataSequence() {

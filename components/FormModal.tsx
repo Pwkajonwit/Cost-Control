@@ -1464,7 +1464,7 @@ function renderField(
                   key={`${optionValue}-${index}`}
                   disabled={readOnly}
                   onClick={() => toggleOption(optionValue)}
-                  className={`px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-all flex items-center gap-1.5 select-none ${buttonStyle}`}
+                  className={`h-10 sm:h-9 px-3 sm:px-3.5 rounded-lg border text-xs sm:text-sm font-medium cursor-pointer transition-all inline-flex items-center justify-center gap-1.5 select-none ${buttonStyle}`}
                 >
                   <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] shrink-0 border transition-all ${
                     checked
@@ -1589,7 +1589,7 @@ function renderField(
               const buttonStyle = getOptionButtonStyle(field.name, optionValue, checked);
               return (
                 <label
-                  className={`px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-all flex items-center gap-1.5 ${buttonStyle}`}
+                  className={`h-10 sm:h-9 px-3 sm:px-3.5 rounded-lg border text-xs sm:text-sm font-medium cursor-pointer transition-all inline-flex items-center justify-center gap-1.5 select-none ${buttonStyle}`}
                   key={`${optionValue}-${index}`}
                   onClick={(e) => {
                     if (readOnly) return;
@@ -1627,7 +1627,7 @@ function renderField(
           {customChoice && choiceValue === customChoice.optionValue ? (
             <input
               type="number"
-              className="w-full h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs font-normal text-slate-800 placeholder:text-slate-400"
+              className="w-full h-10 sm:h-9 px-3 bg-white border border-slate-300 focus:border-slate-800 focus:outline-none rounded-lg text-xs sm:text-sm font-normal text-slate-800 placeholder:text-slate-400"
               value={customValue}
               readOnly={readOnly}
               placeholder={customChoice.placeholder}

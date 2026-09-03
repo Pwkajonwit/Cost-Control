@@ -250,7 +250,7 @@ export function LoginScreen({ peopleRows = [] }: { peopleRows?: SheetRow[] }) {
         {/* Footer Security Note */}
         <div className="pt-1 text-center text-xs text-slate-400 flex items-center justify-center gap-1">
           <ShieldCheck size={12} className="text-emerald-600" />
-          <span>ระบบยืนยันตัวตนผู้ใช้จาก /settings/users</span>
+          <span>ระบบยืนยันตัวตนพนักงาน (6. ชื่อพนักงาน)</span>
         </div>
       </div>
     </div>

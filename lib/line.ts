@@ -1739,8 +1739,18 @@ export async function getLineUserIdByRequester(requesterKey: string): Promise<st
   if (!requesterKey) return "";
   try {
     const rawStr = String(requesterKey).trim();
+    if (rawStr.startsWith("U") && rawStr.length === 33) {
+      return rawStr;
+    }
+
     const trimmed = rawStr.toLowerCase();
-    const normalized = trimmed.replace(/['"`\s\-_]/g, "");
+    const normalized = trimmed.replace(/['"`\s\-_()]/g, "");
+
+    // Extract sub-tokens from strings like "PE101 - สมชาย" or "สมชาย (PE101)"
+    const tokens = rawStr
+      .split(/[-–—()\s]+/)
+      .map(t => t.trim().toLowerCase())
+      .filter(t => t.length > 0);
 
     // 1. Query users_list in system_options (Primary source from User Management)
     const { data: usersRow } = await supabaseAdmin
@@ -1753,26 +1763,50 @@ export async function getLineUserIdByRequester(requesterKey: string): Promise<st
 
     if (usersList.length > 0) {
       const match = usersList.find((u: any) => {
-        const dName = String(u.displayName || "").trim().toLowerCase();
-        const normDName = dName.replace(/['"`\s\-_]/g, "");
+        const dName = String(u.displayName || u.name || "").trim().toLowerCase();
+        const normDName = dName.replace(/['"`\s\-_()]/g, "");
         const uName = String(u.username || "").trim().toLowerCase();
-        const normUName = uName.replace(/['"`\s\-_]/g, "");
+        const normUName = uName.replace(/['"`\s\-_()]/g, "");
         const uId = String(u.id || "").trim().toLowerCase();
-        const normUId = uId.replace(/['"`\s\-_]/g, "");
+        const normUId = uId.replace(/['"`\s\-_()]/g, "");
+        const empId = String(u.employeeId || u["รหัสพนักงาน"] || "").trim().toLowerCase();
+        const normEmpId = empId.replace(/['"`\s\-_()]/g, "");
+        const nickname = String(u.nickname || u["ชื่อเล่น"] || "").trim().toLowerCase();
+        const normNick = nickname.replace(/['"`\s\-_()]/g, "");
         const phone = String(u.phone || "").replace(/[^0-9]/g, "");
         const cleanReq = trimmed.replace(/[^0-9]/g, "");
 
+        const tokenMatch = tokens.some(tok => {
+          const normTok = tok.replace(/['"`\s\-_()]/g, "");
+          return (
+            tok === dName ||
+            tok === uName ||
+            tok === uId ||
+            tok === empId ||
+            tok === nickname ||
+            (normTok && normTok === normNick) ||
+            (normTok && normTok === normDName) ||
+            (normTok && normTok === normEmpId)
+          );
+        });
+
         return (
+          tokenMatch ||
           dName === trimmed ||
           normDName === normalized ||
           uName === trimmed ||
           normUName === normalized ||
           uId === trimmed ||
           normUId === normalized ||
+          empId === trimmed ||
+          normEmpId === normalized ||
+          nickname === trimmed ||
+          normNick === normalized ||
           (cleanReq && phone && phone === cleanReq) ||
           dName.includes(trimmed) ||
           trimmed.includes(dName) ||
-          (normDName && normalized && (normDName.includes(normalized) || normalized.includes(normDName)))
+          (normDName && normalized && (normDName.includes(normalized) || normalized.includes(normDName))) ||
+          (normNick && normalized && (normNick.includes(normalized) || normalized.includes(normNick)))
         );
       });
 
@@ -1787,17 +1821,32 @@ export async function getLineUserIdByRequester(requesterKey: string): Promise<st
     
     if (members && members.length > 0) {
       const match = members.find(m => {
-        const id = String(m.id || "").trim().toLowerCase();
-        const normId = id.replace(/['"`\s\-_]/g, "");
-        const empId = String(m["รหัสพนักงาน"] || "").trim().toLowerCase();
-        const normEmpId = empId.replace(/['"`\s\-_]/g, "");
-        const nickname = String(m["ชื่อเล่น"] || m.nickname || "").trim().toLowerCase();
-        const normNick = nickname.replace(/['"`\s\-_]/g, "");
-        const fullname = String(m["ชื่อ-นามสกุล"] || m.full_name || "").trim().toLowerCase();
-        const normFull = fullname.replace(/['"`\s\-_]/g, "");
-        const name = String(m.name || "").trim().toLowerCase();
+        const d = (m.data && typeof m.data === "object") ? m.data : {};
+        const id = String(m.id || m.id_member || d.id || "").trim().toLowerCase();
+        const normId = id.replace(/['"`\s\-_()]/g, "");
+        const empId = String(m["รหัสพนักงาน"] || d["รหัสพนักงาน"] || m.employee_id || "").trim().toLowerCase();
+        const normEmpId = empId.replace(/['"`\s\-_()]/g, "");
+        const nickname = String(m["ชื่อเล่น"] || m.nickname || d["ชื่อเล่น"] || d.nickname || "").trim().toLowerCase();
+        const normNick = nickname.replace(/['"`\s\-_()]/g, "");
+        const fullname = String(m["ชื่อ-นามสกุล"] || m.full_name || d["ชื่อ-นามสกุล"] || d.full_name || "").trim().toLowerCase();
+        const normFull = fullname.replace(/['"`\s\-_()]/g, "");
+        const name = String(m.name || d.name || "").trim().toLowerCase();
+
+        const tokenMatch = tokens.some(tok => {
+          const normTok = tok.replace(/['"`\s\-_()]/g, "");
+          return (
+            tok === id ||
+            tok === empId ||
+            tok === nickname ||
+            tok === fullname ||
+            tok === name ||
+            (normTok && normTok === normNick) ||
+            (normTok && normTok === normEmpId)
+          );
+        });
 
         return (
+          tokenMatch ||
           id === trimmed ||
           normId === normalized ||
           empId === trimmed ||
@@ -1814,18 +1863,30 @@ export async function getLineUserIdByRequester(requesterKey: string): Promise<st
         );
       });
 
-      if (match?.line_user_id) return String(match.line_user_id).trim();
-      if (match?.["LINE User ID"]) return String(match["LINE User ID"]).trim();
+      if (match) {
+        const d = (match.data && typeof match.data === "object") ? match.data : {};
+        const memberLineId = String(
+          match.line_user_id ||
+          match["LINE User ID"] ||
+          d.line_user_id ||
+          d.lineUserId ||
+          d["LINE User ID"] ||
+          ""
+        ).trim();
 
-      // Cross-reference matched member with usersList by member ID
-      const matchedMemberId = String(match?.id || match?.["รหัสพนักงาน"] || "").trim().toLowerCase();
-      if (matchedMemberId && usersList.length > 0) {
-        const linkedUser = usersList.find(u => {
-          const uId = String(u.id || "").trim().toLowerCase();
-          const uName = String(u.username || "").trim().toLowerCase();
-          return uId === matchedMemberId || uName === matchedMemberId;
-        });
-        if (linkedUser?.lineUserId) return String(linkedUser.lineUserId).trim();
+        if (memberLineId) return memberLineId;
+
+        // Cross-reference matched member with usersList by member ID / empId
+        const matchedMemberId = String(match.id || match["รหัสพนักงาน"] || d["รหัสพนักงาน"] || "").trim().toLowerCase();
+        if (matchedMemberId && usersList.length > 0) {
+          const linkedUser = usersList.find(u => {
+            const uId = String(u.id || "").trim().toLowerCase();
+            const uName = String(u.username || "").trim().toLowerCase();
+            const uEmp = String(u.employeeId || "").trim().toLowerCase();
+            return uId === matchedMemberId || uName === matchedMemberId || uEmp === matchedMemberId;
+          });
+          if (linkedUser?.lineUserId) return String(linkedUser.lineUserId).trim();
+        }
       }
     }
 
@@ -2502,12 +2563,31 @@ export function createMultiBillFlex(
 
   const mode = options.mode || "search";
 
-  const totalAmount = bills.reduce((sum, b) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
-  const formattedTotal = totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const totalGrossAmount = bills.reduce((sum, b) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
+  const totalNetTransfer = bills.reduce((sum, b) => {
+    const gross = Number(b["ยอดเงิน"] || b.amount || 0);
+    const deductAmt = Number(b["จำนวนหัก"] || b["3เปอร์"] || b.deduct_amount || 0);
+    const net = Number(b["ยอดโอน"] || b.net_amount || 0);
+    if (net > 0) return sum + net;
+    if (deductAmt > 0) return sum + (gross - deductAmt);
+    return sum + gross;
+  }, 0);
+
+  const hasAnyDeduction = bills.some(b => {
+    const gross = Number(b["ยอดเงิน"] || b.amount || 0);
+    const deductAmt = Number(b["จำนวนหัก"] || b["3เปอร์"] || b.deduct_amount || 0);
+    const net = Number(b["ยอดโอน"] || b.net_amount || 0);
+    return deductAmt > 0 || (net > 0 && net !== gross);
+  });
+
+  const formattedGrossTotal = totalGrossAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formattedNetTotal = totalNetTransfer.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const firstBill = bills[0];
   const firstReq = getRequesterDisplayName(firstBill);
   const firstCreator = getCreatorDisplayName(firstBill);
+  const rawBillType = String(firstBill["บิล"] || firstBill.bill || firstBill.bill_type || "หลัก").trim();
+  const firstBillTypeTag = rawBillType ? `[${rawBillType.includes("บิล") ? rawBillType : `บิล${rawBillType}`}]` : "[บิลหลัก]";
   const sheetRowIds = bills.map(b => String(b._sheetRow || b.id || b["ลำดับ"] || "").trim()).filter(Boolean);
   const sheetRowStr = sheetRowIds.join(",");
 
@@ -2532,30 +2612,46 @@ export function createMultiBillFlex(
     const startNum = pageIndex * pageSize + 1;
     const endNum = startNum + pageBills.length - 1;
 
-    // 1. Top Summary Banner (Inside Body, replacing Header)
+    // 1. Top Summary Banner (Compact Header with Bill Type & Total)
     const topSummaryBanner = {
       type: "box",
-      layout: "vertical",
-      paddingAll: "10px",
+      layout: "horizontal",
+      paddingAll: "8px",
       backgroundColor: "#ECFDF5",
-      cornerRadius: "8px",
+      cornerRadius: "6px",
       margin: "none",
       contents: [
         {
-          type: "text",
-          text: options.title,
-          weight: "bold",
-          color: "#065F46",
-          size: "sm"
+          type: "box",
+          layout: "vertical",
+          flex: 8,
+          contents: [
+            {
+              type: "text",
+              text: options.title,
+              weight: "bold",
+              color: "#065F46",
+              size: "xs"
+            },
+            {
+              type: "text",
+              text: totalPages > 1
+                ? `หน้า ${pageIndex + 1}/${totalPages} • ${firstBillTypeTag} ${bills.length} รายการ${firstReq && firstReq !== "-" ? ` | ผู้เบิก: ${firstReq}` : ""}`
+                : `${firstBillTypeTag} ${bills.length} รายการ${firstReq && firstReq !== "-" ? ` | ผู้เบิก: ${firstReq}` : ""}`,
+              color: "#047857",
+              size: "xxs"
+            }
+          ]
         },
         {
           type: "text",
-          text: totalPages > 1
-            ? `หน้า ${pageIndex + 1}/${totalPages} (${startNum}-${endNum} จาก ${bills.length} รายการ)${firstReq && firstReq !== "-" ? ` | ผู้เบิก: ${firstReq}` : ""}`
-            : `พบทั้งหมด ${bills.length} รายการ${firstReq && firstReq !== "-" ? ` | ผู้เบิก: ${firstReq}` : ""}${firstCreator && firstCreator !== firstReq && firstCreator !== "-" ? ` (ผู้สร้าง: ${firstCreator})` : ""}`,
-          color: "#047857",
-          size: "xs",
-          margin: "xs"
+          text: `฿${hasAnyDeduction ? formattedNetTotal : formattedGrossTotal}`,
+          weight: "bold",
+          color: "#059669",
+          size: "sm",
+          align: "end",
+          gravity: "center",
+          flex: 4
         }
       ]
     };
@@ -2563,283 +2659,195 @@ export function createMultiBillFlex(
     // 2. Bill Items List
     const itemsContents = pageBills.map((b, idx) => {
       const bId = String(b._sheetRow || b.id || b["ลำดับ"] || startNum + idx);
-    const amt = Number(b["ยอดเงิน"] || b.amount || 0).toLocaleString("th-TH");
-    const requesterName = getRequesterDisplayName(b);
-    const creatorName = getCreatorDisplayName(b);
-    const vendorName = b["ร้าน/บุคคล"] || b.vendor_or_person || "-";
-    const billType = b["บิล"] || b.bill || b.bill_type || "ทั่วไป";
-    const projName = b["ชื่อ Project"] || b.project_name || "โครงการทั่วไป";
-    const desc = b["สินค้า/ทำงาน"] || b.description || "-";
-    const status = b["สถานะ"] || b.status || "รอตั้งเบิก";
-    const bankInfo = resolveBankInfo(b, bankInfoMap);
+      const grossAmt = Number(b["ยอดเงิน"] || b.amount || 0);
+      const deductPercent = String(b["หัก"] || b.deduct_percent || "").trim();
+      let deductAmt = Number(b["จำนวนหัก"] || b["3เปอร์"] || b.deduct_amount || 0);
+      if (!deductAmt && deductPercent && Number(deductPercent.replace(/หัก|\s|%/g, "")) > 0 && grossAmt > 0) {
+        deductAmt = Math.round((grossAmt * Number(deductPercent.replace(/หัก|\s|%/g, ""))) / 100 * 100) / 100;
+      }
+      const rawNet = Number(b["ยอดโอน"] || b.net_amount || 0);
+      const netTransferAmt = rawNet > 0 ? rawNet : (deductAmt > 0 ? grossAmt - deductAmt : grossAmt);
+      const hasDeduct = deductAmt > 0 || (netTransferAmt > 0 && netTransferAmt !== grossAmt);
 
-    const imgList = getBillImages(b);
-    const hasImages = imgList.length > 0;
+      let cleanPercent = String(deductPercent || "").replace(/หัก|\s|%/g, "").trim();
+      if (!cleanPercent && deductAmt > 0 && grossAmt > 0) {
+        cleanPercent = String(Math.round((deductAmt / grossAmt) * 100));
+      }
+      const percentLabel = cleanPercent ? `หัก ${cleanPercent}%` : "หัก ณ ที่จ่าย";
 
-    // Build per-role & per-status action links
-    const actionLinks: any[] = [];
-    const normStatus = String(status || "").trim();
-    const isAlreadyPaid = normStatus === "เบิกแล้ว" || normStatus === "จ่ายแล้ว" || normStatus.includes("เสร็จ") || normStatus.includes("ปิดงาน");
-    const isApproved = normStatus === "อนุมัติ";
-    const isRejected = normStatus === "ไม่อนุมัติ";
+      const requesterName = getRequesterDisplayName(b);
+      const creatorName = getCreatorDisplayName(b);
+      const rawVendorType = String(b["ร้านค้า/ผู้รับเหมา"] || b.vendor_type || "").trim();
+      const isContractor = rawVendorType === "ผู้รับเหมา" || Boolean(b["ผู้รับเหมา"]) || Boolean(b.contractor_id);
+      const vendorLabel = isContractor ? "ผู้รับเหมา" : "ร้าน";
+      const vendorName = isContractor
+        ? (b["ผู้รับเหมา"] || b.contractor_id || b["ร้าน/บุคคล"] || b.vendor_or_person || "-")
+        : (b["ร้านค้า"] || b.store_id || b["ร้าน/บุคคล"] || b.vendor_or_person || "-");
+      const projName = b["ชื่อ Project"] || b.project_name || "โครงการทั่วไป";
+      const desc = b["สินค้า/ทำงาน"] || b.description || b["รายละเอียดงาน"] || "-";
+      const remainingLabor = String(b["ค่าแรงคงเหลือ"] || b.remaining_labor || "").trim();
+      const laborStatus = String(b["statusค่าแรง"] || b.labor_status || "").trim();
+      const bankInfo = resolveBankInfo(b, bankInfoMap);
 
-    if (isAlreadyPaid) {
-      actionLinks.push({
-        type: "text",
-        text: "[เบิกสำเร็จ]",
-        size: "xxs",
-        color: "#059669",
-        align: "end",
-        weight: "bold",
-        flex: 3
-      });
-    } else if (isApproved) {
-      // Approved bill -> only allow Finance to close bill (ปิดงาน)
-      actionLinks.push({
-        type: "text",
-        text: "[ปิดงาน]",
-        size: "xxs",
-        color: "#DC2626",
-        align: "end",
-        weight: "bold",
-        flex: 3,
-        action: {
-          type: "message",
-          label: "ปิดงาน",
-          text: `ปิดงานบิลลำดับที่: ${bId}`
+      let paidNum = 0;
+      if (b["ยอดเงินจ่าย"] && !isNaN(Number(b["ยอดเงินจ่าย"]))) {
+        paidNum = Number(b["ยอดเงินจ่าย"]);
+      } else if (remainingLabor.includes("จาก")) {
+        const parts = remainingLabor.split("จาก").map(p => p.trim());
+        const remNum = Number(parts[0].replace(/,/g, ""));
+        const totalNum = Number(parts[1].replace(/,/g, ""));
+        if (!isNaN(remNum) && !isNaN(totalNum) && totalNum > remNum) {
+          paidNum = totalNum - remNum;
         }
-      });
-    } else if (isRejected) {
-      actionLinks.push({
-        type: "text",
-        text: "[ไม่อนุมัติ]",
-        size: "xxs",
-        color: "#DC2626",
-        align: "end",
-        weight: "bold",
-        flex: 3
-      });
-    } else if (mode === "requester") {
-      actionLinks.push({
-        type: "text",
-        text: "[ส่งอนุมัติ]",
-        size: "xxs",
-        color: "#0284C7",
-        align: "end",
-        weight: "bold",
-        flex: 3,
-        action: {
-          type: "message",
-          label: "ส่งอนุมัติ",
-          text: `ส่งไปเพื่ออนุมัติบิลลำดับที่: ${bId}`
-        }
-      });
-    } else if (mode === "owner") {
-      actionLinks.push(
-        {
-          type: "text",
-          text: "[อนุมัติ]",
-          size: "xxs",
-          color: "#059669",
-          align: "end",
-          weight: "bold",
-          flex: 2,
-          action: {
-            type: "message",
-            label: "อนุมัติ",
-            text: `อนุมัติบิลลำดับที่: ${bId}`
-          }
-        },
-        {
-          type: "text",
-          text: "[ไม่อนุมัติ]",
-          size: "xxs",
-          color: "#DC2626",
-          align: "end",
-          weight: "bold",
-          flex: 3,
-          action: {
-            type: "message",
-            label: "ไม่อนุมัติ",
-            text: `ไม่อนุมัติบิลลำดับที่: ${bId}`
-          }
-        }
-      );
-    } else {
-      // General search / view mode: unapproved bills can only be sent for approval or approved by approvers (NEVER close unapproved bills!)
-      actionLinks.push(
-        {
-          type: "text",
-          text: "[ส่งอนุมัติ]",
-          size: "xxs",
-          color: "#0284C7",
-          align: "end",
-          weight: "bold",
-          flex: 2,
-          action: {
-            type: "message",
-            label: "ส่งอนุมัติ",
-            text: `ส่งไปเพื่ออนุมัติบิลลำดับที่: ${bId}`
-          }
-        },
-        {
-          type: "text",
-          text: "[อนุมัติ]",
-          size: "xxs",
-          color: "#059669",
-          align: "end",
-          weight: "bold",
-          flex: 2,
-          action: {
-            type: "message",
-            label: "อนุมัติ",
-            text: `อนุมัติบิลลำดับที่: ${bId}`
-          }
-        }
-      );
-    }
+      }
 
-    const productName = b["สินค้า"] || b.product || "";
-    const categoryName = b["ประเภท"] || b.category || "";
-    const rawItems = b.items || b.data?.items;
-    let lineItems: Array<{ category?: string; categoryType?: string; amount?: string | number; name?: string; type?: string; price?: string | number; total?: string | number }> = [];
-    if (Array.isArray(rawItems) && rawItems.length > 0) {
-      lineItems = rawItems;
-    } else if (typeof rawItems === "string" && rawItems.trim().startsWith("[")) {
-      try {
-        const parsed = JSON.parse(rawItems);
-        if (Array.isArray(parsed) && parsed.length > 0) lineItems = parsed;
-      } catch {}
-    }
+      const paidText = `จ่ายแล้ว ${paidNum > 0 ? `฿${paidNum.toLocaleString("th-TH")}` : "0"}`;
+      const drawText = `เบิก ฿${grossAmt.toLocaleString("th-TH")}${cleanPercent ? ` (${cleanPercent}%)` : ""}`;
+      const contractorSummaryText = `${paidText}   |   ${drawText}`;
 
-    const textDetailsBox: Record<string, any> = {
-      type: "box",
-      layout: "vertical",
-      spacing: "xs",
-      contents: [
-        // Title & Amount Row
-        {
-          type: "box",
-          layout: "horizontal",
-          contents: [
-            { type: "text", text: `#${bId} [บิล${billType}] | ${projName}`, weight: "bold", size: "xs", color: "#0F172A", flex: 7, wrap: true },
-            { type: "text", text: `฿${amt}`, weight: "bold", size: "xs", color: "#059669", flex: 3, align: "end" }
-          ]
-        },
-        // Requester / Vendor Row
-        {
-          type: "box",
-          layout: "baseline",
-          margin: "xs",
-          contents: [
-            { type: "text", text: "ผู้เบิก/ร้าน:", size: "xxs", color: "#64748B", flex: 3 },
-            { type: "text", text: `${requesterName} / ${vendorName}`, size: "xxs", color: "#1E293B", flex: 7, wrap: true }
-          ]
-        },
-        // Creator Row (if different from requester)
-        ...(creatorName && creatorName !== requesterName && creatorName !== "-" ? [
+      const imgList = getBillImages(b);
+      const hasImages = imgList.length > 0;
+
+      const productName = b["สินค้า"] || b.product || "";
+      const categoryName = b["ประเภท"] || b.category || "";
+      const rawItems = b.items || b.data?.items;
+      let lineItems: Array<{ category?: string; categoryType?: string; amount?: string | number; name?: string; type?: string; price?: string | number; total?: string | number }> = [];
+      if (Array.isArray(rawItems) && rawItems.length > 0) {
+        lineItems = rawItems;
+      } else if (typeof rawItems === "string" && rawItems.trim().startsWith("[")) {
+        try {
+          const parsed = JSON.parse(rawItems);
+          if (Array.isArray(parsed) && parsed.length > 0) lineItems = parsed;
+        } catch {}
+      }
+
+      const textDetailsBox: Record<string, any> = {
+        type: "box",
+        layout: "vertical",
+        spacing: "none",
+        contents: [
+          // Row 1: Title & Net Transfer Amount
           {
             type: "box",
-            layout: "baseline",
-            margin: "xs",
+            layout: "horizontal",
             contents: [
-              { type: "text", text: "ผู้สร้างบิล:", size: "xxs", color: "#64748B", flex: 3 },
-              { type: "text", text: `${creatorName} (บันทึกแทน)`, size: "xxs", color: "#0284C7", flex: 7, wrap: true }
+              { type: "text", text: `#${bId} | ${projName}`, weight: "bold", size: "xs", color: "#0F172A", flex: 7, wrap: true },
+              { type: "text", text: `฿${netTransferAmt.toLocaleString("th-TH")}`, weight: "bold", size: "xs", color: "#DC2626", flex: 3, align: "end" }
             ]
-          }
-        ] : []),
-        // Bank Account Information Box
-        ...(bankInfo && (bankInfo.accountNo || bankInfo.bankName || bankInfo.accountName) ? [
+          },
+          // Row 2: Vendor/Contractor (Highlighted & removed redundant requester)
           {
             type: "box",
-            layout: "vertical",
+            layout: "horizontal",
             margin: "xs",
-            paddingAll: "6px",
-            backgroundColor: "#F8FAFC",
-            cornerRadius: "6px",
-            borderWidth: "1px",
-            borderColor: "#E2E8F0",
-            spacing: "xs",
             contents: [
-              {
-                type: "box",
-                layout: "baseline",
-                contents: [
-                  { type: "text", text: "ธนาคาร:", size: "xxs", color: "#64748B", flex: 3 },
-                  { type: "text", text: bankInfo.bankName || "-", size: "xxs", color: bankInfo.bankName ? "#0F172A" : "#94A3B8", weight: "bold", flex: 7, wrap: true }
-                ]
-              },
-              {
-                type: "box",
-                layout: "baseline",
-                contents: [
-                  { type: "text", text: "ชื่อบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
-                  { type: "text", text: bankInfo.accountName || "-", size: "xxs", color: bankInfo.accountName ? "#0F172A" : "#94A3B8", weight: "bold", flex: 7, wrap: true }
-                ]
-              },
-              {
-                type: "box",
-                layout: "baseline",
-                contents: [
-                  { type: "text", text: "เลขบัญชี:", size: "xxs", color: "#64748B", flex: 3 },
+              { type: "text", text: `${vendorLabel}: ${vendorName}`, size: "xxs", color: "#1E293B", weight: "bold", wrap: true }
+            ]
+          },
+          // Row 3 (Contractor): Single Combined Line (e.g. จ่ายแล้ว 0 | เบิก ฿2,500 (3%))
+          ...(isContractor || hasDeduct ? [
+            {
+              type: "box",
+              layout: "horizontal",
+              margin: "none",
+              contents: [
+                {
+                  type: "text",
+                  text: contractorSummaryText,
+                  size: "xxs",
+                  color: "#D97706",
+                  weight: "bold",
+                  wrap: true
+                }
+              ]
+            }
+          ] : []),
+          // Row 4 (Creator): If recorded on behalf of someone else
+          ...(creatorName && creatorName !== requesterName && creatorName !== "-" ? [
+            {
+              type: "box",
+              layout: "horizontal",
+              margin: "none",
+              contents: [
+                { type: "text", text: `ผู้สร้างบิล: ${creatorName} (บันทึกแทน)`, size: "xxs", color: "#64748B", wrap: true }
+              ]
+            }
+          ] : []),
+          // Row 6: Bank Account Information (2 Clean Lines)
+          ...(bankInfo && (bankInfo.accountNo || bankInfo.bankName || bankInfo.accountName) ? [
+            {
+              type: "box",
+              layout: "vertical",
+              margin: "xs",
+              paddingAll: "5px",
+              backgroundColor: "#F0F9FF",
+              cornerRadius: "4px",
+              spacing: "none",
+              contents: [
+                ...(bankInfo.accountName ? [
                   {
                     type: "text",
-                    text: bankInfo.accountNo || "-",
+                    text: `ชื่อ: ${bankInfo.accountName}`,
                     size: "xxs",
-                    color: bankInfo.accountNo ? "#059669" : "#94A3B8",
+                    color: "#1E293B",
                     weight: "bold",
-                    flex: 7,
-                    wrap: true
+                    wrap: false,
+                    maxLines: 1
                   }
-                ]
-              }
-            ]
-          }
-        ] : [
-          {
-            type: "box",
-            layout: "baseline",
-            margin: "xs",
-            contents: [
-              { type: "text", text: "ธนาคาร:", size: "xxs", color: "#64748B", flex: 3 },
-              { type: "text", text: "-", size: "xxs", color: "#94A3B8", flex: 7 }
-            ]
-          }
-        ]),
-        // Product Category Row (Only shown for single-item bills)
-        ...(productName && productName !== "-" && lineItems.length === 0 ? [
-          {
-            type: "box",
-            layout: "baseline",
-            margin: "xs",
-            contents: [
-              { type: "text", text: "สินค้า/หมวด:", size: "xxs", color: "#64748B", flex: 3 },
-              { type: "text", text: `${productName}${categoryName ? ` (${categoryName})` : ""}`, size: "xxs", color: "#059669", weight: "bold", flex: 7, wrap: true }
-            ]
-          }
-        ] : []),
-        // Itemized Multi-Line Products with Individual Prices
-        ...(lineItems.length > 0 ? [
-          {
-            type: "box",
-            layout: "vertical",
-            margin: "xs",
-            paddingAll: "6px",
-            backgroundColor: "#F1F5F9",
-            cornerRadius: "6px",
-            spacing: "xs",
-            contents: [
-              {
-                type: "box",
-                layout: "horizontal",
-                contents: [
-                  { type: "text", text: `📦 รายการสินค้า (${lineItems.length} รายการ):`, size: "xxs", weight: "bold", color: "#0F172A", flex: 7 },
-                  { type: "text", text: "ราคา", size: "xxs", weight: "bold", color: "#64748B", flex: 3, align: "end" }
-                ]
-              },
-              ...lineItems.map((item, iIdx) => {
-                const itemAmt = Number(item.amount ?? item.price ?? item.total ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                const itemCat = item.category || item.name || `สินค้า ${iIdx + 1}`;
+                ] : []),
+                {
+                  type: "box",
+                  layout: "horizontal",
+                  alignItems: "center",
+                  contents: [
+                    {
+                      type: "text",
+                      text: `เลข: ${bankInfo.accountNo || "-"}`,
+                      size: "xs",
+                      color: "#059669",
+                      weight: "bold",
+                      flex: 7
+                    },
+                    {
+                      type: "text",
+                      text: `ธนาคาร: ${bankInfo.bankName || "-"}`,
+                      size: "xxs",
+                      color: "#475569",
+                      align: "end",
+                      flex: 5,
+                      wrap: false,
+                      maxLines: 1
+                    }
+                  ]
+                }
+              ]
+            }
+          ] : []),
+          // Row 7 (Store): Single Product Category Row
+          ...(productName && productName !== "-" && lineItems.length === 0 && !isContractor ? [
+            {
+              type: "box",
+              layout: "horizontal",
+              margin: "xs",
+              contents: [
+                { type: "text", text: `สินค้า: ${productName}${categoryName ? ` (${categoryName})` : ""}`, size: "xxs", color: "#059669", weight: "bold", wrap: true }
+              ]
+            }
+          ] : []),
+          // Row 8: Itemized Multi-Line Products
+          ...(lineItems.length > 0 ? [
+            {
+              type: "box",
+              layout: "vertical",
+              margin: "xs",
+              paddingAll: "4px",
+              backgroundColor: "#F8FAFC",
+              cornerRadius: "4px",
+              spacing: "none",
+              contents: lineItems.map((item, iIdx) => {
+                const itemAmt = Number(item.amount ?? item.price ?? item.total ?? 0).toLocaleString("th-TH");
+                let itemCat = String(item.category || item.name || `สินค้า ${iIdx + 1}`).trim();
+                itemCat = itemCat.replace(/^\d+\.?\s*\d*\.?\s*/, "");
                 const itemType = item.categoryType || item.type || "";
                 return {
                   type: "box",
@@ -2847,7 +2855,7 @@ export function createMultiBillFlex(
                   contents: [
                     {
                       type: "text",
-                      text: `${iIdx + 1}. ${itemCat}${itemType ? ` (${itemType})` : ""}`,
+                      text: `• ${itemCat}${itemType ? ` (${itemType})` : ""}`,
                       size: "xxs",
                       color: "#334155",
                       flex: 7,
@@ -2865,228 +2873,201 @@ export function createMultiBillFlex(
                   ]
                 };
               })
-            ]
+            }
+          ] : [])
+        ]
+      };
+
+      if (hasImages) {
+        const displayedImgs = imgList.slice(0, 4);
+        const imgColumns: any[] = displayedImgs.map((imgUrl, imgIdx) => ({
+          type: "image",
+          url: imgUrl,
+          aspectRatio: "3:2",
+          aspectMode: "cover",
+          flex: 1,
+          action: {
+            type: "uri",
+            label: `รูปที่ ${imgIdx + 1}`,
+            uri: normalizeUri(imgUrl)
           }
-        ] : []),
-        // Description Row (Only shown if single item or contains distinct custom remarks)
-        ...(desc && desc !== "-" && (lineItems.length === 0 || (!desc.includes(productName) && desc !== productName)) ? [
-          {
-            type: "box",
-            layout: "baseline",
-            margin: "xs",
-            contents: [
-              { type: "text", text: "รายละเอียด:", size: "xxs", color: "#64748B", flex: 3 },
-              { type: "text", text: String(desc), size: "xxs", color: "#334155", flex: 7, wrap: true }
-            ]
-          }
-        ] : []),
-        // Status & Per-role Action Links Row
-        {
+        }));
+
+        while (imgColumns.length < 4) {
+          imgColumns.push({ type: "filler" });
+        }
+
+        const multiImgRow = {
           type: "box",
           layout: "horizontal",
           margin: "xs",
+          spacing: "xs",
+          contents: imgColumns
+        };
+
+        return {
+          type: "box",
+          layout: "vertical",
+          margin: "xs",
+          paddingAll: "6px",
+          backgroundColor: "#F8FAFC",
+          cornerRadius: "6px",
           contents: [
-            { type: "text", text: `สถานะ: ${status}`, size: "xxs", color: status === "อนุมัติ" || status === "เบิกแล้ว" ? "#059669" : "#D97706", weight: "bold", flex: 4 },
-            ...actionLinks
+            textDetailsBox,
+            multiImgRow
           ]
-        }
-      ]
-    };
-
-    if (hasImages) {
-      const displayedImgs = imgList.slice(0, 4);
-      const imgColumns: any[] = displayedImgs.map((imgUrl, imgIdx) => ({
-        type: "image",
-        url: imgUrl,
-        aspectRatio: "1:1",
-        aspectMode: "cover",
-        flex: 1,
-        action: {
-          type: "uri",
-          label: `รูปที่ ${imgIdx + 1}`,
-          uri: normalizeUri(imgUrl)
-        }
-      }));
-
-      while (imgColumns.length < 4) {
-        imgColumns.push({ type: "filler" });
+        };
       }
-
-      const multiImgRow = {
-        type: "box",
-        layout: "horizontal",
-        margin: "xs",
-        spacing: "xs",
-        contents: imgColumns
-      };
 
       return {
         type: "box",
         layout: "vertical",
-        margin: "sm",
-        paddingAll: "8px",
+        margin: "xs",
+        paddingAll: "6px",
         backgroundColor: "#F8FAFC",
         cornerRadius: "6px",
-        contents: [
-          textDetailsBox,
-          {
-            type: "box",
-            layout: "horizontal",
-            margin: "xs",
-            contents: [
-              { type: "text", text: `รูปแนบใบเสร็จ (${imgList.length} รูป - แตะรูปเพื่อดูภาพเต็ม):`, size: "xxs", color: "#475569", weight: "bold" }
-            ]
-          },
-          multiImgRow
-        ]
+        contents: [textDetailsBox]
       };
-    }
+    });
 
-    return {
+    // 3. Bottom Total Sum Box (Only when multiple bills)
+    const bottomTotalSumBox = bills.length > 1 ? {
       type: "box",
-      layout: "vertical",
-      margin: "sm",
-      paddingAll: "8px",
-      backgroundColor: "#F8FAFC",
+      layout: "horizontal",
+      margin: "xs",
+      paddingAll: "6px",
+      backgroundColor: "#ECFDF5",
       cornerRadius: "6px",
-      contents: [textDetailsBox]
-    };
-  });
+      contents: [
+        {
+          type: "text",
+          text: hasAnyDeduction ? `รวมโอนสุทธิ (${bills.length} รายการ)` : `รวมทั้งสิ้น (${bills.length} รายการ)`,
+          weight: "bold",
+          color: "#065F46",
+          size: "xxs",
+          flex: 6,
+          gravity: "center"
+        },
+        {
+          type: "text",
+          text: `฿${hasAnyDeduction ? formattedNetTotal : formattedGrossTotal}`,
+          weight: "bold",
+          color: "#059669",
+          size: "xs",
+          flex: 6,
+          align: "end",
+          gravity: "center"
+        }
+      ]
+    } : null;
 
-  // 3. Bottom Total Sum Box (Theme Emerald Green)
-  const bottomTotalSumBox = {
-    type: "box",
-    layout: "horizontal",
-    margin: "md",
-    paddingAll: "12px",
-    backgroundColor: "#ECFDF5",
-    cornerRadius: "8px",
-    borderWidth: "1px",
-    borderColor: "#A7F3D0",
-    contents: [
-      {
-        type: "text",
-        text: `รวมทั้งสิ้น (${bills.length} รายการ)`,
-        weight: "bold",
-        color: "#065F46",
-        size: "xs",
-        flex: 5,
-        gravity: "center"
-      },
-      {
-        type: "text",
-        text: `฿${formattedTotal}`,
-        weight: "bold",
-        color: "#059669",
-        size: "md",
-        flex: 7,
-        align: "end",
-        gravity: "center"
-      }
-    ]
-  };
-
-  // 4. Footer Action Buttons (Green Theme)
-  let footerButtons: any[] = [];
-  if (mode === "requester") {
-    footerButtons = [
-      {
-        type: "button",
-        style: "primary",
-        color: "#059669",
-        height: "sm",
-        action: {
-          type: "message",
-          label: `ส่งไปเพื่ออนุมัติ (${bills.length} รายการ)`,
-          text: bills.length === 1 ? `ส่งไปเพื่ออนุมัติบิลลำดับที่: ${sheetRowStr}` : `ส่งไปเพื่ออนุมัติ:${sheetRowStr}`
+    // 4. Footer Action Buttons (Compact Height)
+    let footerButtons: any[] = [];
+    if (mode === "requester") {
+      footerButtons = [
+        {
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          action: {
+            type: "message",
+            label: bills.length > 1 ? `ส่งไปเพื่ออนุมัติ (${bills.length} รายการ)` : `ส่งไปเพื่ออนุมัติ (#${sheetRowStr})`,
+            text: bills.length === 1 ? `ส่งไปเพื่ออนุมัติบิลลำดับที่: ${sheetRowStr}` : `ส่งไปเพื่ออนุมัติ:${sheetRowStr}`
+          }
         }
-      }
-    ];
-  } else if (mode === "owner") {
-    footerButtons = [
-      {
-        type: "button",
-        style: "primary",
-        color: "#059669",
-        height: "sm",
-        flex: 6,
-        action: {
-          type: "message",
-          label: `อนุมัติทั้งหมด (${bills.length} รายการ)`,
-          text: bills.length === 1 ? `อนุมัติบิลลำดับที่: ${sheetRowStr}` : `อนุมัติบิลลำดับที่: ${sheetRowStr}`
+      ];
+    } else if (mode === "owner") {
+      footerButtons = [
+        {
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          flex: 6,
+          action: {
+            type: "message",
+            label: `อนุมัติทั้งหมด (${bills.length} รายการ)`,
+            text: bills.length === 1 ? `อนุมัติบิลลำดับที่: ${sheetRowStr}` : `อนุมัติบิลลำดับที่: ${sheetRowStr}`
+          }
+        },
+        {
+          type: "button",
+          style: "primary",
+          color: "#DC2626",
+          height: "sm",
+          flex: 6,
+          action: {
+            type: "message",
+            label: `ไม่อนุมัติ (${bills.length} รายการ)`,
+            text: bills.length === 1 ? `ไม่อนุมัติบิลลำดับที่: ${sheetRowStr}` : `ไม่อนุมัติบิลลำดับที่: ${sheetRowStr}`
+          }
         }
-      },
-      {
-        type: "button",
-        style: "primary",
-        color: "#DC2626",
-        height: "sm",
-        flex: 6,
-        action: {
-          type: "message",
-          label: `ไม่อนุมัติ (${bills.length} รายการ)`,
-          text: bills.length === 1 ? `ไม่อนุมัติบิลลำดับที่: ${sheetRowStr}` : `ไม่อนุมัติบิลลำดับที่: ${sheetRowStr}`
+      ];
+    } else if (mode === "approver") {
+      footerButtons = [
+        {
+          type: "button",
+          style: "primary",
+          color: "#DC2626",
+          height: "sm",
+          action: {
+            type: "message",
+            label: `ปิดงานทั้งหมด (${bills.length} รายการ)`,
+            text: bills.length === 1 ? `ปิดงานบิลลำดับที่: ${sheetRowStr}` : `ปิดงานบิลลำดับที่: ${sheetRowStr}`
+          }
         }
-      }
-    ];
-  } else if (mode === "approver") {
-    footerButtons = [
-      {
-        type: "button",
-        style: "primary",
-        color: "#DC2626",
-        height: "sm",
-        action: {
-          type: "message",
-          label: `ปิดงานทั้งหมด (${bills.length} รายการ)`,
-          text: bills.length === 1 ? `ปิดงานบิลลำดับที่: ${sheetRowStr}` : `ปิดงานบิลลำดับที่: ${sheetRowStr}`
-        }
-      }
-    ];
-  } else if (mode === "completed") {
-    // ไม่มีปุ่มด้านล่างสำหรับการ์ดที่เบิกเงินสำเร็จเรียบร้อยแล้ว
-    footerButtons = [];
-  } else {
-    // Mode search: smartly determine footer actions based on bills statuses
-    const hasPendingBills = displayBills.some(b => {
-      const st = String(b["สถานะ"] || b.status || "").trim();
-      return st !== "อนุมัติ" && st !== "เบิกแล้ว" && st !== "จ่ายแล้ว" && !st.includes("ปิดงาน");
-    });
-    const hasApprovedBills = displayBills.some(b => {
-      const st = String(b["สถานะ"] || b.status || "").trim();
-      return st === "อนุมัติ";
-    });
-
-    footerButtons = [];
-    if (hasPendingBills) {
-      footerButtons.push({
-        type: "button",
-        style: "primary",
-        color: "#059669",
-        height: "sm",
-        flex: 6,
-        action: {
-          type: "message",
-          label: `อนุมัติทั้งหมด (${bills.length})`,
-          text: `อนุมัติบิลลำดับที่: ${sheetRowStr}`
-        }
+      ];
+    } else if (mode === "completed") {
+      footerButtons = [];
+    } else {
+      const hasPendingBills = displayBills.some(b => {
+        const st = String(b["สถานะ"] || b.status || "").trim();
+        return st !== "อนุมัติ" && st !== "เบิกแล้ว" && st !== "จ่ายแล้ว" && !st.includes("ปิดงาน");
       });
-    }
-    if (hasApprovedBills) {
-      footerButtons.push({
-        type: "button",
-        style: "primary",
-        color: "#DC2626",
-        height: "sm",
-        flex: 6,
-        action: {
-          type: "message",
-          label: `ปิดงานทั้งหมด (${bills.length})`,
-          text: `ปิดงานบิลลำดับที่: ${sheetRowStr}`
-        }
+      const hasApprovedBills = displayBills.some(b => {
+        const st = String(b["สถานะ"] || b.status || "").trim();
+        return st === "อนุมัติ";
       });
+
+      footerButtons = [];
+      if (hasPendingBills) {
+        footerButtons.push({
+          type: "button",
+          style: "primary",
+          color: "#059669",
+          height: "sm",
+          flex: 6,
+          action: {
+            type: "message",
+            label: `อนุมัติ (${bills.length})`,
+            text: `อนุมัติบิลลำดับที่: ${sheetRowStr}`
+          }
+        });
+      }
+      if (hasApprovedBills) {
+        footerButtons.push({
+          type: "button",
+          style: "primary",
+          color: "#DC2626",
+          height: "sm",
+          flex: 6,
+          action: {
+            type: "message",
+            label: `ปิดงาน (${bills.length})`,
+            text: `ปิดงานบิลลำดับที่: ${sheetRowStr}`
+          }
+        });
+      }
     }
-  }
+
+    const bodyContents = [
+      topSummaryBanner,
+      ...itemsContents
+    ];
+    if (bottomTotalSumBox) {
+      bodyContents.push(bottomTotalSumBox);
+    }
 
     return {
       type: "bubble",
@@ -3094,19 +3075,15 @@ export function createMultiBillFlex(
       body: {
         type: "box",
         layout: "vertical",
-        paddingAll: "14px",
+        paddingAll: "10px",
         spacing: "xs",
-        contents: [
-          topSummaryBanner,
-          ...itemsContents,
-          bottomTotalSumBox
-        ]
+        contents: bodyContents
       },
       footer: footerButtons.length > 0 ? {
         type: "box",
         layout: "horizontal",
-        spacing: "sm",
-        paddingAll: "10px",
+        spacing: "xs",
+        paddingAll: "8px",
         backgroundColor: "#F8FAFC",
         contents: footerButtons
       } : undefined
