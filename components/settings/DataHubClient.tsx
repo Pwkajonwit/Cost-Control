@@ -40,13 +40,15 @@ import {
   Bell,
   Check,
   AlertTriangle,
-  Play
+  Play,
+  Trash2
 } from "lucide-react";
 import { showToast } from "@/components/ToastProvider";
 import type { BackupConfig, BackupSnapshotSummary } from "@/lib/backup-service";
 import { DEFAULT_BACKUP_CONFIG } from "@/lib/backup-service";
 import { BackupScheduleModal } from "./BackupScheduleModal";
 import { BackupRestoreConfirmModal } from "./BackupRestoreConfirmModal";
+import { BackupDeleteConfirmModal } from "./BackupDeleteConfirmModal";
 
 export type TableConfig = {
   id: string;
@@ -383,6 +385,8 @@ export function DataHubClient() {
   const [loadingBackupMeta, setLoadingBackupMeta] = useState<boolean>(true);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState<boolean>(false);
   const [selectedRestoreSnapshot, setSelectedRestoreSnapshot] = useState<BackupSnapshotSummary | null>(null);
+  const [selectedDeleteSnapshot, setSelectedDeleteSnapshot] = useState<BackupSnapshotSummary | null>(null);
+  const [downloadingSnapshotId, setDownloadingSnapshotId] = useState<string | null>(null);
 
   // Table row counts
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -618,6 +622,53 @@ export function DataHubClient() {
     } finally {
       setImportProgress(null);
       setRestoringFull(false);
+    }
+  }
+
+  // 🌟 5. Download Specific Backup Snapshot File (.json)
+  async function handleDownloadSnapshot(snapshot: BackupSnapshotSummary) {
+    setDownloadingSnapshotId(snapshot.id);
+    try {
+      showToast("info", `กำลังดาวน์โหลดไฟล์สำรอง ${snapshot.filename || snapshot.id}...`);
+      const res = await fetch(`/api/backup/snapshot?id=${encodeURIComponent(snapshot.id)}`);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "ไม่สามารถดาวน์โหลดไฟล์สำรองข้อมูลได้");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = snapshot.filename || `CostLab_Backup_${snapshot.id}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast("success", `ดาวน์โหลดไฟล์ ${snapshot.filename || snapshot.id} เรียบร้อยแล้ว`);
+    } catch (err: any) {
+      showToast("error", err instanceof Error ? err.message : "ดาวน์โหลดไฟล์สำรองไม่สำเร็จ");
+    } finally {
+      setDownloadingSnapshotId(null);
+    }
+  }
+
+  // 🌟 6. Delete Backup Snapshot from History and Storage
+  async function handleConfirmDeleteSnapshot(snapshot: BackupSnapshotSummary) {
+    try {
+      const res = await fetch(`/api/backup/snapshot?id=${encodeURIComponent(snapshot.id)}`, {
+        method: "DELETE"
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "ลบจุดสำรองข้อมูลไม่สำเร็จ");
+
+      if (json.history) setBackupHistory(json.history);
+      showToast("success", `ลบจุดสำรองข้อมูล ${snapshot.id} และไฟล์สำรองเรียบร้อยแล้ว`);
+      await loadBackupMetadata();
+    } catch (err: any) {
+      showToast("error", err instanceof Error ? err.message : "ลบจุดสำรองข้อมูลไม่สำเร็จ");
+      throw err;
     }
   }
 
@@ -1321,16 +1372,43 @@ export function DataHubClient() {
                             </span>
                           </td>
                           <td className="py-3 px-3 text-right">
-                            <div className="inline-flex items-center gap-2">
-                              {/* Restore Button */}
+                            <div className="inline-flex items-center gap-1.5 justify-end">
+                              {/* 1. Download Snapshot File */}
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadSnapshot(snap)}
+                                disabled={downloadingSnapshotId === snap.id}
+                                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+                                title="ดาวน์โหลดไฟล์สำรอง .json นี้ลงเครื่อง"
+                              >
+                                {downloadingSnapshotId === snap.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin text-emerald-700" />
+                                ) : (
+                                  <Download className="w-3 h-3 text-emerald-700" />
+                                )}
+                                <span>โหลดไฟล์</span>
+                              </button>
+
+                              {/* 2. Restore Button */}
                               <button
                                 type="button"
                                 onClick={() => setSelectedRestoreSnapshot(snap)}
-                                className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
                                 title="กู้คืนข้อมูลระบบจากจุดสำรองนี้"
                               >
                                 <RotateCcw className="w-3 h-3 text-amber-700" />
-                                <span>กู้คืนจุดนี้</span>
+                                <span>กู้คืน</span>
+                              </button>
+
+                              {/* 3. Delete Button */}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDeleteSnapshot(snap)}
+                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 border border-rose-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                                title="ลบจุดสำรองข้อมูลและไฟล์นี้ออกจากระบบ"
+                              >
+                                <Trash2 className="w-3 h-3 text-rose-600" />
+                                <span>ลบ</span>
                               </button>
                             </div>
                           </td>
@@ -1607,6 +1685,14 @@ export function DataHubClient() {
         onClose={() => setSelectedRestoreSnapshot(null)}
         snapshot={selectedRestoreSnapshot}
         onConfirmRestore={handleConfirmRestoreFromSnapshot}
+      />
+
+      {/* B2. Delete Backup Snapshot Confirmation Modal */}
+      <BackupDeleteConfirmModal
+        isOpen={!!selectedDeleteSnapshot}
+        onClose={() => setSelectedDeleteSnapshot(null)}
+        snapshot={selectedDeleteSnapshot}
+        onConfirmDelete={handleConfirmDeleteSnapshot}
       />
 
       {/* C. Progress Modal Overlay */}

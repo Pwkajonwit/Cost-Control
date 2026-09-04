@@ -417,7 +417,92 @@ export async function restoreFromSnapshotId(snapshotId: string): Promise<{
   return await restoreFromPayload(parsedJson);
 }
 
-// 9. Centralized LINE Alert Notification for Backups
+// 9. Download Backup Snapshot File from Supabase Storage
+export async function getBackupSnapshotFile(snapshotId: string): Promise<{
+  filename: string;
+  data: Blob;
+  sizeBytes: number;
+}> {
+  const history = await getBackupHistory();
+  const snapshot = history.find(h => h.id === snapshotId);
+  if (!snapshot) {
+    throw new Error(`ไม่พบจุดสำรองข้อมูลรหัส ${snapshotId}`);
+  }
+
+  if (!snapshot.filename && !snapshot.storagePath) {
+    throw new Error("ไม่มีไฟล์สำรองในระบบจัดเก็บ");
+  }
+
+  const filename = snapshot.storagePath || snapshot.filename;
+  const { data, error } = await supabaseAdmin.storage.from("backups").download(filename);
+
+  if (error || !data) {
+    throw new Error(`ไม่สามารถดาวน์โหลดไฟล์สำรอง ${filename} จาก Storage ได้: ${error?.message || ""}`);
+  }
+
+  return {
+    filename: snapshot.filename || filename,
+    data,
+    sizeBytes: snapshot.sizeBytes
+  };
+}
+
+// 10. Delete Backup Snapshot (File from Storage and Record from History)
+export async function deleteBackupSnapshot(snapshotId: string): Promise<{
+  success: boolean;
+  message: string;
+  history: BackupSnapshotSummary[];
+}> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("ระบบฐานข้อมูล Supabase ยังไม่ได้เชื่อมต่อ");
+  }
+
+  const history = await getBackupHistory();
+  const snapshot = history.find(h => h.id === snapshotId);
+  if (!snapshot) {
+    throw new Error(`ไม่พบจุดสำรองข้อมูลรหัส ${snapshotId}`);
+  }
+
+  const filename = snapshot.storagePath || snapshot.filename;
+  if (filename) {
+    try {
+      await supabaseAdmin.storage.from("backups").remove([filename]);
+    } catch (e) {
+      console.warn(`Failed to remove file ${filename} from storage:`, e);
+    }
+  }
+
+  const updatedHistory = history.filter(h => h.id !== snapshotId);
+
+  await supabaseAdmin.from("system_options").upsert({
+    id: "backup_history",
+    data: updatedHistory,
+    updated_at: new Date().toISOString()
+  });
+
+  // If the deleted snapshot was the latest, update config
+  try {
+    const config = await getBackupConfig();
+    if (config.lastBackupAt === snapshot.createdAt) {
+      const latest = updatedHistory[0];
+      await saveBackupConfig({
+        lastBackupAt: latest ? latest.createdAt : null,
+        lastBackupStatus: latest ? latest.status : null,
+        lastBackupMessage: latest ? `สำรองข้อมูลล่าสุด (${latest.totalRows.toLocaleString()} แถว)` : null
+      });
+    }
+  } catch (e) {
+    console.warn("Failed to update lastBackupAt in config after deletion:", e);
+  }
+
+  return {
+    success: true,
+    message: `ลบจุดสำรองข้อมูล ${snapshotId} เรียบร้อยแล้ว`,
+    history: updatedHistory
+  };
+}
+
+// 11. Centralized LINE Alert Notification for Backups
 export async function sendBackupLineNotification(
   snapshot: BackupSnapshotSummary,
   config: BackupConfig,

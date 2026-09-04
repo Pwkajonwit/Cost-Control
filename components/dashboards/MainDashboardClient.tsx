@@ -131,26 +131,27 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
   }, [summary]);
 
   return (
-    <div className="w-full flex flex-col gap-3 p-2.5 sm:p-4 max-w-[1600px] mx-auto font-sans text-slate-800 antialiased pb-10">
+    <div className="w-full flex flex-col gap-2.5 sm:gap-3 p-2 sm:p-3 max-w-[1600px] mx-auto font-sans text-slate-800 antialiased pb-8">
       
       {/* ========================================================================= */}
       {/* 1. EXECUTIVE FILTER & DATE CONTROLS                                       */}
       {/* ========================================================================= */}
-      <section className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col gap-2.5">
+      <section className="bg-white rounded-xl p-2.5 sm:p-3 border border-slate-200/90 shadow-2xs flex flex-col gap-2.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           {/* Title & Preset Badge */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-[#0b3531] text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0b3531] to-[#041d1a] text-[#34d399] flex items-center justify-center shrink-0 shadow-xs ring-1 ring-emerald-800/30">
               <Calendar className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight truncate">แดชบอร์ดภาพรวมการเงิน</h1>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight truncate">
+                  แดชบอร์ดภาพรวมการเงิน
+                </h1>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80 shrink-0 shadow-2xs">
                   {presetLabels[preset]}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-normal truncate hidden sm:block">สรุปรายได้ ค่าใช้จ่าย กำไร และภาษีทั้งระบบ</p>
             </div>
           </div>
 
@@ -174,10 +175,10 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                     setPreset(key as Preset);
                     setShowCustomDate(false);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium shrink-0 whitespace-nowrap transition cursor-pointer active:scale-95 ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 whitespace-nowrap transition cursor-pointer active:scale-95 ${
                     isActive
-                      ? "bg-[#0b3531] text-white"
-                      : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"
+                      ? "bg-[#0b3531] text-white shadow-xs ring-1 ring-[#0b3531]"
+                      : "bg-slate-50 hover:bg-white text-slate-700 hover:text-slate-900 border border-slate-200/90 shadow-2xs"
                   }`}
                 >
                   {label}
@@ -188,21 +189,21 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
             <button
               type="button"
               onClick={() => setShowCustomDate(!showCustomDate)}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-medium transition cursor-pointer shrink-0 active:scale-95 ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition cursor-pointer shrink-0 active:scale-95 shadow-2xs ${
                 preset === "custom" || showCustomDate
-                  ? "bg-emerald-50 border-emerald-400 text-emerald-950 font-semibold"
-                  : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
+                  ? "bg-emerald-50 border-emerald-400 text-emerald-950 ring-1 ring-emerald-300"
+                  : "bg-slate-50 border-slate-200/90 hover:bg-white text-slate-700 hover:text-slate-900"
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="text-xs hidden xs:inline">ระบุวัน</span>
+              <span className="hidden xs:inline">ระบุวัน</span>
             </button>
 
             <button
               type="button"
               onClick={refreshData}
               disabled={refreshing}
-              className="flex items-center gap-1.5 px-3 py-1 bg-[#0b3531] hover:bg-[#072421] text-white font-medium rounded-lg text-xs transition cursor-pointer shrink-0 active:scale-95 disabled:opacity-70"
+              className="flex items-center gap-1.5 px-3 py-1 bg-[#0b3531] hover:bg-[#072421] text-white font-semibold rounded-lg text-xs transition cursor-pointer shrink-0 active:scale-95 disabled:opacity-70 shadow-xs"
             >
               <RotateCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
               <span className="hidden md:inline">{refreshing ? "..." : "รีเฟรช"}</span>
@@ -212,9 +213,9 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
 
         {/* Custom Date Range Picker */}
         {(showCustomDate || preset === "custom") && (
-          <div className="pt-2.5 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in duration-150">
-            <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
-              <span className="text-slate-700 font-medium text-xs shrink-0 pl-1">จาก:</span>
+          <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in duration-150">
+            <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+              <span className="text-slate-700 font-semibold text-xs shrink-0 pl-1">จาก:</span>
               <input
                 type="date"
                 value={from}
@@ -222,11 +223,11 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                   setFrom(e.target.value);
                   setPreset("custom");
                 }}
-                className="w-full bg-white text-slate-900 font-medium text-xs px-2.5 py-1.5 rounded border border-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                className="w-full bg-white text-slate-900 font-medium text-xs px-2 py-1 rounded border border-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
               />
             </div>
-            <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
-              <span className="text-slate-700 font-medium text-xs shrink-0 pl-1">ถึง:</span>
+            <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+              <span className="text-slate-700 font-semibold text-xs shrink-0 pl-1">ถึง:</span>
               <input
                 type="date"
                 value={to}
@@ -234,7 +235,7 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                   setTo(e.target.value);
                   setPreset("custom");
                 }}
-                className="w-full bg-white text-slate-900 font-medium text-xs px-2.5 py-1.5 rounded border border-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                className="w-full bg-white text-slate-900 font-medium text-xs px-2 py-1 rounded border border-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
               />
             </div>
           </div>
@@ -242,86 +243,118 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
       </section>
 
       {/* ========================================================================= */}
-      {/* ========================================================================= */}
-      {/* 2. EXECUTIVE KPI CARDS                                                    */}
+      {/* 2. EXECUTIVE KPI CARDS (Differentiated Color Tones & High Legibility)     */}
       {/* ========================================================================= */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
         
-        {/* Card 1: Total Expenses */}
-        <div className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col justify-between hover:border-slate-300 transition">
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-xs text-slate-500 font-medium truncate">
-              ค่าใช้จ่ายรวม
-            </span>
-            <span className="text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 shrink-0">
+        {/* Card 1: Total Expenses (Rose / Crimson Accent) */}
+        <div className="bg-gradient-to-br from-white via-rose-50/20 to-rose-100/40 rounded-xl p-2.5 sm:p-3 border border-rose-200/90 shadow-2xs flex flex-col justify-between hover:shadow-sm hover:border-rose-300 transition-all group">
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Wallet className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-xs font-bold text-slate-700 truncate">
+                ค่าใช้จ่ายรวม
+              </span>
+            </div>
+            <span className="text-[10px] sm:text-[11px] font-bold text-rose-700 bg-rose-100/80 px-2 py-0.5 rounded-full border border-rose-200 shrink-0">
               {summary.dataCount} บิล
             </span>
           </div>
-          <div className="mt-1.5">
-            <div className="text-xl sm:text-2xl font-bold text-rose-600 tracking-tight leading-tight truncate">
+          <div className="mt-2">
+            <div className="text-xl sm:text-2xl font-black text-rose-600 tracking-tight truncate">
               ฿{money(summary.total)}
             </div>
           </div>
         </div>
 
-        {/* Card 2: Revenue */}
-        <div className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col justify-between hover:border-slate-300 transition">
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-xs text-slate-500 font-medium truncate">
-              ยอดงานรวมภาษี
-            </span>
-            <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 shrink-0">
+        {/* Card 2: Revenue (Fresh Emerald Accent) */}
+        <div className="bg-gradient-to-br from-white via-emerald-50/20 to-emerald-100/40 rounded-xl p-2.5 sm:p-3 border border-emerald-200/90 shadow-2xs flex flex-col justify-between hover:shadow-sm hover:border-emerald-300 transition-all group">
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <TrendingUp className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-xs font-bold text-slate-700 truncate">
+                ยอดงานรวมภาษี
+              </span>
+            </div>
+            <span className="text-[10px] sm:text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
               {summary.projectCount} โครงการ
             </span>
           </div>
-          <div className="mt-1.5">
-            <div className="text-xl sm:text-2xl font-bold text-emerald-700 tracking-tight leading-tight truncate">
+          <div className="mt-2">
+            <div className="text-xl sm:text-2xl font-black text-emerald-700 tracking-tight truncate">
               ฿{money(summary.revenue)}
             </div>
           </div>
         </div>
 
-        {/* Card 3: Net Profit */}
-        <div className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col justify-between hover:border-slate-300 transition">
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-xs text-slate-500 font-medium truncate">
-              กำไรสุทธิ (Profit)
-            </span>
-            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border shrink-0 ${
+        {/* Card 3: Net Profit (Dynamic Teal/Amber Alert Accent) */}
+        <div className={`rounded-xl p-2.5 sm:p-3 border shadow-2xs flex flex-col justify-between hover:shadow-sm transition-all group ${
+          summary.profit >= 0
+            ? "bg-gradient-to-br from-white via-emerald-50/25 to-teal-100/35 border-emerald-200/90 hover:border-emerald-300"
+            : "bg-gradient-to-br from-white via-amber-50/25 to-rose-100/35 border-amber-200/90 hover:border-rose-300"
+        }`}>
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-xs text-white ${
+                summary.profit >= 0 ? "bg-teal-600" : "bg-amber-600"
+              }`}>
+                <Coins className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-xs font-bold text-slate-700 truncate">
+                กำไรสุทธิ (Profit)
+              </span>
+            </div>
+            <span className={`text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
               summary.profitPercent >= 0
-                ? "bg-emerald-50 text-emerald-800 border-emerald-100"
-                : "bg-rose-50 text-rose-700 border-rose-100"
+                ? "bg-emerald-100/80 text-emerald-800 border-emerald-200"
+                : "bg-rose-100/80 text-rose-700 border-rose-200"
             }`}>
-              กำไร {summary.profitPercent.toFixed(1)}%
+              {summary.profitPercent >= 0 ? "+" : ""}{summary.profitPercent.toFixed(1)}%
             </span>
           </div>
-          <div className="mt-1.5">
-            <div className={`text-xl sm:text-2xl font-bold tracking-tight leading-tight truncate ${summary.profit >= 0 ? "text-slate-900" : "text-rose-600"}`}>
+          <div className="mt-2">
+            <div className={`text-xl sm:text-2xl font-black tracking-tight truncate ${summary.profit >= 0 ? "text-teal-700" : "text-rose-600"}`}>
               ฿{money(summary.profit)}
             </div>
           </div>
         </div>
 
-        {/* Card 4: Project Status */}
-        <div className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col justify-between hover:border-slate-300 transition">
-          <div className="flex items-center justify-between gap-1">
-            <span className="text-xs text-slate-500 font-medium truncate">
-              สถานะโครงการ
-            </span>
-            <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0">
-              รวม {summary.activeProjects + summary.completeProjects} โครงการ
+        {/* Card 4: Project Status (Cool Indigo Accent with Status Indicators) */}
+        <div className="bg-gradient-to-br from-white via-indigo-50/20 to-indigo-100/40 rounded-xl p-2.5 sm:p-3 border border-indigo-200/90 shadow-2xs flex flex-col justify-between hover:shadow-sm hover:border-indigo-300 transition-all group">
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <FolderKanban className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-xs font-bold text-slate-700 truncate">
+                สถานะโครงการ
+              </span>
+            </div>
+            <span className="text-[10px] sm:text-[11px] font-bold text-indigo-900 bg-indigo-100/80 px-2 py-0.5 rounded-full border border-indigo-200 shrink-0">
+              รวม {summary.activeProjects + summary.completeProjects}
             </span>
           </div>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-950">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
-              <span className="text-xs font-medium">กำลังทำ:</span>
-              <span className="text-xs sm:text-sm font-bold">{summary.activeProjects}</span>
+          <div className="mt-2 flex items-center gap-1.5">
+            <div className="flex-1 flex items-center justify-between px-2 py-1 rounded-lg bg-white/85 border border-emerald-200/90 shadow-2xs">
+              <div className="flex items-center gap-1">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-[11px] font-semibold text-slate-700">ทำอยู่</span>
+              </div>
+              <span className="text-xs sm:text-sm font-extrabold text-emerald-700">{summary.activeProjects}</span>
             </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-              <span className="text-xs font-medium">เสร็จ:</span>
-              <span className="text-xs sm:text-sm font-bold">{summary.completeProjects}</span>
+            <div className="flex-1 flex items-center justify-between px-2 py-1 rounded-lg bg-white/85 border border-slate-200/90 shadow-2xs">
+              <div className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                <span className="text-[11px] font-semibold text-slate-700">เสร็จ</span>
+              </div>
+              <span className="text-xs sm:text-sm font-extrabold text-slate-800">{summary.completeProjects}</span>
             </div>
           </div>
         </div>
@@ -331,43 +364,53 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
       {/* ========================================================================= */}
       {/* 3. COST STRUCTURE / EXPENSE DISTRIBUTION BAR                              */}
       {/* ========================================================================= */}
-      <section className="bg-white rounded-lg p-3 border border-slate-200 flex flex-col gap-2">
+      <section className="bg-white rounded-xl p-2.5 sm:p-3 border border-slate-200/90 shadow-2xs flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <PieChart className="w-4 h-4 text-slate-600" />
-            <span className="text-xs sm:text-sm font-semibold text-slate-800">สัดส่วนค่าใช้จ่ายตามหมวดหมู่</span>
+            <div className="w-6 h-6 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200/70 shadow-2xs">
+              <PieChart className="w-3.5 h-3.5" />
+            </div>
+            <span className="text-xs sm:text-sm font-bold text-slate-900">สัดส่วนค่าใช้จ่ายตามหมวดหมู่</span>
           </div>
-          <span className="text-xs text-slate-500 font-medium">ยอดรวม <strong className="text-slate-900 font-bold">฿{money(summary.total)}</strong></span>
+          <span className="text-[11px] sm:text-xs text-slate-500 font-medium">
+            ยอดรวมค่าใช้จ่าย <strong className="text-slate-950 font-black">฿{money(summary.total)}</strong>
+          </span>
         </div>
 
-        {/* Visual Progress Bar */}
-        <div className="w-full h-2 rounded-full overflow-hidden flex bg-slate-100 border border-slate-200 p-0.5 gap-0.5">
+        {/* Visual Progress Bar with thicker, prominent segments */}
+        <div className="w-full h-5 sm:h-5.5 rounded-xl overflow-hidden flex bg-slate-100 border border-slate-200/90 p-0.5 gap-0.5 shadow-inner">
           {costBreakdown.length > 0 ? (
             costBreakdown.map((item, idx) => (
               <div
                 key={idx}
-                className={`h-full rounded-xs ${item.color} transition-all duration-500`}
+                className={`h-full rounded-lg ${item.color} transition-all duration-500 hover:brightness-105 flex items-center justify-center overflow-hidden relative shadow-2xs`}
                 style={{ width: `${Math.max(3, item.percent)}%` }}
                 title={`${item.name}: ${item.percent.toFixed(1)}% (฿${money(item.amount)})`}
-              />
+              >
+                {item.percent >= 8 && (
+                  <span className="text-[10px] font-black text-white px-1 truncate select-none drop-shadow-xs">
+                    {item.percent.toFixed(1)}%
+                  </span>
+                )}
+              </div>
             ))
           ) : (
-            <div className="w-full h-full bg-slate-200 rounded-xs" />
+            <div className="w-full h-full bg-slate-200 rounded-lg" />
           )}
         </div>
 
         {/* Breakdown Chips */}
         {costBreakdown.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-0.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
             {costBreakdown.map((item, idx) => (
               <div
                 key={idx}
-                className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-medium border shrink-0 ${item.lightBg}`}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border shrink-0 ${item.lightBg} shadow-2xs hover:scale-[1.01] transition cursor-default`}
               >
-                <span className={`w-2 h-2 rounded-full ${item.color}`} />
-                <span className="text-slate-800 font-medium">{item.name}</span>
-                <span className={item.text}>{item.percent.toFixed(1)}%</span>
-                <span className="text-slate-500">({money(item.amount)})</span>
+                <span className={`w-2 h-2 rounded-full ${item.color} shadow-xs shrink-0`} />
+                <span className="text-slate-800 font-semibold">{item.name}</span>
+                <span className={`${item.text} font-black`}>{item.percent.toFixed(1)}%</span>
+                <span className="text-slate-500 font-normal">({money(item.amount)} ฿)</span>
               </div>
             ))}
           </div>
@@ -375,93 +418,145 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. BILL FOLLOW-UP QUICK ACTION CARDS                                      */}
+      {/* 4. BILL FOLLOW-UP QUICK ACTION CARDS (Color-Coded & Dynamic Status)       */}
       {/* ========================================================================= */}
       <section className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between px-0.5">
-          <div className="flex items-center gap-2">
-            <Clock3 className="w-4 h-4 text-slate-600" />
-            <h2 className="text-xs sm:text-sm font-semibold text-slate-800">สถานะงานที่ต้องติดตาม (Follow-up)</h2>
+          <div className="flex items-center gap-1.5">
+            <Clock3 className="w-3.5 h-3.5 text-slate-700" />
+            <h2 className="text-xs sm:text-sm font-bold text-slate-900">สถานะงานที่ต้องติดตาม (Follow-up)</h2>
           </div>
-          <span className="text-[11px] text-slate-500 font-medium">แตะเพื่อดูบิล</span>
+          <span className="text-[10px] text-slate-500 font-medium">แตะเพื่อเข้าดูรายการบิล</span>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 text-xs">
           
-          {/* VAT Follow */}
+          {/* VAT Follow (Sky Theme) */}
           <Link
             href="/bill-follow?tab=vat"
-            className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:border-slate-300 transition active:scale-[0.99] group"
+            className={`p-2.5 sm:p-3 rounded-xl border transition-all active:scale-[0.99] group flex items-center justify-between ${
+              summary.vatCount > 0
+                ? "bg-gradient-to-br from-white via-sky-50/40 to-sky-100/50 border-sky-300/90 shadow-xs ring-1 ring-sky-200/70 hover:border-sky-400"
+                : "bg-white border-slate-200/90 shadow-2xs hover:border-slate-300"
+            }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-md bg-sky-50 border border-sky-200/80 text-sky-700 flex items-center justify-center shrink-0">
-                <FileCheck className="w-4 h-4" />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                summary.vatCount > 0 ? "bg-sky-500 text-white shadow-xs" : "bg-slate-100 text-slate-500"
+              }`}>
+                <FileCheck className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
-                <div className="text-slate-600 text-xs font-medium truncate">ตาม VAT (รอได้บิล)</div>
-                <div className="text-slate-900 text-sm sm:text-base font-bold truncate">
-                  {summary.vatCount} <span className="text-xs font-normal text-slate-500">บิล</span>
+                <div className="text-slate-600 text-xs font-semibold truncate">ตาม VAT (รอได้บิล)</div>
+                <div className="text-slate-900 text-xs sm:text-sm font-extrabold truncate mt-0.5">
+                  {summary.vatCount} <span className="text-[11px] font-normal text-slate-500">บิล</span>
                 </div>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              {summary.vatCount > 0 ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-800 border border-sky-300">
+                  รอใบเสร็จ
+                </span>
+              ) : null}
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition" />
+            </div>
           </Link>
 
-          {/* Natural 3% Follow */}
+          {/* Natural 3% Follow (Purple Theme - Active Highlight when > 0!) */}
           <Link
             href="/bill-follow?tab=natural"
-            className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:border-slate-300 transition active:scale-[0.99] group"
+            className={`p-2.5 sm:p-3 rounded-xl border transition-all active:scale-[0.99] group flex items-center justify-between ${
+              summary.naturalDeductCount > 0
+                ? "bg-gradient-to-br from-white via-purple-50/50 to-purple-100/60 border-purple-300 shadow-xs ring-1 ring-purple-300/80 hover:border-purple-400"
+                : "bg-white border-slate-200/90 shadow-2xs hover:border-slate-300"
+            }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-md bg-purple-50 border border-purple-200/80 text-purple-700 flex items-center justify-center shrink-0">
-                <UserCheck className="w-4 h-4" />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                summary.naturalDeductCount > 0 ? "bg-purple-600 text-white shadow-xs" : "bg-slate-100 text-slate-500"
+              }`}>
+                <UserCheck className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
-                <div className="text-slate-600 text-xs font-medium truncate">ตาม หัก 3% บุคคล</div>
-                <div className="text-slate-900 text-sm sm:text-base font-bold truncate">
-                  {summary.naturalDeductCount} <span className="text-xs font-normal text-slate-500">บิล</span>
+                <div className="text-slate-600 text-xs font-semibold truncate">ตาม หัก 3% บุคคล</div>
+                <div className="text-slate-900 text-xs sm:text-sm font-extrabold truncate mt-0.5">
+                  {summary.naturalDeductCount} <span className="text-[11px] font-normal text-slate-500">บิล</span>
                 </div>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              {summary.naturalDeductCount > 0 ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-900 border border-purple-300 animate-pulse">
+                  รอออก 3%
+                </span>
+              ) : null}
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition" />
+            </div>
           </Link>
 
-          {/* Company 3% Follow */}
+          {/* Company 3% Follow (Blue Theme) */}
           <Link
             href="/bill-follow?tab=company"
-            className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:border-slate-300 transition active:scale-[0.99] group"
+            className={`p-2.5 sm:p-3 rounded-xl border transition-all active:scale-[0.99] group flex items-center justify-between ${
+              summary.companyDeductCount > 0
+                ? "bg-gradient-to-br from-white via-blue-50/50 to-blue-100/60 border-blue-300 shadow-xs ring-1 ring-blue-300/80 hover:border-blue-400"
+                : "bg-white border-slate-200/90 shadow-2xs hover:border-slate-300"
+            }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-md bg-blue-50 border border-blue-200/80 text-blue-700 flex items-center justify-center shrink-0">
-                <Building2 className="w-4 h-4" />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                summary.companyDeductCount > 0 ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 text-slate-500"
+              }`}>
+                <Building2 className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
-                <div className="text-slate-600 text-xs font-medium truncate">ตาม หัก 3% บริษัท</div>
-                <div className="text-slate-900 text-sm sm:text-base font-bold truncate">
-                  {summary.companyDeductCount} <span className="text-xs font-normal text-slate-500">บิล</span>
+                <div className="text-slate-600 text-xs font-semibold truncate">ตาม หัก 3% บริษัท</div>
+                <div className="text-slate-900 text-xs sm:text-sm font-extrabold truncate mt-0.5">
+                  {summary.companyDeductCount} <span className="text-[11px] font-normal text-slate-500">บิล</span>
                 </div>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              {summary.companyDeductCount > 0 ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-900 border border-blue-300">
+                  รอออก 3%
+                </span>
+              ) : null}
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition" />
+            </div>
           </Link>
 
-          {/* Credit Follow */}
+          {/* Credit Follow (Amber Theme) */}
           <Link
             href="/bill-follow?tab=credit"
-            className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between hover:border-slate-300 transition active:scale-[0.99] group"
+            className={`p-2.5 sm:p-3 rounded-xl border transition-all active:scale-[0.99] group flex items-center justify-between ${
+              summary.creditCount > 0
+                ? "bg-gradient-to-br from-white via-amber-50/50 to-amber-100/60 border-amber-300 shadow-xs ring-1 ring-amber-300/80 hover:border-amber-400"
+                : "bg-white border-slate-200/90 shadow-2xs hover:border-slate-300"
+            }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-md bg-orange-50 border border-orange-200/80 text-orange-700 flex items-center justify-center shrink-0">
-                <Clock3 className="w-4 h-4" />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                summary.creditCount > 0 ? "bg-amber-600 text-white shadow-xs" : "bg-slate-100 text-slate-500"
+              }`}>
+                <Clock3 className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
-                <div className="text-slate-600 text-xs font-medium truncate">ตาม เครดิต (รอจ่าย)</div>
-                <div className="text-slate-900 text-sm sm:text-base font-bold truncate">
-                  {summary.creditCount} <span className="text-xs font-normal text-slate-500">บิล</span>
+                <div className="text-slate-600 text-xs font-semibold truncate">ตาม เครดิต (รอจ่าย)</div>
+                <div className="text-slate-900 text-xs sm:text-sm font-extrabold truncate mt-0.5">
+                  {summary.creditCount} <span className="text-[11px] font-normal text-slate-500">บิล</span>
                 </div>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition shrink-0 ml-1" />
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              {summary.creditCount > 0 ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                  รอจ่าย
+                </span>
+              ) : null}
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition" />
+            </div>
           </Link>
 
         </div>
@@ -470,75 +565,75 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
       {/* ========================================================================= */}
       {/* 5. TABBED BREAKDOWN REPORTS                                                */}
       {/* ========================================================================= */}
-      <section className="bg-white rounded-lg border border-slate-200 overflow-hidden flex flex-col">
+      <section className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col">
         
         {/* Tab Controls Bar */}
-        <div className="p-2.5 sm:p-3 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-slate-50/60">
+        <div className="p-2 sm:p-2.5 border-b border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-2 bg-gradient-to-b from-slate-50/90 to-slate-50/40">
           
           {/* Category Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap text-xs">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap text-xs p-1 bg-slate-200/60 rounded-xl">
             <button
               type="button"
               onClick={() => setActiveTab("vat")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 active:scale-95 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 active:scale-95 ${
                 activeTab === "vat"
-                  ? "bg-[#0b3531] text-white"
-                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                  ? "bg-[#0b3531] text-white shadow-xs"
+                  : "text-slate-700 hover:text-slate-900 hover:bg-white/80"
               }`}
             >
-              <Building2 className="w-4 h-4" />
+              <Building2 className="w-3.5 h-3.5" />
               <span>ค่าแรงบริษัท & ภาษี VAT</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab("natural")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 active:scale-95 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 active:scale-95 ${
                 activeTab === "natural"
-                  ? "bg-[#0b3531] text-white"
-                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                  ? "bg-[#0b3531] text-white shadow-xs"
+                  : "text-slate-700 hover:text-slate-900 hover:bg-white/80"
               }`}
             >
-              <Users className="w-4 h-4" />
+              <Users className="w-3.5 h-3.5" />
               <span>ค่าแรงบุคคล & ดำเนินงาน</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab("equipment")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 active:scale-95 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 active:scale-95 ${
                 activeTab === "equipment"
-                  ? "bg-[#0b3531] text-white"
-                  : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+                  ? "bg-[#0b3531] text-white shadow-xs"
+                  : "text-slate-700 hover:text-slate-900 hover:bg-white/80"
               }`}
             >
-              <Wrench className="w-4 h-4" />
+              <Wrench className="w-3.5 h-3.5" />
               <span>เครื่องจักร เครื่องมือ & อื่นๆ</span>
             </button>
           </div>
 
           {/* View Mode Switcher (Card View vs Table View) */}
           <div className="flex items-center justify-end gap-1.5 shrink-0 self-end md:self-auto">
-            <span className="text-xs text-slate-500 font-medium mr-1 hidden sm:inline">มุมมอง:</span>
-            <div className="bg-slate-100 p-0.5 rounded-lg flex items-center gap-1 border border-slate-200">
+            <span className="text-[11px] text-slate-500 font-medium mr-0.5 hidden sm:inline">มุมมอง:</span>
+            <div className="bg-slate-200/60 p-0.5 rounded-lg flex items-center gap-1 border border-slate-200/60">
               <button
                 type="button"
                 onClick={() => setViewMode("cards")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
-                  viewMode === "cards" ? "bg-white text-slate-900 font-semibold border border-slate-200/80" : "text-slate-600 hover:text-slate-900"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
+                  viewMode === "cards" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <LayoutGrid className="w-3.5 h-3.5" />
+                <LayoutGrid className="w-3 h-3" />
                 <span>การ์ด</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
-                  viewMode === "table" ? "bg-white text-slate-900 font-semibold border border-slate-200/80" : "text-slate-600 hover:text-slate-900"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition cursor-pointer ${
+                  viewMode === "table" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <TableProperties className="w-3.5 h-3.5" />
+                <TableProperties className="w-3 h-3" />
                 <span>ตาราง</span>
               </button>
             </div>
@@ -547,138 +642,138 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
         </div>
 
         {/* Tab Content Container */}
-        <div className="p-3 sm:p-3.5">
+        <div className="p-2.5 sm:p-3">
           
           {/* =================================================================== */}
           {/* TAB 1: ค่าแรงบริษัท & ภาษี VAT                                        */}
           {/* =================================================================== */}
           {activeTab === "vat" && (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               
-              {/* Summary Highlight Strip */}
-              <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="text-center sm:text-left pl-1">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">ก่อน VAT รวม</div>
-                  <div className="text-sm sm:text-lg font-bold text-slate-900 truncate mt-0.5">฿{money(summary.main3BeforeVatTotal)}</div>
+              {/* Summary Highlight Strip (Streamlined Compact & Crisp) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-slate-600">ก่อน VAT รวม</span>
+                  <span className="text-sm sm:text-base font-extrabold text-slate-900">฿{money(summary.main3BeforeVatTotal)}</span>
                 </div>
-                <div className="text-center sm:text-left border-x border-slate-200 px-2">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">ภาษี / VAT รวม</div>
-                  <div className="text-sm sm:text-lg font-bold text-emerald-700 truncate mt-0.5">฿{money(summary.main3VatTotal)}</div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-50/70 border border-emerald-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-emerald-800">ภาษี / VAT รวม</span>
+                  <span className="text-sm sm:text-base font-extrabold text-emerald-700">฿{money(summary.main3VatTotal)}</span>
                 </div>
-                <div className="text-center sm:text-left pl-1">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">ยอดรวมสุทธิ</div>
-                  <div className="text-sm sm:text-lg font-bold text-indigo-950 truncate mt-0.5">฿{money(summary.main3GrandTotal)}</div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-indigo-50/70 border border-indigo-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-indigo-800">ยอดรวมสุทธิ</span>
+                  <span className="text-sm sm:text-base font-black text-indigo-950">฿{money(summary.main3GrandTotal)}</span>
                 </div>
               </div>
 
               {/* View Mode 1: Mobile Cards View */}
               {viewMode === "cards" ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-2.5">
                   
                   {/* Card 1: ค่าแรงบริษัท */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-blue-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-blue-50 border border-blue-200/60 text-blue-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Building2 className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">ค่าแรงบริษัท</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">ค่าแรงบริษัท</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/60">หัก 3%</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/70">หัก 3%</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ก่อน VAT</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main3.laborBeforeVat)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ก่อน VAT</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main3.laborBeforeVat)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ภาษี 3%</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-600 mt-0.5">{money(summary.main3.laborVat)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-700">ภาษี 3%</div>
+                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5 truncate">{money(summary.main3.laborVat)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">รวมสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">{money(summary.main3.laborBeforeVat)}</div>
+                      <div className="bg-indigo-50/60 border border-indigo-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-indigo-800">รวมสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-indigo-950 mt-0.5 truncate">{money(summary.main3.laborBeforeVat)}</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Card 2: ค่าของ (มี VAT) */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-emerald-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-emerald-50 border border-emerald-200/60 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Hammer className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">ค่าของ (มี VAT)</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">ค่าของ (มี VAT)</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60">VAT 7%</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/70">VAT 7%</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ก่อน VAT</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main3.materialBeforeVat)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ก่อน VAT</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main3.materialBeforeVat)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">VAT 7%</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-600 mt-0.5">{money(summary.main3.materialVat)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-700">VAT 7%</div>
+                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5 truncate">{money(summary.main3.materialVat)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">รวมสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">{money(summary.main3.materialBeforeVat + summary.main3.materialVat)}</div>
+                      <div className="bg-indigo-50/60 border border-indigo-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-indigo-800">รวมสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-indigo-950 mt-0.5 truncate">{money(summary.main3.materialBeforeVat + summary.main3.materialVat)}</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Card 3: น้ำมัน (มี VAT) */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-amber-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Fuel className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">น้ำมัน (มี VAT)</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">น้ำมัน (มี VAT)</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60">VAT 7%</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/70">VAT 7%</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ก่อน VAT</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main3.fuelBeforeVat)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ก่อน VAT</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main3.fuelBeforeVat)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">VAT 7%</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-600 mt-0.5">{money(summary.main3.fuelVat)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-700">VAT 7%</div>
+                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5 truncate">{money(summary.main3.fuelVat)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">รวมสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">{money(summary.main3.fuelBeforeVat + summary.main3.fuelVat)}</div>
+                      <div className="bg-indigo-50/60 border border-indigo-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-indigo-800">รวมสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-indigo-950 mt-0.5 truncate">{money(summary.main3.fuelBeforeVat + summary.main3.fuelVat)}</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Card 4: ซ่อมรถ (มี VAT) */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-rose-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-rose-50 border border-rose-200/60 text-rose-600 flex items-center justify-center shrink-0 shadow-2xs">
                           <Truck className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">ซ่อมรถ (มี VAT)</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">ซ่อมรถ (มี VAT)</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200/60">VAT 7%</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200/70">VAT 7%</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ก่อน VAT</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main3.repairBeforeVat)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ก่อน VAT</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main3.repairBeforeVat)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">VAT 7%</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-600 mt-0.5">{money(summary.main3.repairVat)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-700">VAT 7%</div>
+                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5 truncate">{money(summary.main3.repairVat)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">รวมสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">{money(summary.main3.repairBeforeVat + summary.main3.repairVat)}</div>
+                      <div className="bg-indigo-50/60 border border-indigo-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-indigo-800">รวมสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-indigo-950 mt-0.5 truncate">{money(summary.main3.repairBeforeVat + summary.main3.repairVat)}</div>
                       </div>
                     </div>
                   </div>
@@ -686,10 +781,10 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                 </div>
               ) : (
                 /* View Mode 2: Full Data Table */
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                      <tr className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                         <th className="py-2 px-3 border-r border-slate-200">รายการ</th>
                         <th className="py-2 px-3 border-r border-slate-200 text-right">ก่อน VAT (บาท)</th>
                         <th className="py-2 px-3 border-r border-slate-200 text-right">คำนวณ VAT / ภาษี (บาท)</th>
@@ -697,35 +792,35 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white font-normal text-slate-800">
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">ค่าแรงบริษัท</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">ค่าแรงบริษัท</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main3.laborBeforeVat)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-semibold">{money(summary.main3.laborVat)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-slate-900">{money(summary.main3.laborBeforeVat)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-bold">{money(summary.main3.laborVat)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-900">{money(summary.main3.laborBeforeVat)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">ค่าของ (มี VAT)</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">ค่าของ (มี VAT)</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main3.materialBeforeVat)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-semibold">{money(summary.main3.materialVat)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-slate-900">{money(summary.main3.materialBeforeVat + summary.main3.materialVat)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-bold">{money(summary.main3.materialVat)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-900">{money(summary.main3.materialBeforeVat + summary.main3.materialVat)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">น้ำมัน (มี VAT)</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">น้ำมัน (มี VAT)</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main3.fuelBeforeVat)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-semibold">{money(summary.main3.fuelVat)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-slate-900">{money(summary.main3.fuelBeforeVat + summary.main3.fuelVat)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-bold">{money(summary.main3.fuelVat)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-900">{money(summary.main3.fuelBeforeVat + summary.main3.fuelVat)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">ซ่อมรถ (มี VAT)</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">ซ่อมรถ (มี VAT)</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main3.repairBeforeVat)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-semibold">{money(summary.main3.repairVat)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-slate-900">{money(summary.main3.repairBeforeVat + summary.main3.repairVat)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-bold">{money(summary.main3.repairVat)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-slate-900">{money(summary.main3.repairBeforeVat + summary.main3.repairVat)}</td>
                       </tr>
-                      <tr className="bg-slate-50 text-slate-900 border-t border-slate-200 font-bold">
+                      <tr className="bg-slate-100/90 text-slate-900 border-t-2 border-slate-300 font-extrabold">
                         <td className="py-2 px-3 border-r border-slate-200">รวมทั้งสิ้น</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main3BeforeVatTotal)}</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700">{money(summary.main3VatTotal)}</td>
-                        <td className="py-2 px-3 text-right text-slate-900">{money(summary.main3GrandTotal)}</td>
+                        <td className="py-2 px-3 text-right text-indigo-950 font-black">{money(summary.main3GrandTotal)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -739,159 +834,159 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
           {/* TAB 2: ค่าแรงบุคคล & ดำเนินงาน                                         */}
           {/* =================================================================== */}
           {activeTab === "natural" && (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               
-              {/* Summary Highlight Strip */}
-              <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="text-center sm:text-left pl-1">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">รวมค่าใช้จ่าย</div>
-                  <div className="text-sm sm:text-lg font-bold text-slate-900 truncate mt-0.5">฿{money(summary.main4Total)}</div>
+              {/* Summary Highlight Strip (Streamlined Compact & Crisp) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-slate-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-slate-600">รวมค่าใช้จ่าย</span>
+                  <span className="text-sm sm:text-base font-extrabold text-slate-900">฿{money(summary.main4Total)}</span>
                 </div>
-                <div className="text-center sm:text-left border-x border-slate-200 px-2">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">รวมหัก ณ ที่จ่าย</div>
-                  <div className="text-sm sm:text-lg font-bold text-amber-700 truncate mt-0.5">฿{money(summary.main4DeductTotal)}</div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-50/70 border border-amber-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-amber-800">รวมหัก ณ ที่จ่าย</span>
+                  <span className="text-sm sm:text-base font-extrabold text-amber-700">฿{money(summary.main4DeductTotal)}</span>
                 </div>
-                <div className="text-center sm:text-left pl-1">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">รวมยอดโอนสุทธิ</div>
-                  <div className="text-sm sm:text-lg font-bold text-emerald-700 truncate mt-0.5">฿{money(summary.main4NetTotal)}</div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-50/70 border border-emerald-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-emerald-800">รวมยอดโอนสุทธิ</span>
+                  <span className="text-sm sm:text-base font-black text-emerald-700">฿{money(summary.main4NetTotal)}</span>
                 </div>
               </div>
 
               {/* View Mode 1: Mobile Cards View */}
               {viewMode === "cards" ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-2.5">
                   
-                  {/* Card 1: ค่าแรง */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  {/* Card 1: ค่าแรงบุคคล */}
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-indigo-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-indigo-50 border border-indigo-200/60 text-indigo-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Users className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">ค่าแรงบุคคล</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">ค่าแรงบุคคล</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/60">หมวดแรงงาน</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200/70">หมวดแรงงาน</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ค่าใช้จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main4.naturalLabor)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ค่าใช้จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main4.naturalLabor)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">หัก ณ ที่จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-amber-600 mt-0.5">{money(summary.main4.naturalLaborDeduct)}</div>
+                      <div className="bg-amber-50/60 border border-amber-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-amber-700">หัก ณ ที่จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-amber-700 mt-0.5 truncate">{money(summary.main4.naturalLaborDeduct)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ยอดโอนสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5">{money(summary.main4.naturalLabor - summary.main4.naturalLaborDeduct)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-800">ยอดโอนสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5 truncate">{money(summary.main4.naturalLabor - summary.main4.naturalLaborDeduct)}</div>
                       </div>
                     </div>
                   </div>
 
                   {/* Card 2: พนักงาน */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-sky-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-sky-50 border border-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-sky-50 border border-sky-200/60 text-sky-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <UserCheck className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">พนักงาน</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">พนักงาน</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200/60">เงินเดือน/เบี้ยเลี้ยง</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200/70">เงินเดือน/เบี้ยเลี้ยง</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ค่าใช้จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main4.staff)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ค่าใช้จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main4.staff)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">หัก ณ ที่จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-amber-600 mt-0.5">{money(summary.main4.staffDeduct)}</div>
+                      <div className="bg-amber-50/60 border border-amber-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-amber-700">หัก ณ ที่จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-amber-700 mt-0.5 truncate">{money(summary.main4.staffDeduct)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ยอดโอนสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5">{money(summary.main4.staff - summary.main4.staffDeduct)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-800">ยอดโอนสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5 truncate">{money(summary.main4.staff - summary.main4.staffDeduct)}</div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Card 3: ค่าของ */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  {/* Card 3: ค่าของ (ไม่มี VAT) */}
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-emerald-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-emerald-50 border border-emerald-200/60 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Hammer className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">ค่าของ (ไม่มี VAT)</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">ค่าของ (ไม่มี VAT)</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/60">วัสดุอุปกรณ์</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/70">วัสดุอุปกรณ์</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ค่าใช้จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main4.material)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ค่าใช้จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main4.material)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">หัก ณ ที่จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-amber-600 mt-0.5">{money(summary.main4.materialDeduct)}</div>
+                      <div className="bg-amber-50/60 border border-amber-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-amber-700">หัก ณ ที่จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-amber-700 mt-0.5 truncate">{money(summary.main4.materialDeduct)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ยอดโอนสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5">{money(summary.main4.material - summary.main4.materialDeduct)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-800">ยอดโอนสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5 truncate">{money(summary.main4.material - summary.main4.materialDeduct)}</div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Card 4: น้ำมัน */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  {/* Card 4: น้ำมัน (ไม่มี VAT) */}
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-amber-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Fuel className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">น้ำมัน (ไม่มี VAT)</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">น้ำมัน (ไม่มี VAT)</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/60">เชื้อเพลิง</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/70">เชื้อเพลิง</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ค่าใช้จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main4.fuel)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ค่าใช้จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main4.fuel)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">หัก ณ ที่จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-amber-600 mt-0.5">{money(summary.main4.fuelDeduct)}</div>
+                      <div className="bg-amber-50/60 border border-amber-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-amber-700">หัก ณ ที่จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-amber-700 mt-0.5 truncate">{money(summary.main4.fuelDeduct)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ยอดโอนสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5">{money(summary.main4.fuel - summary.main4.fuelDeduct)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-800">ยอดโอนสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5 truncate">{money(summary.main4.fuel - summary.main4.fuelDeduct)}</div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Card 5: ซ่อมรถ */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  {/* Card 5: ซ่อมรถ (ไม่มี VAT) */}
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-rose-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-rose-50 border border-rose-200/60 text-rose-600 flex items-center justify-center shrink-0 shadow-2xs">
                           <Truck className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">ซ่อมรถ (ไม่มี VAT)</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">ซ่อมรถ (ไม่มี VAT)</span>
                       </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/60">ซ่อมบำรุง</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200/70">ซ่อมบำรุง</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 text-center divide-x divide-slate-200/60">
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ค่าใช้จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5">{money(summary.main4.repair)}</div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="bg-slate-50/90 border border-slate-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-slate-500">ค่าใช้จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-800 mt-0.5 truncate">{money(summary.main4.repair)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">หัก ณ ที่จ่าย</div>
-                        <div className="text-xs sm:text-sm font-bold text-amber-600 mt-0.5">{money(summary.main4.repairDeduct)}</div>
+                      <div className="bg-amber-50/60 border border-amber-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-amber-700">หัก ณ ที่จ่าย</div>
+                        <div className="text-xs sm:text-sm font-bold text-amber-700 mt-0.5 truncate">{money(summary.main4.repairDeduct)}</div>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[11px] font-medium text-slate-500">ยอดโอนสุทธิ</div>
-                        <div className="text-xs sm:text-sm font-bold text-emerald-700 mt-0.5">{money(summary.main4.repair - summary.main4.repairDeduct)}</div>
+                      <div className="bg-emerald-50/60 border border-emerald-200/60 p-1.5 rounded-lg text-center">
+                        <div className="text-[10px] font-semibold text-emerald-800">ยอดโอนสุทธิ</div>
+                        <div className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5 truncate">{money(summary.main4.repair - summary.main4.repairDeduct)}</div>
                       </div>
                     </div>
                   </div>
@@ -899,10 +994,10 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                 </div>
               ) : (
                 /* View Mode 2: Full Data Table */
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                      <tr className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                         <th className="py-2 px-3 border-r border-slate-200">รายการ</th>
                         <th className="py-2 px-3 border-r border-slate-200 text-right">ยอดรวมค่าใช้จ่าย (บาท)</th>
                         <th className="py-2 px-3 border-r border-slate-200 text-right">หัก ณ ที่จ่าย (บาท)</th>
@@ -910,41 +1005,41 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white font-normal text-slate-800">
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">ค่าแรง</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">ค่าแรง</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main4.naturalLabor)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-semibold">{money(summary.main4.naturalLaborDeduct)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-emerald-700">{money(summary.main4.naturalLabor - summary.main4.naturalLaborDeduct)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-bold">{money(summary.main4.naturalLaborDeduct)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-emerald-700">{money(summary.main4.naturalLabor - summary.main4.naturalLaborDeduct)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">พนักงาน</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">พนักงาน</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main4.staff)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-semibold">{money(summary.main4.staffDeduct)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-emerald-700">{money(summary.main4.staff - summary.main4.staffDeduct)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-bold">{money(summary.main4.staffDeduct)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-emerald-700">{money(summary.main4.staff - summary.main4.staffDeduct)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">ค่าของ</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">ค่าของ</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main4.material)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-semibold">{money(summary.main4.materialDeduct)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-emerald-700">{money(summary.main4.material - summary.main4.materialDeduct)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-bold">{money(summary.main4.materialDeduct)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-emerald-700">{money(summary.main4.material - summary.main4.materialDeduct)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">น้ำมัน</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">น้ำมัน</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main4.fuel)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-semibold">{money(summary.main4.fuelDeduct)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-emerald-700">{money(summary.main4.fuel - summary.main4.fuelDeduct)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-bold">{money(summary.main4.fuelDeduct)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-emerald-700">{money(summary.main4.fuel - summary.main4.fuelDeduct)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">ซ่อมรถ</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">ซ่อมรถ</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main4.repair)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-semibold">{money(summary.main4.repairDeduct)}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-emerald-700">{money(summary.main4.repair - summary.main4.repairDeduct)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700 font-bold">{money(summary.main4.repairDeduct)}</td>
+                        <td className="py-2 px-3 text-right font-bold text-emerald-700">{money(summary.main4.repair - summary.main4.repairDeduct)}</td>
                       </tr>
-                      <tr className="bg-slate-50 text-slate-900 border-t border-slate-200 font-bold">
+                      <tr className="bg-slate-100/90 text-slate-900 border-t-2 border-slate-300 font-extrabold">
                         <td className="py-2 px-3 border-r border-slate-200">รวมทั้งสิ้น</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main4Total)}</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-700">{money(summary.main4DeductTotal)}</td>
-                        <td className="py-2 px-3 text-right text-emerald-700">{money(summary.main4NetTotal)}</td>
+                        <td className="py-2 px-3 text-right text-emerald-700 font-black">{money(summary.main4NetTotal)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -958,108 +1053,108 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
           {/* TAB 3: เครื่องจักร เครื่องมือ & อื่นๆ                                    */}
           {/* =================================================================== */}
           {activeTab === "equipment" && (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               
-              {/* Summary Highlight Strip */}
-              <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="text-center sm:text-left pl-1">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">รวมเครื่องจักร</div>
-                  <div className="text-sm sm:text-lg font-bold text-slate-900 truncate mt-0.5">฿{money(summary.main5MachineTotal)}</div>
+              {/* Summary Highlight Strip (Streamlined Compact & Crisp) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-sky-50/70 border border-sky-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-sky-800">รวมเครื่องจักร</span>
+                  <span className="text-sm sm:text-base font-extrabold text-sky-900">฿{money(summary.main5MachineTotal)}</span>
                 </div>
-                <div className="text-center sm:text-left border-x border-slate-200 px-2">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">รวมเครื่องมือ</div>
-                  <div className="text-sm sm:text-lg font-bold text-sky-800 truncate mt-0.5">฿{money(summary.main5ToolTotal)}</div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-50/70 border border-amber-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-amber-800">รวมเครื่องมือ</span>
+                  <span className="text-sm sm:text-base font-extrabold text-amber-900">฿{money(summary.main5ToolTotal)}</span>
                 </div>
-                <div className="text-center sm:text-left pl-1">
-                  <div className="text-[11px] font-medium text-slate-500 uppercase truncate">รวมอื่นๆ</div>
-                  <div className="text-sm sm:text-lg font-bold text-indigo-950 truncate mt-0.5">฿{money(summary.main5OtherTotal)}</div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-purple-50/70 border border-purple-200/80 shadow-2xs">
+                  <span className="text-[11px] font-semibold text-purple-800">รวมอื่นๆ</span>
+                  <span className="text-sm sm:text-base font-black text-purple-950">฿{money(summary.main5OtherTotal)}</span>
                 </div>
               </div>
 
               {/* View Mode 1: Mobile Cards View */}
               {viewMode === "cards" ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5">
                   
                   {/* Card 1: เครื่องจักร */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-sky-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-sky-50 border border-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-sky-50 border border-sky-200/60 text-sky-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Wrench className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">เครื่องจักร</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">เครื่องจักร</span>
                       </div>
-                      <span className="text-xs sm:text-sm font-bold text-sky-800">฿{money(summary.main5MachineTotal)}</span>
+                      <span className="text-xs font-extrabold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200/70">฿{money(summary.main5MachineTotal)}</span>
                     </div>
                     
-                    <div className="space-y-1.5 text-xs bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 divide-y divide-slate-100">
+                    <div className="space-y-1 text-xs bg-slate-50/70 p-2 rounded-lg border border-slate-200/60 divide-y divide-slate-100">
                       <div className="flex items-center justify-between text-slate-600 pt-0.5 first:pt-0">
-                        <span>ก่อน VAT:</span>
-                        <span className="text-slate-900 font-semibold">{money(summary.main5.machineBeforeVat)}</span>
+                        <span className="font-medium">ก่อน VAT:</span>
+                        <span className="text-slate-900 font-bold">{money(summary.main5.machineBeforeVat)}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-600 pt-1">
-                        <span>คำนวณ VAT (7%):</span>
-                        <span className="text-emerald-700 font-semibold">{money(summary.main5.machineVat)}</span>
+                        <span className="font-medium">คำนวณ VAT (7%):</span>
+                        <span className="text-emerald-700 font-bold">{money(summary.main5.machineVat)}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-600 pt-1">
-                        <span>ไม่มี VAT:</span>
-                        <span className="text-slate-900 font-semibold">{money(summary.main5.machineNoVat)}</span>
+                        <span className="font-medium">ไม่มี VAT:</span>
+                        <span className="text-slate-900 font-bold">{money(summary.main5.machineNoVat)}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Card 2: เครื่องมือ */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-amber-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-amber-50 border border-amber-200/60 text-amber-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Hammer className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">เครื่องมือ</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">เครื่องมือ</span>
                       </div>
-                      <span className="text-xs sm:text-sm font-bold text-amber-800">฿{money(summary.main5ToolTotal)}</span>
+                      <span className="text-xs font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/70">฿{money(summary.main5ToolTotal)}</span>
                     </div>
                     
-                    <div className="space-y-1.5 text-xs bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 divide-y divide-slate-100">
+                    <div className="space-y-1 text-xs bg-slate-50/70 p-2 rounded-lg border border-slate-200/60 divide-y divide-slate-100">
                       <div className="flex items-center justify-between text-slate-600 pt-0.5 first:pt-0">
-                        <span>ก่อน VAT:</span>
-                        <span className="text-slate-900 font-semibold">{money(summary.main5.toolBeforeVat)}</span>
+                        <span className="font-medium">ก่อน VAT:</span>
+                        <span className="text-slate-900 font-bold">{money(summary.main5.toolBeforeVat)}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-600 pt-1">
-                        <span>คำนวณ VAT (7%):</span>
-                        <span className="text-emerald-700 font-semibold">{money(summary.main5.toolVat)}</span>
+                        <span className="font-medium">คำนวณ VAT (7%):</span>
+                        <span className="text-emerald-700 font-bold">{money(summary.main5.toolVat)}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-600 pt-1">
-                        <span>ไม่มี VAT:</span>
-                        <span className="text-slate-900 font-semibold">{money(summary.main5.toolNoVat)}</span>
+                        <span className="font-medium">ไม่มี VAT:</span>
+                        <span className="text-slate-900 font-bold">{money(summary.main5.toolNoVat)}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Card 3: อื่นๆ */}
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-2.5">
+                  <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-purple-50 border border-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                        <div className="w-6 h-6 rounded-md bg-purple-50 border border-purple-200/60 text-purple-700 flex items-center justify-center shrink-0 shadow-2xs">
                           <Briefcase className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-xs sm:text-sm font-semibold text-slate-800">อื่นๆ</span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">อื่นๆ</span>
                       </div>
-                      <span className="text-xs sm:text-sm font-bold text-purple-800">฿{money(summary.main5OtherTotal)}</span>
+                      <span className="text-xs font-extrabold text-purple-800 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200/70">฿{money(summary.main5OtherTotal)}</span>
                     </div>
                     
-                    <div className="space-y-1.5 text-xs bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/60 divide-y divide-slate-100">
+                    <div className="space-y-1 text-xs bg-slate-50/70 p-2 rounded-lg border border-slate-200/60 divide-y divide-slate-100">
                       <div className="flex items-center justify-between text-slate-600 pt-0.5 first:pt-0">
-                        <span>ก่อน VAT:</span>
-                        <span className="text-slate-900 font-semibold">{money(summary.main5.otherBeforeVat)}</span>
+                        <span className="font-medium">ก่อน VAT:</span>
+                        <span className="text-slate-900 font-bold">{money(summary.main5.otherBeforeVat)}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-600 pt-1">
-                        <span>คำนวณ VAT (7%):</span>
-                        <span className="text-emerald-700 font-semibold">{money(summary.main5.otherVat)}</span>
+                        <span className="font-medium">คำนวณ VAT (7%):</span>
+                        <span className="text-emerald-700 font-bold">{money(summary.main5.otherVat)}</span>
                       </div>
                       <div className="flex items-center justify-between text-slate-600 pt-1">
-                        <span>ไม่มี VAT:</span>
-                        <span className="text-slate-900 font-semibold">{money(summary.main5.otherNoVat)}</span>
+                        <span className="font-medium">ไม่มี VAT:</span>
+                        <span className="text-slate-900 font-bold">{money(summary.main5.otherNoVat)}</span>
                       </div>
                     </div>
                   </div>
@@ -1067,10 +1162,10 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                 </div>
               ) : (
                 /* View Mode 2: Full Data Table */
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-2xs">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                      <tr className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
                         <th className="py-2 px-3 border-r border-slate-200">รายการ</th>
                         <th className="py-2 px-3 border-r border-slate-200 text-right">เครื่องจักร (บาท)</th>
                         <th className="py-2 px-3 border-r border-slate-200 text-right">เครื่องมือ (บาท)</th>
@@ -1078,29 +1173,29 @@ export function MainDashboardClient({ initialDataRows, initialProjectRows }: Mai
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white font-normal text-slate-800">
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">ก่อน VAT</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">ก่อน VAT</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main5.machineBeforeVat)}</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main5.toolBeforeVat)}</td>
-                        <td className="py-2 px-3 text-right">{money(summary.main5.otherBeforeVat)}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-slate-900">{money(summary.main5.otherBeforeVat)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">คำนวณ VAT (7%)</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-semibold">{money(summary.main5.machineVat)}</td>
-                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-semibold">{money(summary.main5.toolVat)}</td>
-                        <td className="py-2 px-3 text-right text-emerald-700 font-semibold">{money(summary.main5.otherVat)}</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">คำนวณ VAT (7%)</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-bold">{money(summary.main5.machineVat)}</td>
+                        <td className="py-2 px-3 border-r border-slate-200 text-right text-emerald-700 font-bold">{money(summary.main5.toolVat)}</td>
+                        <td className="py-2 px-3 text-right text-emerald-700 font-bold">{money(summary.main5.otherVat)}</td>
                       </tr>
-                      <tr className="hover:bg-slate-50/60 transition">
-                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-medium">ไม่มี VAT</td>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="py-2 px-3 border-r border-slate-200 text-slate-900 font-semibold">ไม่มี VAT</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main5.machineNoVat)}</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right">{money(summary.main5.toolNoVat)}</td>
-                        <td className="py-2 px-3 text-right">{money(summary.main5.otherNoVat)}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-slate-900">{money(summary.main5.otherNoVat)}</td>
                       </tr>
-                      <tr className="bg-slate-50 text-slate-900 border-t border-slate-200 font-bold">
+                      <tr className="bg-slate-100/90 text-slate-900 border-t-2 border-slate-300 font-extrabold">
                         <td className="py-2 px-3 border-r border-slate-200">ยอดรวมทั้งสิ้น</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right text-sky-800">{money(summary.main5MachineTotal)}</td>
                         <td className="py-2 px-3 border-r border-slate-200 text-right text-amber-800">{money(summary.main5ToolTotal)}</td>
-                        <td className="py-2 px-3 text-right text-purple-800">{money(summary.main5OtherTotal)}</td>
+                        <td className="py-2 px-3 text-right text-purple-900 font-black">{money(summary.main5OtherTotal)}</td>
                       </tr>
                     </tbody>
                   </table>
