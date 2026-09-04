@@ -10,11 +10,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing bill object" }, { status: 400 });
     }
 
+    const { getLineTargetGroup } = await import("@/lib/line");
+    const fallbackFinanceGroup = await getLineTargetGroup("finance");
     const targetGroup =
       requestedGroup ||
+      fallbackFinanceGroup ||
       process.env.LINE_GROUP_ID_FINANCE ||
       process.env.LINE_GROUP_ID_SUMMARY ||
-      process.env.LINE_USER_ID_OWN ||
       "";
 
     if (!targetGroup) {

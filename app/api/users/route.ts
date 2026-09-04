@@ -159,8 +159,8 @@ export async function POST(req: NextRequest) {
           ownerLineId = lineId;
         }
 
-        // 🟢 Approver (canCloseBill / isOwner)
-        if (Boolean(u.canCloseBill) || u.isOwner || u.role === "Admin_Approver" || u.role === "Approver") {
+        // 🟢 Approver (canCloseBill / Approver)
+        if (Boolean(u.canCloseBill) || u.role === "Admin_Approver" || u.role === "Approver") {
           if (!approverLineIds.includes(lineId)) {
             approverLineIds.push(lineId);
           }

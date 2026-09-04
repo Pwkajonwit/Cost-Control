@@ -8,6 +8,7 @@ import { getRows } from "@/lib/db";
 import { cookies } from "next/headers";
 import { ToastProvider } from "@/components/ToastProvider";
 import { LineAuthProvider } from "@/components/LineAuthProvider";
+import { TopProgressBar } from "@/components/TopProgressBar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -65,6 +66,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="th" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <PreventZoom />
+        <TopProgressBar />
         <LineAuthProvider isAuthenticated={Boolean(currentUser)}>
           <ToastProvider>
             {!currentUser ? (

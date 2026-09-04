@@ -626,7 +626,7 @@ async function attachUploadedFiles(formData: FormData, tableName: string, row: S
   const filesByColumn = new Map<string, File[]>();
   for (const [key, value] of formData.entries()) {
     if (!isFile(value) || value.size <= 0) continue;
-    if (!value.type.startsWith("image/")) continue;
+    if (!value.type.startsWith("image/") && value.type !== "application/pdf") continue;
     filesByColumn.set(key, [...(filesByColumn.get(key) || []), value]);
   }
 
