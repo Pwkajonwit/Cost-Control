@@ -107,7 +107,7 @@ export default async function ContractDetailPage({ params }: ContractDetailPageP
   const pendingAmount = pendingBills.reduce((sum, r) => sum + (toAmount(r["ค่าแรง"]) || toAmount(r["ยอดเงิน"]) || toAmount(r["ยอดโอน"])), 0);
 
   const total = toAmount(valueOf(contract, ["ยอดเงินจ้าง"]));
-  const paid = relatedRows.length > 0 ? calculatedPaid : toAmount(valueOf(contract, ["ยอดเงินจ่าย"]));
+  const paid = calculatedPaid;
   const remaining = total - paid;
   const payPercent = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
 

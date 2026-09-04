@@ -104,7 +104,13 @@ export async function POST(req: NextRequest) {
           await supabaseAdmin.from("bills").delete().not("id", "is", null);
         }
 
-        // 2. Clear bill_follow_dates in system_options
+        // 2. Reset paid_amount on all contracts since all bills are deleted
+        await supabaseAdmin
+          .from("contract_works")
+          .update({ paid_amount: 0 })
+          .not("id", "is", null);
+
+        // 3. Clear bill_follow_dates in system_options
         await supabaseAdmin
           .from("system_options")
           .upsert({
@@ -113,7 +119,7 @@ export async function POST(req: NextRequest) {
             updated_at: new Date().toISOString()
           });
 
-        // 3. Update bill_start_sequence in system_options
+        // 4. Update bill_start_sequence in system_options
         const { data: currentOptRow } = await supabaseAdmin
           .from("system_options")
           .select("data")
@@ -133,6 +139,7 @@ export async function POST(req: NextRequest) {
           });
 
         invalidateTableCache(TABLES.DATA);
+        invalidateTableCache(TABLES.CONTRACT_WORK);
         clearCache();
       }
 
