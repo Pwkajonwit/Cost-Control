@@ -16,7 +16,8 @@ import {
   getOperatorDisplayName,
   getRecipientDisplayNames,
   getPeopleMap,
-  getBankInfoMap
+  getBankInfoMap,
+  getContractWorkMap
 } from "@/lib/line";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { insertRowToSupabase } from "@/lib/supabase-db";
@@ -498,7 +499,7 @@ export async function handleLineCommand(
         .trim();
 
       const { getRows } = await import("@/lib/db");
-      const { getLineConfigIds, createWithdrawOwnerFlex, sendFlexMessageDetailed } = await import("@/lib/line");
+      const { getLineConfigIds, createWithdrawOwnerFlex, sendFlexMessageDetailed, getContractWorkMap } = await import("@/lib/line");
       const { normalizeBillStatus } = await import("@/lib/bill-status");
       const [rawBills, peopleRows] = await Promise.all([
         getRows("Data", 60_000, 1000),
@@ -584,8 +585,8 @@ export async function handleLineCommand(
         return true;
       }
 
-      const [resolvedPeopleMap, bankInfoMap] = await Promise.all([getPeopleMap(), getBankInfoMap()]);
-      const flexForApprovers = createWithdrawOwnerFlex(pendingBills, resolvedPeopleMap, bankInfoMap);
+      const [resolvedPeopleMap, bankInfoMap, contractsMap] = await Promise.all([getPeopleMap(), getBankInfoMap(), getContractWorkMap()]);
+      const flexForApprovers = createWithdrawOwnerFlex(pendingBills, resolvedPeopleMap, bankInfoMap, contractsMap);
       const totalAmount = pendingBills.reduce((sum, b) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
       const amountStr = totalAmount.toLocaleString("th-TH");
 
@@ -690,7 +691,7 @@ export async function handleLineCommand(
       const { normalizeBillStatus } = await import("@/lib/bill-status");
       const { updateRowInSupabase } = await import("@/lib/supabase-db");
       const { getRows, invalidateTableCache } = await import("@/lib/db");
-      const { getLineConfigIds, createWithdrawApproverFlex, sendFlexMessageDetailed } = await import("@/lib/line");
+      const { getLineConfigIds, createWithdrawApproverFlex, sendFlexMessageDetailed, getContractWorkMap } = await import("@/lib/line");
       const [rawBills, peopleRows] = await Promise.all([
         getRows("Data", 60_000, 1000),
         getRows("master_members", 300_000, 500).catch(() => []),
@@ -815,14 +816,27 @@ export async function handleLineCommand(
         b.status = newStatus;
       }
 
+      // Sync contract_works paid amount when bills are closed/paid
+      if (!isApprove && !isReject) {
+        const { syncContractWorkPaidAmount } = await import("@/lib/supabase-db");
+        for (const b of targetBills) {
+          const d = (b.data && typeof b.data === "object") ? b.data : {};
+          const cRef = String(b._rawContractor || d._rawContractor || b.conwork_id || d.conwork_id || b["สัญญา"] || d["สัญญา"] || b.contractor_id || b["ผู้รับเหมา"] || "").trim();
+          const pId = String(b.project_id || d["ID Project"] || "").trim();
+          if (cRef) {
+            syncContractWorkPaidAmount(cRef, pId).catch(() => null);
+          }
+        }
+      }
+
       // Invalidate table caches immediately so next read is 100% fresh
       invalidateTableCache("Data");
       invalidateTableCache("bills");
 
       // When Approver Approves successfully, forward Multi-Item Flex Message to Finance / Closers to pay & close job
       if (isApprove && targetFinanceList.length > 0) {
-        const [peopleMap, bankInfoMap] = await Promise.all([getPeopleMap(), getBankInfoMap()]);
-        const flexForFinance = createWithdrawApproverFlex(targetBills, peopleMap, bankInfoMap);
+        const [peopleMap, bankInfoMap, contractsMap] = await Promise.all([getPeopleMap(), getBankInfoMap(), getContractWorkMap()]);
+        const flexForFinance = createWithdrawApproverFlex(targetBills, peopleMap, bankInfoMap, contractsMap);
         const totalAmtStr = totalAmount.toLocaleString("th-TH");
         const altText = targetBills.length === 1
           ? `✅ รายการอนุมัติสำเร็จ (รอปิดงาน) #${targetBills[0]["ลำดับ"] || targetBills[0].id || ""} (฿${totalAmtStr})`
@@ -864,8 +878,8 @@ export async function handleLineCommand(
           if (recipients.size === 0 && validGroup) recipients.add(validGroup);
 
           if (recipients.size > 0) {
-            const [peopleMap, bankInfoMap] = await Promise.all([getPeopleMap(), getBankInfoMap()]);
-            const flexForRequester = createWithdrawCompletedRequesterFlex(reqBills, peopleMap, bankInfoMap);
+            const [peopleMap, bankInfoMap, contractsMap] = await Promise.all([getPeopleMap(), getBankInfoMap(), getContractWorkMap()]);
+            const flexForRequester = createWithdrawCompletedRequesterFlex(reqBills, peopleMap, bankInfoMap, contractsMap);
             const totalAmt = reqBills.reduce((sum, b) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
             const totalAmtStr = totalAmt.toLocaleString("th-TH");
             const altText = reqBills.length === 1
@@ -1078,11 +1092,11 @@ export async function handleLineCommand(
             ? `ผลการค้นหาบิล${isSub ? "ย่อย" : isMain ? "หลัก" : ""}ของ "${filterQuery}"`
             : `รายการเบิกเงิน${isSub ? "บิลย่อย" : isMain ? "บิลหลัก" : "บิล"}`;
 
-      const bankInfoMap = await getBankInfoMap();
+      const [bankInfoMap, contractsMap] = await Promise.all([getBankInfoMap(), getContractWorkMap()]);
 
       // For approved bills awaiting finance closing, use createWithdrawApproverFlex with close buttons & bank details
       const flexPayload = isApprovedFilter
-        ? createWithdrawApproverFlex(bills, peopleMap, bankInfoMap)
+        ? createWithdrawApproverFlex(bills, peopleMap, bankInfoMap, contractsMap)
         : createBillSearchResultFlex(flexTitle, bills, isSub, isMain, totalCount, totalSumAmount, filterQuery, peopleMap, bankInfoMap);
 
       const sent = await replyFlexMessage(replyToken, `🧾 ${flexTitle} (${bills.length} รายการ)`, flexPayload);

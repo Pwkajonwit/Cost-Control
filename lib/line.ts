@@ -2461,6 +2461,55 @@ export async function getBankInfoMap(forceRefresh = false): Promise<Map<string, 
   return bankInfoMap;
 }
 
+let cachedContractMap: Map<string, any> | null = null;
+let cachedContractMapTime = 0;
+
+export async function getContractWorkMap(forceRefresh = false): Promise<Map<string, any>> {
+  const now = Date.now();
+  if (!forceRefresh && cachedContractMap && (now - cachedContractMapTime < CACHE_TTL_MS)) {
+    return cachedContractMap;
+  }
+
+  const contractMap = new Map<string, any>();
+  try {
+    const { data: contracts } = await supabaseAdmin.from("contract_works").select("*");
+    if (contracts && contracts.length > 0) {
+      for (const c of contracts) {
+        const id = String(c.id || c.id_Conwork || "").trim();
+        const pId = String(c.project_id || c["ID Project"] || "").trim();
+        const cId = String(c.contractor_id || c.id_Contractor || "").trim();
+        const cName = String(c.contractor_name || c["ชื่อเล่น"] || c["ผู้รับเหมา"] || c["ชื่อ-นามสกุล"] || "").trim();
+
+        if (id) {
+          contractMap.set(id, c);
+          contractMap.set(id.toLowerCase(), c);
+          contractMap.set(id.toUpperCase(), c);
+        }
+        if (pId && cId) {
+          contractMap.set(`${pId}_${cId}`, c);
+          contractMap.set(`${pId}_${cId.toLowerCase()}`, c);
+          contractMap.set(`${pId}_${cId.toUpperCase()}`, c);
+        }
+        if (pId && cName) {
+          contractMap.set(`${pId}_${cName}`, c);
+        }
+        if (cName) {
+          contractMap.set(cName, c);
+        }
+        if (cId) {
+          contractMap.set(cId, c);
+        }
+      }
+    }
+    cachedContractMap = contractMap;
+    cachedContractMapTime = now;
+  } catch (err) {
+    console.warn("⚠️ Failed to fetch contract_works map:", err);
+  }
+
+  return contractMap;
+}
+
 export function resolveBankInfo(
   bill: any,
   bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>
@@ -2756,7 +2805,8 @@ export function createMultiBillFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   options: MultiBillFlexOptions,
   peopleMap?: Map<string, string> | Record<string, string>,
-  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>
+  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
+  contractMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = Array.isArray(billsInput) ? billsInput : [billsInput];
   if (bills.length === 0) {
@@ -2928,6 +2978,36 @@ export function createMultiBillFlex(
       const remainingLabor = String(b["ค่าแรงคงเหลือ"] || b.remaining_labor || "").trim();
       const laborStatus = String(b["statusค่าแรง"] || b.labor_status || "").trim();
 
+      // Resolve contract details for contractor bills
+      let matchedContract: any = null;
+      const activeContractMap = contractMap || cachedContractMap;
+      if (activeContractMap) {
+        const rawContractor = String(b["_rawContractor"] || b.data?.["_rawContractor"] || b.conwork_id || b.contractor_id || b["ผู้รับเหมา"] || b.vendor_or_person || "").trim();
+        const pId = String(b["ID Project"] || b.project_id || "").trim();
+        const vendor = String(b["ผู้รับเหมา"] || b.vendor_or_person || b["ร้าน/บุคคล"] || "").trim();
+
+        if (activeContractMap instanceof Map) {
+          matchedContract = activeContractMap.get(rawContractor) ||
+                            (pId && rawContractor ? activeContractMap.get(`${pId}_${rawContractor}`) : null) ||
+                            (pId && vendor ? activeContractMap.get(`${pId}_${vendor}`) : null) ||
+                            (vendor ? activeContractMap.get(vendor) : null) ||
+                            (rawContractor ? activeContractMap.get(rawContractor.toLowerCase()) : null);
+        } else if (typeof activeContractMap === "object") {
+          matchedContract = activeContractMap[rawContractor] ||
+                            (pId && rawContractor ? activeContractMap[`${pId}_${rawContractor}`] : null) ||
+                            (pId && vendor ? activeContractMap[`${pId}_${vendor}`] : null) ||
+                            (vendor ? activeContractMap[vendor] : null);
+        }
+      }
+
+      const contractTotal = Number(
+        matchedContract?.total_contract_amount ||
+        matchedContract?.["ยอดเงินจ้าง"] ||
+        b["ยอดเงินจ้าง"] ||
+        b.total_contract_amount ||
+        0
+      );
+
       let paidNum = 0;
       if (b["ยอดเงินจ่าย"] && !isNaN(Number(b["ยอดเงินจ่าย"]))) {
         paidNum = Number(b["ยอดเงินจ่าย"]);
@@ -2938,6 +3018,13 @@ export function createMultiBillFlex(
         if (!isNaN(remNum) && !isNaN(totalNum) && totalNum > remNum) {
           paidNum = totalNum - remNum;
         }
+      } else if (contractTotal > 0 && remainingLabor !== "") {
+        const remNum = Number(remainingLabor.replace(/,/g, ""));
+        if (!isNaN(remNum) && contractTotal >= remNum) {
+          paidNum = contractTotal - remNum;
+        }
+      } else if (matchedContract && Number(matchedContract.paid_amount || matchedContract["ยอดเงินจ่าย"] || 0) > 0) {
+        paidNum = Number(matchedContract.paid_amount || matchedContract["ยอดเงินจ่าย"]);
       }
 
       const paidText = `จ่ายแล้ว ${paidNum > 0 ? `฿${paidNum.toLocaleString("th-TH")}` : "0"}`;
@@ -3348,7 +3435,8 @@ export function createMultiBillFlex(
 export function createWithdrawRequesterFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   peopleMap?: Map<string, string> | Record<string, string>,
-  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>
+  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
+  contractMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = (Array.isArray(billsInput) ? billsInput : [billsInput]).map(b => ({
     ...b,
@@ -3358,13 +3446,14 @@ export function createWithdrawRequesterFlex(
   return createMultiBillFlex(bills, {
     title: "📄 แจ้งเตือนรายการตั้งเบิกเงิน",
     mode: "requester"
-  }, peopleMap, bankInfoMap);
+  }, peopleMap, bankInfoMap, contractMap);
 }
 
 export function createWithdrawOwnerFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   peopleMap?: Map<string, string> | Record<string, string>,
-  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>
+  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
+  contractMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = (Array.isArray(billsInput) ? billsInput : [billsInput]).map(b => ({
     ...b,
@@ -3374,13 +3463,14 @@ export function createWithdrawOwnerFlex(
   return createMultiBillFlex(bills, {
     title: "📋 คำขออนุมัติเบิกเงิน (ส่งจากผู้เบิก)",
     mode: "owner"
-  }, peopleMap, bankInfoMap);
+  }, peopleMap, bankInfoMap, contractMap);
 }
 
 export function createWithdrawApproverFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   peopleMap?: Map<string, string> | Record<string, string>,
-  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>
+  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
+  contractMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = (Array.isArray(billsInput) ? billsInput : [billsInput]).map(b => ({
     ...b,
@@ -3390,13 +3480,14 @@ export function createWithdrawApproverFlex(
   return createMultiBillFlex(bills, {
     title: "✅ รายการอนุมัติสำเร็จ (รอปิดงาน)",
     mode: "approver"
-  }, peopleMap, bankInfoMap);
+  }, peopleMap, bankInfoMap, contractMap);
 }
 
 export function createWithdrawCompletedRequesterFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   peopleMap?: Map<string, string> | Record<string, string>,
-  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>
+  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
+  contractMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = (Array.isArray(billsInput) ? billsInput : [billsInput]).map(b => ({
     ...b,
@@ -3406,7 +3497,7 @@ export function createWithdrawCompletedRequesterFlex(
   return createMultiBillFlex(bills, {
     title: "🎉 รายการเบิกเงินสำเร็จเรียบร้อย (ปิดงาน)",
     mode: "completed"
-  }, peopleMap, bankInfoMap);
+  }, peopleMap, bankInfoMap, contractMap);
 }
 
 export async function getLineQuotaInfo() {

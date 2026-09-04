@@ -201,6 +201,11 @@ function computePaidForContract(contractRow: SheetRow, dataRows: SheetRow[]): nu
   for (const b of dataRows) {
     if (!isCommittedBill(b)) continue;
 
+    // Only count bills that are actually paid/withdrawn towards "ยอดเงินจ่าย"
+    const status = String(b["สถานะ"] || b.status || "").trim().toLowerCase();
+    const isPaid = status.includes("เบิกแล้ว") || status === "paid" || status === "withdrawn" || Boolean(b.paid_date) || Boolean(b.paid_at);
+    if (!isPaid) continue;
+
     const bVendorType = String(b["ร้านค้า/ผู้รับเหมา"] || "").trim();
     const bContractorRef = String(b["ผู้รับเหมา"] || b.contractor_id || b.conwork_id || "").trim();
     const bVendorRef = String(b["ร้าน/บุคคล"] || "").trim();
@@ -232,6 +237,10 @@ function computePaidForContract(contractRow: SheetRow, dataRows: SheetRow[]): nu
       const amt = toNumber(b["ค่าแรง"]) || toNumber(b["ยอดเงิน"]) || toNumber(b["ยอดโอน"]);
       totalPaid += amt;
     }
+  }
+
+  if (totalPaid === 0 && toNumber(contractRow.paid_amount || contractRow["ยอดเงินจ่าย"]) > 0) {
+    return toNumber(contractRow.paid_amount || contractRow["ยอดเงินจ่าย"]);
   }
 
   return totalPaid;

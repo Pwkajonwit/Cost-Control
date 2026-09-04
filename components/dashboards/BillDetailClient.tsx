@@ -36,6 +36,9 @@ type BillDetailClientProps = {
   decodedBillId: string;
   project: SheetRow[];
   contract: SheetRow[];
+  matchedContract?: SheetRow | null;
+  contractDisplay?: string;
+  contractLink?: string;
   requesterDisplay?: string;
   requesterLink?: string;
   createdByDisplay?: string;
@@ -50,6 +53,9 @@ export function BillDetailClient({
   decodedBillId,
   project,
   contract,
+  matchedContract: propsMatchedContract,
+  contractDisplay: propsContractDisplay,
+  contractLink: propsContractLink,
   requesterDisplay,
   requesterLink,
   createdByDisplay,
@@ -59,6 +65,10 @@ export function BillDetailClient({
   documentData,
 }: BillDetailClientProps) {
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+
+  const matchedContract = propsMatchedContract || contract[0] || null;
+  const contractDisplay = propsContractDisplay || (matchedContract ? text(matchedContract.id_Conwork || matchedContract.id) : "");
+  const contractLink = propsContractLink || (contractDisplay ? `/contract-open/${encodeURIComponent(contractDisplay)}` : "");
 
   const billId = billKey(bill) || decodedBillId;
   const projectId = text(bill["ID Project"]);
@@ -168,9 +178,31 @@ export function BillDetailClient({
           >
             {status}
           </span>
+          {contractLink && (
+            <Link
+              href={contractLink}
+              className="flex items-center gap-1.5 text-xs font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 border border-amber-400 px-2.5 py-0.5 rounded transition shrink-0 shadow-2xs"
+              title={`ดูรายละเอียดสัญญาเปิดจ้าง ${contractDisplay}`}
+            >
+              <Wrench size={13} className="text-amber-700 shrink-0" />
+              <span>สัญญา {contractDisplay}</span>
+              <ArrowUpRight size={12} className="text-amber-700 shrink-0" />
+            </Link>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {contractLink && (
+            <Link
+              href={contractLink}
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-md transition cursor-pointer"
+              title={`เปิดดูสัญญา ${contractDisplay}`}
+            >
+              <Wrench size={13} className="text-amber-700 shrink-0" />
+              <span>เปิดดูสัญญา {contractDisplay}</span>
+              <ArrowUpRight size={12} className="text-amber-700 shrink-0" />
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => setIsDocModalOpen(true)}
@@ -203,6 +235,18 @@ export function BillDetailClient({
               <span>ผู้เบิก: <strong className="text-slate-950 font-bold">{requester}</strong></span>
               <span className="text-slate-300">•</span>
               <span>วันที่บิล: <strong className="text-slate-950 font-bold">{billDate}</strong></span>
+              {contractLink && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span>
+                    สัญญาเปิดจ้าง:{" "}
+                    <Link href={contractLink} className="text-amber-800 hover:text-amber-950 font-bold hover:underline inline-flex items-center gap-0.5">
+                      <span>[{contractDisplay}]</span>
+                      <ArrowUpRight size={11} />
+                    </Link>
+                  </span>
+                </>
+              )}
               {billNo !== "-" && (
                 <>
                   <span className="text-slate-300">•</span>
@@ -327,6 +371,41 @@ export function BillDetailClient({
                   )}
                 </span>
               </div>
+
+              {contractLink && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 px-3.5 py-2.5 gap-1 bg-amber-50/70 border-y border-amber-200">
+                  <span className="text-amber-950 font-bold flex items-center gap-1.5">
+                    <Wrench size={14} className="text-amber-700 shrink-0" />
+                    <span>สัญญาเปิดจ้าง (เปิดจ้าง):</span>
+                  </span>
+                  <div className="sm:col-span-2 flex flex-col gap-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link
+                        href={contractLink}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-bold bg-amber-200 text-amber-950 hover:bg-amber-300 border border-amber-400 transition"
+                        title={`เปิดดูสัญญา ${contractDisplay}`}
+                      >
+                        <span>เปิดดูสัญญา {contractDisplay}</span>
+                        <ArrowUpRight size={12} />
+                      </Link>
+                      {matchedContract && (
+                        <span className="text-xs text-slate-800 font-semibold truncate max-w-[320px]">
+                          {matchedContract["รายละเอียดงาน"] || matchedContract["ชื่อ Project"] || ""}
+                        </span>
+                      )}
+                    </div>
+                    {matchedContract && (
+                      <div className="text-[11px] text-slate-700 flex items-center gap-2 flex-wrap mt-0.5 font-medium">
+                        <span>ยอดจ้าง: <strong className="text-slate-950 font-bold">{money(matchedContract["ยอดเงินจ้าง"])} ฿</strong></span>
+                        <span>•</span>
+                        <span>จ่ายแล้ว: <strong className="text-emerald-700 font-bold">{money(matchedContract["ยอดเงินจ่าย"])} ฿</strong></span>
+                        <span>•</span>
+                        <span>คงเหลือ: <strong className="text-amber-900 font-bold">{money(matchedContract["ค่าแรงคงเหลือ"])} ฿</strong></span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 px-3.5 py-2 gap-1">
                 <span className="text-slate-700 font-semibold">หมวดหมู่ค่าใช้จ่าย:</span>
@@ -677,25 +756,35 @@ export function BillDetailClient({
 
         {contract.length > 0 && (
           <div className="border border-slate-300 rounded-xl bg-white overflow-hidden">
-            <div className="px-3.5 py-2 border-b border-slate-300 bg-slate-100 flex items-center justify-between">
+            <div className="px-3.5 py-2 border-b border-slate-300 bg-amber-50/70 flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900">
                 <Wrench size={14} className="text-amber-700" />
                 <span>สัญญาเปิดจ้างผู้รับเหมาที่เกี่ยวข้อง ({contract.length})</span>
               </div>
-              <Link href={`/contract-open`} className="text-xs text-indigo-700 hover:text-indigo-950 hover:underline inline-flex items-center gap-1 font-bold">
-                <span>ดูรายการเปิดจ้างทั้งหมด</span>
-                <ArrowUpRight size={12} />
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link
+                  href={contractLink || `/contract-open/${encodeURIComponent(contract[0]?.id_Conwork || contract[0]?.id || "")}`}
+                  className="text-xs text-amber-800 hover:text-amber-950 hover:underline inline-flex items-center gap-1 font-bold"
+                >
+                  <span>เปิดดูสัญญา {contractDisplay || contract[0]?.id_Conwork || contract[0]?.id}</span>
+                  <ArrowUpRight size={12} />
+                </Link>
+                <span className="text-slate-300">|</span>
+                <Link href="/contract-open" className="text-xs text-slate-600 hover:text-slate-900 hover:underline inline-flex items-center gap-1 font-medium">
+                  <span>รายการเปิดจ้างทั้งหมด</span>
+                  <ArrowUpRight size={12} />
+                </Link>
+              </div>
             </div>
             <DataTable
-              columns={["id_Conwork", "id_Contractor", "ยอดเงินจ้าง", "ยอดเงินจ่าย", "ค่าแรงคงเหลือ", "รายละเอียดงาน", "วันที่"]}
+              columns={["id_Conwork", "id_Contractor", "ชื่อ Project", "ยอดเงินจ้าง", "ยอดเงินจ่าย", "ค่าแรงคงเหลือ", "รายละเอียดงาน", "วันที่"]}
               rows={contract}
               title=""
               rowLabel="รายการ"
               limit={5}
               detailBasePath="/contract-open"
               detailKeyColumn="id_Conwork"
-              showDetailColumn={false}
+              showDetailColumn={true}
               cellFormatters={{
                 "วันที่": (v) => formatDateThai(v),
                 "ยอดเงินจ้าง": (v) => money(v),

@@ -2348,3 +2348,89 @@ export async function cleanupOrphanedStorageImages(bucketName = "repairs", dryRu
   }
 }
 
+export async function syncContractWorkPaidAmount(conworkIdOrRef: string, projectId?: string): Promise<number | null> {
+  if (!isSupabaseConfigured() || !conworkIdOrRef) return null;
+  try {
+    const rawRef = String(conworkIdOrRef).trim();
+    if (!rawRef) return null;
+
+    // 1. Find the contract in contract_works table
+    let contractQuery = supabaseAdmin.from("contract_works").select("*");
+    if (rawRef.startsWith("CW") || !isNaN(Number(rawRef))) {
+      contractQuery = contractQuery.eq("id", rawRef);
+    } else if (projectId) {
+      contractQuery = contractQuery.eq("project_id", projectId).or(`contractor_id.eq.${rawRef},work_details.ilike.%${rawRef}%`);
+    } else {
+      contractQuery = contractQuery.or(`id.eq.${rawRef},contractor_id.eq.${rawRef}`);
+    }
+
+    const { data: matchedContracts } = await contractQuery.limit(1);
+    const contract = matchedContracts?.[0];
+    if (!contract) return null;
+
+    const targetContractId = contract.id;
+    const targetProjectId = contract.project_id;
+    const contractorId = contract.contractor_id;
+
+    // 2. Query all paid bills matching this contract
+    const { data: bills, error: billsErr } = await supabaseAdmin
+      .from("bills")
+      .select("id, project_id, vendor_or_person, labor_cost, amount, status, paid_date, data");
+
+    if (billsErr || !bills) return null;
+
+    let totalPaid = 0;
+    for (const b of bills) {
+      const isPaid = b.status === "เบิกแล้ว" || Boolean(b.paid_date);
+      if (!isPaid) continue;
+
+      const d = (b.data && typeof b.data === "object") ? b.data : {};
+      const bRef = String(d._rawContractor || d.conwork_id || d["สัญญา"] || d["_rawVendor"] || "").trim();
+      const bContractor = String(d["ผู้รับเหมา"] || b.vendor_or_person || "").trim();
+      const bProjId = String(b.project_id || d["ID Project"] || "").trim();
+
+      let isMatch = false;
+      if (bRef && (bRef === targetContractId || bRef.includes(targetContractId))) {
+        isMatch = true;
+      } else if (targetProjectId && bProjId === targetProjectId) {
+        if (contractorId && (bContractor === contractorId || bRef === contractorId)) {
+          isMatch = true;
+        } else if (contract.nickname && (bContractor === contract.nickname || bContractor.includes(contract.nickname))) {
+          isMatch = true;
+        }
+      }
+
+      if (isMatch) {
+        const labor = Number(b.labor_cost || d["ค่าแรง"] || b.amount || 0);
+        totalPaid += labor;
+      }
+    }
+
+    // 3. Update contract_works
+    const contractTotal = Number(contract.total_contract_amount || 0);
+    const remainingLabor = Math.max(0, contractTotal - totalPaid);
+
+    const updatePayload: Record<string, any> = {
+      paid_amount: totalPaid
+    };
+    if ("remaining_amount" in contract) {
+      updatePayload.remaining_amount = remainingLabor;
+    }
+
+    await supabaseAdmin
+      .from("contract_works")
+      .update(updatePayload)
+      .eq("id", targetContractId);
+
+    clearCache("rows:contract_works");
+    clearCache("rows:งานรับเหมา");
+    clearCache("rows:Contract_work");
+    clearCache("headers:contract_works");
+
+    return totalPaid;
+  } catch (e) {
+    console.warn("Error in syncContractWorkPaidAmount:", e);
+    return null;
+  }
+}
+
