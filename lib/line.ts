@@ -448,7 +448,14 @@ export function createBillNotificationFlex(bill: {
               layout: "baseline",
               contents: [
                 { type: "text", text: "ร้าน/บุคคล:", color: "#64748B", size: "xs", flex: 2 },
-                { type: "text", text: bill.vendor_or_person || "-", color: "#1E293B", size: "xs", flex: 5, wrap: true },
+                {
+                  type: "text",
+                  text: resolveVendorName(bill.vendor_or_person, bankInfoMap, bill) || bankInfo?.storeName || bankInfo?.accountName || bill.vendor_or_person || "-",
+                  color: "#1E293B",
+                  size: "xs",
+                  flex: 5,
+                  wrap: true
+                },
               ],
             },
             // Bank Account Information Box
@@ -1070,8 +1077,8 @@ export function createBillSearchResultFlex(
           const amt = Number(b.amount || 0).toLocaleString("th-TH");
           const billId = String(b.id || b.bill_no || startNum + idx);
           const rawReq = b.requester || b.vendor_or_person || "-";
-          const requesterName = resolveRequesterNameFromMap(rawReq, peopleMap);
           const bankInfo = resolveBankInfo(b, bankInfoMap);
+          const requesterName = resolveVendorName(rawReq, bankInfoMap, b, peopleMap) || resolveRequesterNameFromMap(rawReq, peopleMap) || bankInfo?.storeName || bankInfo?.accountName || rawReq;
 
           // Parse single or multiple images
           let imgList: string[] = [];
@@ -2042,7 +2049,14 @@ export async function getPeopleMap(forceRefresh = false): Promise<Map<string, st
 
   const peopleMap = new Map<string, string>();
   try {
-    const { data: members } = await supabaseAdmin.from("master_members").select("*");
+    const [membersRes, usersRes, storesRes, contractorsRes] = await Promise.all([
+      supabaseAdmin.from("master_members").select("*"),
+      supabaseAdmin.from("users").select("*"),
+      supabaseAdmin.from("stores").select("*"),
+      supabaseAdmin.from("contractors").select("*"),
+    ]);
+
+    const members = membersRes.data;
     if (members && members.length > 0) {
       for (const m of members) {
         const dataObj = (m.data && typeof m.data === "object") ? m.data : {};
@@ -2083,7 +2097,7 @@ export async function getPeopleMap(forceRefresh = false): Promise<Map<string, st
       }
     }
 
-    const { data: users } = await supabaseAdmin.from("users").select("*");
+    const users = usersRes.data;
     if (users && users.length > 0) {
       for (const u of users) {
         const dataObj = (u.data && typeof u.data === "object") ? u.data : {};
@@ -2114,6 +2128,44 @@ export async function getPeopleMap(forceRefresh = false): Promise<Map<string, st
       }
     }
 
+    // Stores (resolve store IDs like ST101 -> store name)
+    const stores = storesRes.data;
+    if (stores && stores.length > 0) {
+      for (const s of stores) {
+        const dataObj = (s.data && typeof s.data === "object") ? s.data : {};
+        const id = String(s.id || s.id_store || dataObj.id || dataObj.id_store || "").trim();
+        const name = String(s.name || s["ชื่อร้านค้า"] || dataObj.name || dataObj["ชื่อร้านค้า"] || "").trim();
+        const fullName = String(s.full_name || s["ชื่อเต็ม"] || dataObj.full_name || dataObj["ชื่อเต็ม"] || "").trim();
+        const storeName = name || fullName;
+        if (storeName && id) {
+          peopleMap.set(id, storeName);
+          peopleMap.set(id.toLowerCase(), storeName);
+          peopleMap.set(id.toUpperCase(), storeName);
+          const cleanId = id.toLowerCase().replace(/^(st)[-_]?/i, "").trim();
+          if (cleanId) peopleMap.set(cleanId, storeName);
+        }
+      }
+    }
+
+    // Contractors (resolve contractor IDs like CT101 -> contractor nickname/name)
+    const contractors = contractorsRes.data;
+    if (contractors && contractors.length > 0) {
+      for (const c of contractors) {
+        const dataObj = (c.data && typeof c.data === "object") ? c.data : {};
+        const id = String(c.id || c.id_Contractor || dataObj.id || dataObj.id_Contractor || "").trim();
+        const nickname = String(c.nickname || c["ชื่อเล่น"] || dataObj.nickname || dataObj["ชื่อเล่น"] || "").trim();
+        const fullName = String(c.full_name || c["ชื่อ-นามสกุล"] || dataObj.full_name || dataObj["ชื่อ-นามสกุล"] || "").trim();
+        const conName = nickname || fullName;
+        if (conName && id) {
+          peopleMap.set(id, conName);
+          peopleMap.set(id.toLowerCase(), conName);
+          peopleMap.set(id.toUpperCase(), conName);
+          const cleanId = id.toLowerCase().replace(/^(ct)[-_]?/i, "").trim();
+          if (cleanId) peopleMap.set(cleanId, conName);
+        }
+      }
+    }
+
     cachedPeopleMap = peopleMap;
     cachedPeopleMapTime = now;
   } catch (e) {
@@ -2127,6 +2179,8 @@ export type BankLookupInfo = {
   accountName?: string;
   accountNo?: string;
   bankName?: string;
+  storeName?: string;
+  vendorName?: string;
 };
 
 export const DEFAULT_THAI_BANKS: Record<string, string> = {
@@ -2257,14 +2311,18 @@ export async function getBankInfoMap(forceRefresh = false): Promise<Map<string, 
           (name ? entityBanksMap[name] : "") || (fullName ? entityBanksMap[fullName] : "");
 
         const bankName = cleanBank(rawBankVal);
+        const storeDisplayName = name || fullName || id;
 
         const info: BankLookupInfo = {
           accountName: fullName || name,
           accountNo: accountNo && accountNo !== "non" && accountNo !== "-" ? accountNo : undefined,
           bankName: bankName || undefined,
+          storeName: storeDisplayName,
+          vendorName: storeDisplayName,
         };
 
         if (id) {
+          bankInfoMap.set(id, info);
           bankInfoMap.set(id.toLowerCase(), info);
           bankInfoMap.set(id.toUpperCase(), info);
           const cleanId = id.toLowerCase().replace(/^(st)[-_]?/i, "").trim();
@@ -2295,14 +2353,18 @@ export async function getBankInfoMap(forceRefresh = false): Promise<Map<string, 
           (nickname ? entityBanksMap[nickname] : "") || (fullName ? entityBanksMap[fullName] : "");
 
         const bankName = cleanBank(rawBankVal);
+        const contractorDisplayName = nickname || fullName || id;
 
         const info: BankLookupInfo = {
           accountName: fullName || nickname,
           accountNo: accountNo && accountNo !== "non" && accountNo !== "-" ? accountNo : undefined,
           bankName: bankName || undefined,
+          storeName: contractorDisplayName,
+          vendorName: contractorDisplayName,
         };
 
         if (id) {
+          bankInfoMap.set(id, info);
           bankInfoMap.set(id.toLowerCase(), info);
           bankInfoMap.set(id.toUpperCase(), info);
           const cleanId = id.toLowerCase().replace(/^(ct)[-_]?/i, "").trim();
@@ -2333,14 +2395,18 @@ export async function getBankInfoMap(forceRefresh = false): Promise<Map<string, 
           (nickname ? entityBanksMap[nickname] : "") || (fullName ? entityBanksMap[fullName] : "");
 
         const bankName = cleanBank(rawBankVal);
+        const memberDisplayName = nickname || fullName || id;
 
         const info: BankLookupInfo = {
           accountName: fullName || nickname,
           accountNo: accountNo && accountNo !== "non" && accountNo !== "-" ? accountNo : undefined,
           bankName: bankName || undefined,
+          storeName: memberDisplayName,
+          vendorName: memberDisplayName,
         };
 
         if (id) {
+          bankInfoMap.set(id, info);
           bankInfoMap.set(id.toLowerCase(), info);
           bankInfoMap.set(id.toUpperCase(), info);
           const cleanId = id.toLowerCase().replace(/^(pt|pe)[-_]?/i, "").trim();
@@ -2528,6 +2594,105 @@ export function resolveRequesterNameFromMap(
   return str;
 }
 
+export function resolveVendorName(
+  rawVendor: unknown,
+  bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
+  bill?: Record<string, any>,
+  peopleMap?: Map<string, string> | Record<string, string>
+): string {
+  if (bill) {
+    const explicit = String(
+      bill["ชื่อร้านค้า"] ||
+      bill.store_name ||
+      bill.storeName ||
+      bill["ชื่อผู้รับเหมา"] ||
+      bill.contractor_name ||
+      bill.contractorName ||
+      ""
+    ).trim();
+    if (explicit && explicit !== "-" && explicit !== "non" && !/^[a-zA-Z]{1,3}[-_]?\d+$/.test(explicit)) {
+      return explicit;
+    }
+
+    const vendorOrPerson = String(
+      bill["ร้าน/บุคคล"] ||
+      bill.vendor_or_person ||
+      bill.data?.["ร้าน/บุคคล"] ||
+      bill.data?.vendor_or_person ||
+      bill.data?.data?.["ร้าน/บุคคล"] ||
+      bill.data?.data?.vendor_or_person ||
+      ""
+    ).trim();
+    if (vendorOrPerson && vendorOrPerson !== "-" && vendorOrPerson !== "non" && !/^[a-zA-Z]{1,3}[-_]?\d+$/.test(vendorOrPerson)) {
+      return vendorOrPerson;
+    }
+  }
+
+  const raw = String(rawVendor || "").trim();
+  if (!raw || raw === "-" || raw === "non") return "-";
+
+  const getFromBankMap = (k: string): BankLookupInfo | undefined => {
+    if (!k) return undefined;
+    const cleanK = k.trim();
+    const mapsToCheck: Array<Map<string, BankLookupInfo> | Record<string, BankLookupInfo> | undefined> = [
+      bankInfoMap,
+      cachedBankInfoMap || undefined
+    ];
+    for (const map of mapsToCheck) {
+      if (!map) continue;
+      if (map instanceof Map) {
+        if (map.has(cleanK)) return map.get(cleanK);
+        if (map.has(cleanK.toLowerCase())) return map.get(cleanK.toLowerCase());
+        if (map.has(cleanK.toUpperCase())) return map.get(cleanK.toUpperCase());
+      } else if (typeof map === "object") {
+        if (map[cleanK]) return map[cleanK];
+        if (map[cleanK.toLowerCase()]) return map[cleanK.toLowerCase()];
+        if (map[cleanK.toUpperCase()]) return map[cleanK.toUpperCase()];
+      }
+    }
+    return undefined;
+  };
+
+  // 1. Direct ID match in bankInfoMap
+  const info = getFromBankMap(raw);
+  if (info && (info.storeName || info.vendorName || info.accountName)) {
+    return info.storeName || info.vendorName || info.accountName!;
+  }
+
+  // 2. Prefix stripped match (e.g. "st101" -> "101" or "ct101" -> "101")
+  if (/^(st|ct|pe|pt)[-_]?\d+/i.test(raw)) {
+    const clean = raw.toLowerCase().replace(/^(st|ct|pe|pt)[-_]?/i, "").trim();
+    const infoClean = getFromBankMap(clean);
+    if (infoClean && (infoClean.storeName || infoClean.vendorName || infoClean.accountName)) {
+      return infoClean.storeName || infoClean.vendorName || infoClean.accountName!;
+    }
+  }
+
+  // 3. Check peopleMap (which indexes stores and contractors too)
+  const fromPeople = resolveRequesterNameFromMap(raw, peopleMap);
+  if (fromPeople && fromPeople !== raw && fromPeople !== "-") {
+    return fromPeople;
+  }
+
+  // 4. Composite format (e.g. "ST101 - ปัญญาสตีล")
+  if (raw.includes(" - ")) {
+    const parts = raw.split(" - ");
+    const info0 = getFromBankMap(parts[0].trim());
+    if (info0 && (info0.storeName || info0.vendorName)) return info0.storeName || info0.vendorName!;
+    if (parts[1] && !/^[a-zA-Z]{1,3}[-_]?\d+$/.test(parts[1].trim())) return parts[1].trim();
+  }
+
+  // 5. Fallback: if bill has bankInfo already resolved and raw is an ID code
+  if (bill) {
+    const bInfo = resolveBankInfo(bill, bankInfoMap);
+    if (bInfo && (bInfo.storeName || bInfo.accountName) && /^[a-zA-Z]{1,3}[-_]?\d+$/.test(raw)) {
+      return bInfo.storeName || bInfo.accountName!;
+    }
+  }
+
+  return raw;
+}
+
 export function createMultiBillFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   options: MultiBillFlexOptions,
@@ -2680,14 +2845,29 @@ export function createMultiBillFlex(
       const rawVendorType = String(b["ร้านค้า/ผู้รับเหมา"] || b.vendor_type || "").trim();
       const isContractor = rawVendorType === "ผู้รับเหมา" || Boolean(b["ผู้รับเหมา"]) || Boolean(b.contractor_id);
       const vendorLabel = isContractor ? "ผู้รับเหมา" : "ร้าน";
-      const vendorName = isContractor
-        ? (b["ผู้รับเหมา"] || b.contractor_id || b["ร้าน/บุคคล"] || b.vendor_or_person || "-")
-        : (b["ร้านค้า"] || b.store_id || b["ร้าน/บุคคล"] || b.vendor_or_person || "-");
+      let rawVendorCandidate = "";
+      if (isContractor) {
+        rawVendorCandidate = b["ชื่อผู้รับเหมา"] || b.contractor_name || b["ผู้รับเหมา"] || b.contractor_id || b["ร้าน/บุคคล"] || b.vendor_or_person || "-";
+      } else {
+        const namedVendor = String(b["ชื่อร้านค้า"] || b.store_name || b["ร้าน/บุคคล"] || b.vendor_or_person || b.data?.["ร้าน/บุคคล"] || b.data?.vendor_or_person || "").trim();
+        const idStore = String(b["ร้านค้า"] || b.store_id || b.data?.["ร้านค้า"] || "").trim();
+        if (namedVendor && namedVendor !== "-" && namedVendor !== "non" && !/^[a-zA-Z]{1,3}[-_]?\d+$/.test(namedVendor)) {
+          rawVendorCandidate = namedVendor;
+        } else if (idStore) {
+          rawVendorCandidate = idStore;
+        } else {
+          rawVendorCandidate = namedVendor || "-";
+        }
+      }
+      const bankInfo = resolveBankInfo(b, bankInfoMap);
+      let vendorName = resolveVendorName(rawVendorCandidate, bankInfoMap, b, peopleMap);
+      if ((!vendorName || vendorName === "-" || /^[a-zA-Z]{1,3}[-_]?\d+$/.test(vendorName)) && bankInfo) {
+        vendorName = bankInfo.storeName || bankInfo.accountName || vendorName;
+      }
       const projName = b["ชื่อ Project"] || b.project_name || "โครงการทั่วไป";
       const desc = b["สินค้า/ทำงาน"] || b.description || b["รายละเอียดงาน"] || "-";
       const remainingLabor = String(b["ค่าแรงคงเหลือ"] || b.remaining_labor || "").trim();
       const laborStatus = String(b["statusค่าแรง"] || b.labor_status || "").trim();
-      const bankInfo = resolveBankInfo(b, bankInfoMap);
 
       let paidNum = 0;
       if (b["ยอดเงินจ่าย"] && !isNaN(Number(b["ยอดเงินจ่าย"]))) {
