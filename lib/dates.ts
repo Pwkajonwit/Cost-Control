@@ -55,3 +55,51 @@ export function normalizeDateToIso(value: unknown): string {
   const m = String(parsed.month).padStart(2, "0");
   return `${parsed.year}-${m}-${d}`;
 }
+
+/**
+ * Returns today's date in YYYY-MM-DD string format in Thai timezone (Asia/Bangkok, UTC+7).
+ * This prevents timezone discrepancies where UTC time lags behind local Thai time
+ * (e.g. between 00:00 - 06:59 AM, UTC is still yesterday).
+ */
+export function getTodayDateIso(date: Date = new Date()): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(date);
+  } catch {
+    const tzOffset = 7 * 60; // Bangkok is UTC+7
+    const localMs = date.getTime() + (date.getTimezoneOffset() + tzOffset) * 60000;
+    const localDate = new Date(localMs);
+    const y = localDate.getFullYear();
+    const m = String(localDate.getMonth() + 1).padStart(2, "0");
+    const d = String(localDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+}
+
+/**
+ * Returns today's date in D/M/YYYY or DD/MM/YYYY format in Thai timezone (Asia/Bangkok, UTC+7).
+ */
+export function getTodaySheetDate(date: Date = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Bangkok",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric"
+    }).formatToParts(date);
+    const d = parts.find(p => p.type === "day")?.value || String(date.getDate());
+    const m = parts.find(p => p.type === "month")?.value || String(date.getMonth() + 1);
+    const y = parts.find(p => p.type === "year")?.value || String(date.getFullYear());
+    return `${d}/${m}/${y}`;
+  } catch {
+    const tzOffset = 7 * 60;
+    const localMs = date.getTime() + (date.getTimezoneOffset() + tzOffset) * 60000;
+    const localDate = new Date(localMs);
+    return `${localDate.getDate()}/${localDate.getMonth() + 1}/${localDate.getFullYear()}`;
+  }
+}
+

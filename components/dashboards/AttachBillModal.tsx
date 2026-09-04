@@ -15,7 +15,7 @@ import {
   ZoomIn
 } from "lucide-react";
 import { money, toNumber } from "@/lib/numbers";
-import { formatDateDisplay } from "@/lib/dates";
+import { formatDateDisplay, getTodayDateIso } from "@/lib/dates";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 import { formatVatDisplay, formatDeductDisplay, formatCreditDisplay } from "@/lib/bill-status";
 import { compressImageFiles } from "@/lib/image-compressor";
@@ -171,7 +171,7 @@ export function AttachBillModal({
     setError(null);
 
     try {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = getTodayDateIso();
       const formData = new FormData();
 
       formData.append("tableName", "Data");

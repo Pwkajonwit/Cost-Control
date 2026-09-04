@@ -26,7 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { money, toNumber } from "@/lib/numbers";
-import { formatDateDisplay, normalizeDateToIso } from "@/lib/dates";
+import { formatDateDisplay, normalizeDateToIso, getTodayDateIso } from "@/lib/dates";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 import { formatVatDisplay, formatDeductDisplay, formatCreditDisplay } from "@/lib/bill-status";
 import { useRealtimeSync } from "@/lib/use-realtime-sync";
@@ -296,7 +296,7 @@ export function BillFollowDashboardClient({
     const rowId = String(row["ลำดับ"] || row._sheetRow || "");
     if (!sheetRow) return;
 
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = getTodayDateIso();
     const updateValues: SheetRow = {};
 
     if (targetType === "vat" || (targetType === "all" && row.vat && !row["วันได้บิล"])) {

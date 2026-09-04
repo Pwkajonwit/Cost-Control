@@ -5,6 +5,7 @@ import { getFormSchema, getRefRowColumns } from "@/lib/schemas";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getNextBillSequence } from "@/lib/supabase-db";
 import type { FieldSchema, RefOption, SheetRow } from "@/lib/types";
+import { getTodayDateIso } from "@/lib/dates";
 
 export async function getFormPayload(tableName: string, preloadedRows?: Record<string, SheetRow[]>) {
   const schema = await getFormSchemaWithSheetOptions(tableName);
@@ -291,7 +292,7 @@ export async function getInitialValues(tableName: string): Promise<SheetRow> {
   const values: SheetRow = {};
   for (const column of getFormSchema(tableName)) {
     if (!column.initialValue) continue;
-    if (column.initialValue === "today") values[column.name] = tableName === TABLES.DATA ? formatSheetDate(new Date()) : new Date().toISOString().slice(0, 10);
+    if (column.initialValue === "today") values[column.name] = getTodayDateIso();
     if (column.initialValue === "nextDataSequence") values[column.name] = String(await nextDataSequence());
     if (column.initialValue === "nextProjectId") values[column.name] = String(await nextProjectId());
     if (column.initialValue === "nextContractWorkId") values[column.name] = await nextContractWorkId();

@@ -3,7 +3,7 @@ import { TABLES } from "@/lib/config";
 import { getRows } from "@/lib/db";
 import { toNumber } from "@/lib/numbers";
 import { parseDeductPercent, isVatActive } from "@/lib/project-summary";
-import { formatDateDisplay } from "@/lib/dates";
+import { formatDateDisplay, getTodayDateIso } from "@/lib/dates";
 import type { SheetRow } from "@/lib/types";
 
 export interface BillDocumentModel {
@@ -201,7 +201,7 @@ export async function getBillDocumentData(
 
   return {
     billSequence: String(billRow["ลำดับ"] || billRow["ลำดับtest"] || billRow._sheetRow || "-"),
-    billDate: formatDateDisplay(billRow["ว/ด/ป"] || billRow["วันได้บิล"] || new Date().toISOString().slice(0, 10)),
+    billDate: formatDateDisplay(billRow["ว/ด/ป"] || billRow["วันได้บิล"] || getTodayDateIso()),
     status: String(billRow["สถานะ"] || "รออนุมัติ"),
 
     company: {

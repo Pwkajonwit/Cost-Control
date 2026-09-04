@@ -31,7 +31,7 @@ import {
 import dynamic from "next/dynamic";
 import { TABLES } from "@/lib/config";
 import type { FieldSchema, RefOption, SheetRow } from "@/lib/types";
-import { normalizeDateToIso, parseDateStrict, toInputDateValue } from "@/lib/dates";
+import { normalizeDateToIso, parseDateStrict, toInputDateValue, getTodayDateIso } from "@/lib/dates";
 import { imagePreviewUrl } from "@/components/BillImageThumbnail";
 import { compressImageFiles } from "@/lib/image-compressor";
 
@@ -473,6 +473,17 @@ export function FormModal({
     const nextValues = detail?.row
       ? getRowStringValues(targetForm, detail.row)
       : getInitialStringValues(targetForm);
+
+    // When creating a new entry, ensure all date fields configured for today (e.g. ว/ด/ป, วันที่) use current Thai local date
+    if (!detail?.row) {
+      const todayIso = getTodayDateIso();
+      targetForm.schema.forEach(field => {
+        if (field.initialValue === "today" || (field.type === "Date" && (field.initialValue === "today" || field.name === "ว/ด/ป" || field.name === "วันที่" || field.name === "ดู/ทำ"))) {
+          nextValues[field.name] = todayIso;
+        }
+      });
+    }
+
     if (detail?.row) {
       targetForm.schema.filter(f => f.type === "Ref" && f.refFill).forEach(field => {
         const refVal = nextValues[field.name];
@@ -562,11 +573,19 @@ export function FormModal({
         setActiveForm(fresh);
         if (!detail?.row) {
           const freshInitial = getInitialStringValues(fresh);
+          const todayIso = getTodayDateIso();
           setValues(prev => {
             const next = { ...prev };
             if (freshInitial["ลำดับ"]) next["ลำดับ"] = freshInitial["ลำดับ"];
             if (freshInitial["ID Project"] && !next["ID Project"]) next["ID Project"] = freshInitial["ID Project"];
             if (freshInitial["id_Conwork"] && !next["id_Conwork"]) next["id_Conwork"] = freshInitial["id_Conwork"];
+            fresh.schema.forEach(field => {
+              if (field.initialValue === "today" || (field.type === "Date" && (field.name === "ว/ด/ป" || field.name === "วันที่" || field.name === "ดู/ทำ"))) {
+                if (!next[field.name]) {
+                  next[field.name] = todayIso;
+                }
+              }
+            });
             return next;
           });
         } else {
@@ -2215,7 +2234,15 @@ function getCookie(name: string): string {
 }
 
 function getInitialStringValues(form: FormPayload) {
-  const values = Object.fromEntries(form.schema.map(field => [field.name, String(form.initialValues[field.name] ?? "")]));
+  const todayIso = getTodayDateIso();
+  const values = Object.fromEntries(
+    form.schema.map(field => {
+      if (field.initialValue === "today" || (field.type === "Date" && (field.initialValue === "today" || field.name === "ว/ด/ป" || field.name === "วันที่" || field.name === "ดู/ทำ"))) {
+        return [field.name, todayIso];
+      }
+      return [field.name, String(form.initialValues[field.name] ?? "")];
+    })
+  );
   if (form.tableName === TABLES.DATA || form.tableName === "Data") {
     const loggedInEmployeeId = getCookie("auth_employee_id");
     const loggedInName = getCookie("auth_name");
@@ -2471,7 +2498,7 @@ function normalizeDependentValues(values: Record<string, string>, changedField: 
     const creditDays = parseCreditDays(values["เครดิต"]);
     if (creditDays > 0) {
       values["วันได้บิล"] = ""; // เคลียร์ข้อมูลวันที่ได้บิลทันที
-      const baseDate = values["ว/ด/ป"] || values["วันที่"] || new Date().toISOString().slice(0, 10);
+      const baseDate = values["ว/ด/ป"] || values["วันที่"] || getTodayDateIso();
       const dueDate = calculateDueDate(baseDate, creditDays);
       if (dueDate) {
         values["วันจ่าย"] = dueDate;

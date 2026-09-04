@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 export { supabaseAdmin };
-import { normalizeDateToIso, formatDateDisplay } from "@/lib/dates";
+import { normalizeDateToIso, formatDateDisplay, getTodayDateIso } from "@/lib/dates";
 import { cached, clearCache } from "@/lib/cache";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 
@@ -201,7 +201,7 @@ export function mapSupabaseRowToSheetRow(dbTable: string, row: Record<string, an
     res["created_by"] = res["ผู้สร้างบิล"];
     res["รูปถ่ายบิล"] = row.image_url ?? row["รูปถ่ายบิล"] ?? dataObj["รูปถ่ายบิล"];
     res["สถานะ"] = row.status ?? row["สถานะ"] ?? dataObj["สถานะ"];
-    res["ว/ด/ป"] = row.bill_date ? String(row.bill_date) : row["ว/ด/ป"] ?? dataObj["ว/ด/ป"] ?? (row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : "");
+    res["ว/ด/ป"] = row.bill_date ? String(row.bill_date) : row["ว/ด/ป"] ?? dataObj["ว/ด/ป"] ?? (row.created_at ? getTodayDateIso(new Date(row.created_at)) : "");
 
     res["ค่าของ"] = row.material_cost ?? row["ค่าของ"] ?? dataObj["ค่าของ"] ?? "";
     res["ค่าแรง"] = row.labor_cost ?? row["ค่าแรง"] ?? dataObj["ค่าแรง"] ?? "";
@@ -269,7 +269,7 @@ export function mapSupabaseRowToSheetRow(dbTable: string, row: Record<string, an
     res["ยอดงาน"] = row.work_amount ?? row["ยอดงาน"];
     res["งบไม่เกิน"] = row.budget ?? row["งบไม่เกิน"];
     res["ยอดรวม vat"] = row.vat_total ?? row["ยอดรวม vat"];
-    res["วันที่"] = row.start_date ? String(row.start_date) : (row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : "");
+    res["วันที่"] = row.start_date ? String(row.start_date) : (row.created_at ? getTodayDateIso(new Date(row.created_at)) : "");
     res["color"] = row.color ?? row["color"];
     res["บริษัท"] = row.company ?? row["บริษัท"];
     res["รับผิดชอบ"] = row.responsible_person ?? row["รับผิดชอบ"];
@@ -2381,10 +2381,10 @@ export async function syncContractWorkPaidAmount(conworkIdOrRef: string, project
 
     let totalPaid = 0;
     for (const b of bills) {
-      const isPaid = b.status === "เบิกแล้ว" || Boolean(b.paid_date);
-      if (!isPaid) continue;
-
       const d = (b.data && typeof b.data === "object") ? b.data : {};
+      const status = String(b.status || d["สถานะ"] || "").trim().toLowerCase();
+      const isPaid = status.includes("เบิกแล้ว") || status === "paid" || status === "withdrawn" || Boolean(b.paid_date);
+      if (!isPaid) continue;
       const bRef = String(d._rawContractor || d.conwork_id || d["สัญญา"] || d["_rawVendor"] || "").trim();
       const bContractor = String(d["ผู้รับเหมา"] || b.vendor_or_person || "").trim();
       const bProjId = String(b.project_id || d["ID Project"] || "").trim();

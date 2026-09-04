@@ -1,4 +1,5 @@
 import { uploadFileToSupabaseStorage } from "@/lib/supabase-db";
+import { getTodayDateIso } from "@/lib/dates";
 
 type UploadBillImageContext = {
   sequence?: string;
@@ -15,7 +16,7 @@ type UploadTableImageContext = {
 function buildBillFileName(originalName: string, context: UploadBillImageContext = {}): string {
   const extMatch = originalName.match(/\.([a-zA-Z0-9]+)$/);
   const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
-  const dateStr = context.billDate || new Date().toISOString().slice(0, 10);
+  const dateStr = context.billDate || getTodayDateIso();
   const seq = context.sequence ? `_seq${context.sequence}` : "";
   const proj = context.projectId ? `_${context.projectId}` : "";
   const rand = Math.floor(Math.random() * 10000);

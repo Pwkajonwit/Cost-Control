@@ -21,7 +21,7 @@ import {
 } from "@/lib/line";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { insertRowToSupabase } from "@/lib/supabase-db";
-import { normalizeDateToIso } from "@/lib/dates";
+import { normalizeDateToIso, getTodayDateIso } from "@/lib/dates";
 
 /**
   * Central command processor for all 63 AppscriptBot keywords migrated to Next.js + Supabase
@@ -159,7 +159,7 @@ export async function handleLineCommand(
         details = content.replace(match[0], "").trim();
       }
 
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = getTodayDateIso();
       const { data: inserted } = await supabaseAdmin
         .from("tasks")
         .insert({
@@ -255,7 +255,7 @@ export async function handleLineCommand(
       const receiver = lines[1]?.replace(/^ผู้รับ:|^ถึง:|^ผู้รับผิดชอบ:/, "").trim() || "ทีมงาน";
       const head = lines[2]?.replace(/^หัวหน้า:|^อนุมัติโดย:/, "").trim() || "หัวหน้า";
 
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = getTodayDateIso();
       const { data: insRows } = await supabaseAdmin
         .from("tasks")
         .insert([
@@ -320,7 +320,7 @@ export async function handleLineCommand(
             assignee_name: receiver,
             task_type: typeNum,
             status: "ดำเนินการ",
-            do_date: doWork && doWork !== "-" ? normalizeDateToIso(doWork) : new Date().toISOString().slice(0, 10),
+            do_date: doWork && doWork !== "-" ? normalizeDateToIso(doWork) : getTodayDateIso(),
             send_date: sendWork && sendWork !== "-" ? normalizeDateToIso(sendWork) : null,
           })
           .select()

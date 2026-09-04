@@ -3,6 +3,7 @@ import { isCommittedBill } from "@/lib/bill-status";
 import { computeBillAmount, computeBillDeductMultiplier, computeBillTransferAmount, isVatActive, parseDeductPercent } from "@/lib/project-summary";
 import { getRows } from "@/lib/db";
 import type { SheetRow } from "@/lib/types";
+import { getTodayDateIso } from "@/lib/dates";
 
 export async function applyBillFormulas(row: SheetRow) {
   const context = await getBillFormulaContext();
@@ -114,7 +115,7 @@ export function applyProjectFormulas(row: SheetRow) {
     }
   }
 
-  if (!hasValue(output["วันที่"])) output["วันที่"] = new Date().toISOString().slice(0, 10);
+  if (!hasValue(output["วันที่"])) output["วันที่"] = getTodayDateIso();
   if (!hasValue(output["color"])) output["color"] = "Red";
   return output;
 }
@@ -237,10 +238,6 @@ function computePaidForContract(contractRow: SheetRow, dataRows: SheetRow[]): nu
       const amt = toNumber(b["ค่าแรง"]) || toNumber(b["ยอดเงิน"]) || toNumber(b["ยอดโอน"]);
       totalPaid += amt;
     }
-  }
-
-  if (totalPaid === 0 && toNumber(contractRow.paid_amount || contractRow["ยอดเงินจ่าย"]) > 0) {
-    return toNumber(contractRow.paid_amount || contractRow["ยอดเงินจ่าย"]);
   }
 
   return totalPaid;
