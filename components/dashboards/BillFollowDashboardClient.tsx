@@ -29,6 +29,8 @@ import { formatDateDisplay, normalizeDateToIso } from "@/lib/dates";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 import { formatVatDisplay, formatDeductDisplay, formatCreditDisplay } from "@/lib/bill-status";
 import { useRealtimeSync } from "@/lib/use-realtime-sync";
+import { BillImageThumbnail } from "@/components/BillImageThumbnail";
+import { AttachBillModal } from "@/components/dashboards/AttachBillModal";
 import type { SheetRow } from "@/lib/types";
 
 const PAGE_SIZE_OPTIONS = [20, 40, 60, 100];
@@ -40,7 +42,46 @@ type BillFollowDashboardClientProps = {
   creditRows: SheetRow[];
   requesterNames: Record<string, string>;
   peopleRows?: SheetRow[];
+  initialRequester?: string;
+  authEmpId?: string;
+  authName?: string;
 };
+
+function resolveMatchingRequesterKey(
+  peopleRows: SheetRow[],
+  authEmpId?: string,
+  authName?: string
+): string {
+  let empId = String(authEmpId || "").trim();
+  let name = String(authName || "").trim();
+
+  if (!empId && !name && typeof document !== "undefined") {
+    const empMatch = document.cookie.match(/auth_employee_id=([^;]+)/);
+    const nameMatch = document.cookie.match(/auth_name=([^;]+)/);
+    empId = empMatch ? decodeURIComponent(empMatch[1]).trim() : "";
+    name = nameMatch ? decodeURIComponent(nameMatch[1]).trim() : "";
+  }
+
+  if (!empId && !name) return "";
+
+  const cleanEmpId = empId.toLowerCase();
+  const cleanName = name.toLowerCase();
+
+  const matched = peopleRows.find(p => {
+    const pId = String(p["รหัสพนักงาน"] || p.id || "").trim().toLowerCase();
+    const pNick = String(p["ชื่อเล่น"] || "").trim().toLowerCase();
+    const pFull = String(p["ชื่อ-นามสกุล"] || "").trim().toLowerCase();
+    return (
+      (cleanEmpId && (pId === cleanEmpId || pNick === cleanEmpId || pFull === cleanEmpId)) ||
+      (cleanName && (pNick === cleanName || pFull === cleanName || pId === cleanName))
+    );
+  });
+
+  if (matched) {
+    return String(matched["รหัสพนักงาน"] || matched.id || matched["ชื่อเล่น"] || "");
+  }
+  return empId || name || "";
+}
 
 function calculateDaysElapsed(dateVal: unknown): number {
   if (!dateVal) return 0;
@@ -60,19 +101,36 @@ export function BillFollowDashboardClient({
   creditRows,
   requesterNames,
   peopleRows = [],
+  initialRequester = "",
+  authEmpId = "",
+  authName = "",
 }: BillFollowDashboardClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get("search") || "";
 
+  const computedInitialRequester = useMemo(() => {
+    return initialRequester || resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
+  }, [initialRequester, peopleRows, authEmpId, authName]);
+
   const [activeTab, setActiveTab] = useState<"all" | "vat" | "natural" | "company" | "credit">("all");
   const [searchTerm, setSearchTerm] = useState(urlSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
-  const [selectedRequester, setSelectedRequester] = useState("");
+  const [selectedRequester, setSelectedRequester] = useState(computedInitialRequester);
   const [selectedDate, setSelectedDate] = useState("");
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  // Auto-sync user requester once peopleRows are loaded if not yet selected
+  useEffect(() => {
+    if (!selectedRequester) {
+      const resolved = resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
+      if (resolved) {
+        setSelectedRequester(resolved);
+      }
+    }
+  }, [peopleRows, authEmpId, authName]);
 
   useEffect(() => {
     setSearchTerm(urlSearch);
@@ -102,6 +160,24 @@ export function BillFollowDashboardClient({
   const [completedRowIds, setCompletedRowIds] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Bill Document Attachment Modal State
+  const [selectedBillForAttach, setSelectedBillForAttach] = useState<SheetRow | null>(null);
+  const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
+
+  function handleOpenAttachModal(row: SheetRow) {
+    setSelectedBillForAttach(row);
+    setIsAttachModalOpen(true);
+  }
+
+  function handleAttachSuccess(updatedRow: SheetRow, message: string) {
+    const rowId = String(updatedRow["ลำดับ"] || updatedRow._sheetRow || "");
+    if (updatedRow["วันได้บิล"] || updatedRow["วันออก 3%"] || updatedRow["วันจ่าย"]) {
+      setCompletedRowIds((prev) => new Set(prev).add(rowId));
+    }
+    showToast(message);
+    router.refresh();
+  }
 
   function showToast(msg: string) {
     setToastMessage(msg);
@@ -137,8 +213,27 @@ export function BillFollowDashboardClient({
   const filteredRows = useMemo(() => {
     return activeCategoryRows.filter((row) => {
       // Filter by requester
-      if (selectedRequester && String(row["ผู้เบิก"] || "").trim() !== selectedRequester) {
-        return false;
+      if (selectedRequester) {
+        const rowReq = String(row["ผู้เบิก"] || row.requester || "").trim().toLowerCase();
+        const mappedReqName = (requesterNames[rowReq] || requesterNames[String(row["ผู้เบิก"] || "")] || "").toLowerCase();
+        const rowCreator = String(row["ผู้สร้างบิล"] || row.created_by || "").trim().toLowerCase();
+        const mappedCreatorName = (requesterNames[rowCreator] || requesterNames[String(row["ผู้สร้างบิล"] || "")] || "").toLowerCase();
+        const selLower = selectedRequester.toLowerCase();
+        const selNameLower = (requesterNames[selectedRequester] || selectedRequester).toLowerCase();
+
+        const matchesReq =
+          rowReq === selLower ||
+          rowReq === selNameLower ||
+          mappedReqName === selLower ||
+          mappedReqName === selNameLower;
+
+        const matchesCreator =
+          rowCreator === selLower ||
+          rowCreator === selNameLower ||
+          mappedCreatorName === selLower ||
+          mappedCreatorName === selNameLower;
+
+        if (!matchesReq && !matchesCreator) return false;
       }
       // Filter by date
       if (selectedDate) {
@@ -626,7 +721,7 @@ export function BillFollowDashboardClient({
                       )}
                     </div>
 
-                    {/* Quick Actions: LINE text & Mark Received */}
+                    {/* Quick Actions: Single Unified Button & LINE text */}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
@@ -642,18 +737,24 @@ export function BillFollowDashboardClient({
                       </button>
 
                       {isCompleted ? (
-                        <span className="px-2 py-1 bg-slate-100 text-slate-400 text-xs rounded-lg border border-slate-200">
-                          ได้บิลแล้ว
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAttachModal(row)}
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-lg border border-slate-200 transition cursor-pointer flex items-center gap-1"
+                          title="คลิกเพื่อดูหรือแนบเอกสารเพิ่มเติม"
+                        >
+                          <CheckCircle2 size={12} className="text-emerald-600" />
+                          <span>ได้บิลแล้ว</span>
+                        </button>
                       ) : (
                         <button
                           type="button"
                           disabled={isSaving}
-                          onClick={() => handleMarkReceived(row, (activeTab === "natural" || activeTab === "company") ? "deduct" : activeTab)}
-                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs rounded-lg transition cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs"
-                          title="กดเพื่อบันทึกว่าได้รับบิลแล้ว"
+                          onClick={() => handleOpenAttachModal(row)}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs rounded-lg transition cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs flex items-center gap-1"
+                          title="กดเพื่อแนบเอกสารหรือบันทึกได้บิลแล้ว"
                         >
-                          {isSaving ? "บันทึก..." : "ได้บิลแล้ว"}
+                          <span>ได้บิลแล้ว</span>
                         </button>
                       )}
                     </div>
@@ -678,6 +779,7 @@ export function BillFollowDashboardClient({
                 <th className="py-2.5 px-3 border-r border-slate-200">ผู้เบิก</th>
                 <th className="py-2.5 px-3 border-r border-slate-200 text-right">ยอดเงิน</th>
                 <th className="py-2.5 px-3 border-r border-slate-200 text-center">เงื่อนไข</th>
+                <th className="py-2.5 px-3 border-r border-slate-200 text-center">เอกสารแนบ</th>
                 <th className="py-2.5 px-3 text-center">จัดการตามบิล</th>
               </tr>
             </thead>
@@ -778,22 +880,39 @@ export function BillFollowDashboardClient({
                       </div>
                     </td>
 
-                    {/* Actions: Mark Received & LINE Copy */}
+                    {/* Attached Documents */}
+                    <td className="py-2 px-3 text-center border-r border-slate-100">
+                      <div className="flex items-center justify-center">
+                        {row["รูปถ่ายบิล"] ? (
+                          <BillImageThumbnail value={row["รูปถ่ายบิล"]} compact />
+                        ) : (
+                          <span className="text-slate-300 font-mono select-none text-xs">-</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Actions: Single Unified Button & LINE Copy */}
                     <td className="py-2 px-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         {completedRowIds.has(billId) || (hasVat && Boolean(row["วันได้บิล"])) || (hasDeduct && Boolean(row["วันออก 3%"])) || (hasCredit && Boolean(row["วันจ่าย"])) ? (
-                          <span className="px-2 py-1 bg-slate-100 text-slate-500 text-xs rounded border border-slate-200 cursor-not-allowed">
-                            ได้บิลแล้ว
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAttachModal(row)}
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded border border-slate-200 transition cursor-pointer flex items-center gap-1"
+                            title="คลิกเพื่อดูหรือแนบเอกสารเพิ่มเติม"
+                          >
+                            <CheckCircle2 size={12} className="text-emerald-600" />
+                            <span>ได้บิลแล้ว</span>
+                          </button>
                         ) : (
                           <button
                             type="button"
                             disabled={isSaving}
-                            onClick={() => handleMarkReceived(row, (activeTab === "natural" || activeTab === "company") ? "deduct" : activeTab)}
-                            className="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs rounded transition cursor-pointer disabled:opacity-50"
-                            title="กดเพื่อบันทึกว่าได้รับบิลแล้ว"
+                            onClick={() => handleOpenAttachModal(row)}
+                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs rounded transition cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs flex items-center gap-1"
+                            title="กดเพื่อแนบเอกสารหรือบันทึกได้บิลแล้ว"
                           >
-                            {isSaving ? "บันทึก..." : "ได้บิลแล้ว"}
+                            <span>ได้บิลแล้ว</span>
                           </button>
                         )}
 
@@ -817,7 +936,7 @@ export function BillFollowDashboardClient({
 
               {!paginatedRows.length && (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-slate-400 text-xs font-medium">
+                  <td colSpan={11} className="py-8 text-center text-slate-400 text-xs font-medium">
                     ไม่พบรายการตามบิลที่ค้นหา
                   </td>
                 </tr>
@@ -918,6 +1037,22 @@ export function BillFollowDashboardClient({
           </>
         )}
       </div>
+
+      {/* Attach Bill Document Modal */}
+      <AttachBillModal
+        isOpen={isAttachModalOpen}
+        onClose={() => {
+          setIsAttachModalOpen(false);
+          setSelectedBillForAttach(null);
+        }}
+        row={selectedBillForAttach}
+        requesterName={
+          selectedBillForAttach
+            ? requesterNames[String(selectedBillForAttach["ผู้เบิก"] || "").trim()] || String(selectedBillForAttach["ผู้เบิก"] || "")
+            : ""
+        }
+        onSuccess={handleAttachSuccess}
+      />
     </div>
   );
 }

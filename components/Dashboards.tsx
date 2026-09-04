@@ -46,7 +46,20 @@ export async function WithdrawDashboard({ filters = {} }: { filters?: WithdrawFi
 }
 
 export async function BillFollowDashboard() {
-  const [dataRows, peopleRows] = await Promise.all([getBillFollowBills(), safeRows(TABLES.PEOPLE)]);
+  const [dataRows, peopleRows, usersList] = await Promise.all([
+    getBillFollowBills(),
+    safeRows(TABLES.PEOPLE),
+    getUsersListFromSupabase()
+  ]);
+  const cookieStore = await cookies();
+  const authEmpId = cookieStore.get("auth_employee_id")?.value || "";
+  const authName = cookieStore.get("auth_name")?.value || "";
+
+  let defaultRequester = "";
+  if (authEmpId || authName) {
+    defaultRequester = findMatchingRequesterKey(peopleRows, authEmpId, authName, usersList);
+  }
+
   const rawRows = hydrateDataRows(dataRows).filter(isCommittedBill);
   const requesterNames = requesterNameMap(peopleRows);
   
@@ -78,6 +91,9 @@ export async function BillFollowDashboard() {
       creditRows={creditRows}
       requesterNames={requesterNames}
       peopleRows={peopleRows}
+      initialRequester={defaultRequester}
+      authEmpId={authEmpId}
+      authName={authName}
     />
   );
 }

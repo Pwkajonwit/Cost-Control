@@ -327,7 +327,6 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
                       <Link
                         key={view.id}
                         href={href}
-                        prefetch={false}
                         className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
                           active
                             ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"
@@ -369,7 +368,6 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
                       <Link
                         key={view.id}
                         href={href}
-                        prefetch={false}
                         className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
                           active
                             ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"
@@ -411,7 +409,6 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
                       <Link
                         key={view.id}
                         href={href}
-                        prefetch={false}
                         className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
                           active
                             ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"
@@ -465,7 +462,6 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
 
                   <Link
                     href="/settings"
-                    prefetch={false}
                     className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
                       pathname === "/settings"
                         ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"
@@ -486,7 +482,6 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
 
                   <Link
                     href="/settings/product-categories"
-                    prefetch={false}
                     className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
                       pathname.startsWith("/settings/product-categories")
                         ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"
@@ -507,7 +502,6 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
 
                   <Link
                     href="/settings/options"
-                    prefetch={false}
                     className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
                       pathname.startsWith("/settings/options")
                         ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"
@@ -528,7 +522,6 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
 
                   <Link
                     href="/settings/line-system"
-                    prefetch={false}
                     className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
                       pathname.startsWith("/settings/line-system") || pathname.startsWith("/line-system")
                         ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"
@@ -549,7 +542,6 @@ export function DualSidebar({ collapsed, onToggleCollapse, currentUser }: DualSi
 
                   <Link
                     href="/settings/import-export"
-                    prefetch={false}
                     className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 text-xs font-sans ${
                       pathname.startsWith("/settings/import-export")
                         ? "bg-[#d4f54e] text-[#0b3531] font-semibold shadow-xs"

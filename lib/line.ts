@@ -32,11 +32,8 @@ export async function isLineApproverAuthorized(userId: string, targetId?: string
 
   return cached(cacheKey, 10_000, async () => {
     try {
-      const { approverIds, ownerId } = await getLineTargetIds();
+      const { approverIds } = await getLineTargetIds();
       if (approverIds.includes(userId) || (targetId && approverIds.includes(targetId))) {
-        return true;
-      }
-      if (ownerId && (userId === ownerId || targetId === ownerId)) {
         return true;
       }
     } catch (e) {
@@ -52,11 +49,8 @@ export async function isLineCloserAuthorized(userId: string, targetId?: string):
 
   return cached(cacheKey, 10_000, async () => {
     try {
-      const { closerIds, ownerId } = await getLineTargetIds();
+      const { closerIds } = await getLineTargetIds();
       if (closerIds.includes(userId) || (targetId && closerIds.includes(targetId))) {
-        return true;
-      }
-      if (ownerId && (userId === ownerId || targetId === ownerId)) {
         return true;
       }
     } catch (e) {
@@ -2017,6 +2011,7 @@ export async function getLineTargetIds(): Promise<{
         }
       }
 
+      // เจ้าของระบบ (Owner) มีสิทธิ์แค่รับแจ้งเตือนประจำวันเท่านั้น (ตัดออกจาก approverSet และ financeSet)
       const approverIds = Array.from(approverSet);
       const closerIds = Array.from(financeSet);
       return { ownerId, approverIds, closerIds, financeIds: closerIds };

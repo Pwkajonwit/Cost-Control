@@ -572,21 +572,19 @@ export async function handleLineCommand(
         return true;
       }
 
-      const { ownerId, approverIds } = await getLineConfigIds();
-      const targetApprovers = (approverIds && approverIds.length > 0)
-        ? approverIds
-        : (ownerId ? [ownerId] : []);
+      const { approverIds } = await getLineConfigIds();
+      const targetApprovers = (approverIds && approverIds.length > 0) ? approverIds : [];
 
       if (targetApprovers.length === 0) {
         await replyTextMessage(
           replyToken,
-          "⚠️ ยังไม่ได้ระบุ LINE User ID ผู้อนุมัติ (Approver) หรือ เจ้าของระบบ (OWN) ในการตั้งค่า LINE System กรุณาตรวจสอบที่เมนูตั้งค่า LINE ครับ"
+          "⚠️ ยังไม่ได้ระบุ LINE User ID ผู้อนุมัติ (Approver) ในระบบ กรุณาตรวจสอบสิทธิ์อนุมัติบิลในหน้าพนักงานครับ"
         );
         return true;
       }
 
       const [resolvedPeopleMap, bankInfoMap] = await Promise.all([getPeopleMap(), getBankInfoMap()]);
-      const flexForOwner = createWithdrawOwnerFlex(pendingBills, resolvedPeopleMap, bankInfoMap);
+      const flexForApprovers = createWithdrawOwnerFlex(pendingBills, resolvedPeopleMap, bankInfoMap);
       const totalAmount = pendingBills.reduce((sum, b) => sum + Number(b["ยอดเงิน"] || b.amount || 0), 0);
       const amountStr = totalAmount.toLocaleString("th-TH");
 
@@ -598,7 +596,7 @@ export async function handleLineCommand(
       let lastError = "";
 
       for (const targetUserId of targetApprovers) {
-        const result = await sendFlexMessageDetailed(targetUserId, altText, flexForOwner);
+        const result = await sendFlexMessageDetailed(targetUserId, altText, flexForApprovers);
         if (result.success) {
           successCount++;
         } else {
@@ -781,20 +779,43 @@ export async function handleLineCommand(
       }
 
       let totalAmount = 0;
-      const { ownerId, closerIds, financeIds } = await getLineConfigIds();
+      const { closerIds, financeIds } = await getLineConfigIds();
       const rawFinanceList = Array.from(new Set([...(closerIds || []), ...(financeIds || [])].filter(Boolean)));
-      const targetFinanceList = rawFinanceList.length > 0 ? rawFinanceList : (ownerId ? [ownerId] : []);
+      const fallbackFinanceGroup = await getLineTargetGroup("finance");
+      const validFinanceGroup = fallbackFinanceGroup && fallbackFinanceGroup.startsWith("C") ? fallbackFinanceGroup : "";
+      const targetFinanceList = rawFinanceList.length > 0 
+        ? rawFinanceList 
+        : (validFinanceGroup ? [validFinanceGroup] : []);
+
+      const nowIso = new Date().toISOString();
+      const todayDate = nowIso.split("T")[0];
 
       for (const b of targetBills) {
         const bId = b.id || b["ลำดับ"] || b._sheetRow;
         totalAmount += Number(b["ยอดเงิน"] || b.amount || 0);
-        await updateRowInSupabase("bills", "id", bId, {
+
+        const patchPayload: Record<string, any> = {
           "สถานะ": newStatus,
           status: newStatus
-        });
+        };
+
+        if (isApprove) {
+          patchPayload.approved_at = nowIso;
+        } else if (!isReject) {
+          // Closed / Paid
+          patchPayload.paid_at = nowIso;
+          patchPayload.paid_date = todayDate;
+          patchPayload["วันจ่าย"] = todayDate;
+        }
+
+        await updateRowInSupabase("bills", "id", bId, patchPayload);
         b["สถานะ"] = newStatus;
         b.status = newStatus;
       }
+
+      // Invalidate table caches immediately so next read is 100% fresh
+      invalidateTableCache("Data");
+      invalidateTableCache("bills");
 
       // When Approver Approves successfully, forward Multi-Item Flex Message to Finance / Closers to pay & close job
       if (isApprove && targetFinanceList.length > 0) {

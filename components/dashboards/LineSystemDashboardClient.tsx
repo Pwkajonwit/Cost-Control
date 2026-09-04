@@ -397,7 +397,7 @@ export function LineSystemDashboardClient() {
   });
 
   const detectedApprovers = systemUsers.filter(
-    (u) => Boolean(u.isOwner) || Boolean(u.canCloseBill) || u.role === "Owner" || u.role === "Approver" || u.role === "Admin_Approver" || u.role === "Admin"
+    (u) => Boolean(u.canCloseBill) || u.role === "Approver" || u.role === "Admin_Approver"
   );
 
   const detectedClosers = systemUsers.filter(
@@ -851,7 +851,7 @@ export function LineSystemDashboardClient() {
                       </div>
                     )}
                     <p className="text-[10px] text-amber-800/90 leading-tight">
-                      รับสรุปผลงานประจำวัน (เช้า-เย็น) & สิทธิ์สูงสุด
+                      รับสรุปผลงานประจำวัน (เช้า-เย็น) เท่านั้น
                     </p>
                   </div>
 

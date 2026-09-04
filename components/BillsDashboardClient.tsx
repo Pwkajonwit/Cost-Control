@@ -32,14 +32,6 @@ type BillsDashboardClientProps = {
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 
-function getTodayIso(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 function resolveMatchingRequesterKey(
   peopleRows: SheetRow[],
   authEmpId?: string,
@@ -71,7 +63,7 @@ function resolveMatchingRequesterKey(
   });
 
   if (matched) {
-    return String(matched["รหัสพนักงาน"] || matched["ชื่อเล่น"] || matched.id || "");
+    return String(matched["รหัสพนักงาน"] || matched.id || matched["ชื่อเล่น"] || "");
   }
   return empId || name || "";
 }
@@ -100,7 +92,19 @@ export function BillsDashboardClient({
     return resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
   }, [peopleRows, authEmpId, authName]);
 
-  const todayIso = useMemo(() => getTodayIso(), []);
+  const todayIso = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Bangkok",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+    } catch {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+  }, []);
 
   const [searchInput, setSearchInput] = useState(initialSearch);
   const [filters, setFilters] = useState(() => ({
@@ -111,15 +115,14 @@ export function BillsDashboardClient({
     search: initialSearch,
   }));
 
-  // Ensure default requester and date are initialized if peopleRows load later
+  // Auto-sync initial requester when peopleRows finishes loading if not yet set
   useEffect(() => {
-    const resolvedReq = resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
-    const currentToday = getTodayIso();
-    setFilters(prev => ({
-      ...prev,
-      requester: prev.requester || resolvedReq,
-      date: prev.date || currentToday,
-    }));
+    if (!filters.requester) {
+      const resolvedReq = resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
+      if (resolvedReq) {
+        setFilters(prev => ({ ...prev, requester: resolvedReq }));
+      }
+    }
   }, [peopleRows, authEmpId, authName]);
 
   useEffect(() => {
@@ -235,8 +238,26 @@ export function BillsDashboardClient({
 
     return rows.filter(row => {
       if (requester) {
-        const rowReq = String(row["ผู้เบิก"] || "").trim();
-        if (rowReq !== requester && rowReq !== reqName) return false;
+        const rowReq = String(row["ผู้เบิก"] || row.requester || "").trim().toLowerCase();
+        const mappedReqName = (requesterNames[rowReq] || requesterNames[String(row["ผู้เบิก"] || "")] || "").toLowerCase();
+        const rowCreator = String(row["ผู้สร้างบิล"] || row.created_by || "").trim().toLowerCase();
+        const mappedCreatorName = (requesterNames[rowCreator] || requesterNames[String(row["ผู้สร้างบิล"] || "")] || "").toLowerCase();
+        const reqLower = requester.toLowerCase();
+        const reqNameLower = reqName.toLowerCase();
+
+        const matchesReq =
+          rowReq === reqLower ||
+          rowReq === reqNameLower ||
+          mappedReqName === reqLower ||
+          mappedReqName === reqNameLower;
+
+        const matchesCreator =
+          rowCreator === reqLower ||
+          rowCreator === reqNameLower ||
+          mappedCreatorName === reqLower ||
+          mappedCreatorName === reqNameLower;
+
+        if (!matchesReq && !matchesCreator) return false;
       }
       if (bill && String(row["บิล"] || "").trim() !== bill) return false;
       if (status && String(row["สถานะ"] || "").trim() !== status) return false;
@@ -586,12 +607,34 @@ export function BillsDashboardClient({
           {/* Date Filter */}
           <div className="flex items-center gap-1.5">
             <span className="text-slate-700 whitespace-nowrap">วันที่:</span>
-            <input
-              type="date"
-              value={filters.date}
-              onChange={event => updateFilter("date", event.target.value)}
-              className="bg-white border border-slate-300 text-xs text-slate-800 px-2 py-1 rounded-md focus:outline-none cursor-pointer"
-            />
+            <div className="relative flex items-center">
+              <input
+                type="date"
+                value={filters.date}
+                onChange={event => updateFilter("date", event.target.value)}
+                className="bg-white border border-slate-300 text-xs text-slate-800 px-2 py-1 rounded-md focus:outline-none cursor-pointer pr-6"
+              />
+              {filters.date ? (
+                <button
+                  type="button"
+                  onClick={() => updateFilter("date", "")}
+                  className="absolute right-1.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  title="ล้างวันที่ (ดูทั้งหมด)"
+                >
+                  <X size={12} />
+                </button>
+              ) : null}
+            </div>
+            {filters.date !== todayIso ? (
+              <button
+                type="button"
+                onClick={() => updateFilter("date", todayIso)}
+                className="text-[11px] text-emerald-700 hover:underline cursor-pointer font-medium whitespace-nowrap"
+                title="กรองเฉพาะวันนี้"
+              >
+                วันนี้
+              </button>
+            ) : null}
           </div>
 
           {/* Bill Type Filter */}
@@ -651,7 +694,33 @@ export function BillsDashboardClient({
       {/* 3. WORK TABLE / MOBILE HIGH-DENSITY CARD FEED */}
       <div className="border border-slate-200 rounded-xl md:rounded-md bg-white overflow-hidden shadow-2xs">
         {!visibleRows.length ? (
-          <div className="p-8 text-center text-slate-400 text-xs font-medium">ไม่พบรายการบิล</div>
+          <div className="p-8 text-center text-slate-500 text-xs font-medium space-y-2">
+            <div>
+              ไม่พบรายการบิล{filters.date ? ` สำหรับวันที่ ${formatDateDisplay(filters.date)}` : ""}{filters.requester ? ` ของ ${requesterNames[filters.requester] || filters.requester}` : ""}
+            </div>
+            {(filters.date || filters.requester) && (
+              <div className="flex items-center justify-center gap-2 pt-1">
+                {filters.date && (
+                  <button
+                    type="button"
+                    onClick={() => updateFilter("date", "")}
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs shadow-2xs cursor-pointer"
+                  >
+                    ดูบิลทุกวัน (ล้างวันที่)
+                  </button>
+                )}
+                {filters.requester && (
+                  <button
+                    type="button"
+                    onClick={() => updateFilter("requester", "")}
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs shadow-2xs cursor-pointer"
+                  >
+                    ดูบิลทุกคน (ล้างผู้เบิก)
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
           <>
             {/* MOBILE COMPACT CARD FEED (High-Density & Fast Scanning) */}
