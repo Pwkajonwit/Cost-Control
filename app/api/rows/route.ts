@@ -10,7 +10,7 @@ import { getFormSchema } from "@/lib/schemas";
 import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-summary";
 import { appendAuditLog, appendRow, bulkAppendRows, deleteRows, getRows, getSystemOptions, invalidateTableCache, updateRow } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { getNextBillSequence } from "@/lib/supabase-db";
+import { getNextBillSequence, syncContractWorkPaidAmount } from "@/lib/supabase-db";
 import type { SheetRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -342,6 +342,14 @@ export async function PATCH(request: NextRequest) {
     const originalTarget = (keyCol && existing[keyCol] ? existing[keyCol] : undefined) || existing.id || targetRowKey || existing._sheetRow;
     const row = await updateRow(tableName, originalTarget, output);
     console.log(`[PATCH /api/rows SUCCESS] updated "${tableName}" row key: "${originalTarget}"`);
+
+    if (tableName === TABLES.DATA || tableName === "Data" || tableName === "bills") {
+      const cRef = String(row._rawContractor || row["_rawContractor"] || row.conwork_id || row["สัญญา"] || row.contractor_id || row["ผู้รับเหมา"] || existing._rawContractor || existing.conwork_id || existing["ผู้รับเหมา"] || "").trim();
+      const pId = String(row.project_id || row["ID Project"] || existing.project_id || existing["ID Project"] || "").trim();
+      if (cRef) {
+        syncContractWorkPaidAmount(cRef, pId).catch(() => null);
+      }
+    }
     await appendAuditLog({
       action: tableName === TABLES.DATA && Object.keys(patch).every(key => key === "สถานะ") ? "STATUS" : "UPDATE",
       tableName,
@@ -415,6 +423,15 @@ export async function DELETE(request: NextRequest) {
     }).catch(() => undefined)));
 
     invalidateTableCache(tableName);
+    if (tableName === TABLES.DATA || tableName === "Data" || tableName === "bills") {
+      for (const dRow of deletingRows) {
+        const cRef = String(dRow._rawContractor || dRow["_rawContractor"] || dRow.conwork_id || dRow["สัญญา"] || dRow.contractor_id || dRow["ผู้รับเหมา"] || "").trim();
+        const pId = String(dRow.project_id || dRow["ID Project"] || "").trim();
+        if (cRef) {
+          syncContractWorkPaidAmount(cRef, pId).catch(() => null);
+        }
+      }
+    }
     try {
       revalidatePath("/bills");
       revalidatePath("/documents");

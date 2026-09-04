@@ -89,7 +89,7 @@ export default async function ContractDetailPage({ params }: ContractDetailPageP
     "ที่อยู่": rawContract["ที่อยู่"] || contractor?.["ที่อยู่"] || "",
   };
 
-  const relatedRows = dataRows
+  const relatedRows: SheetRow[] = dataRows
     .filter(row => relatedToContract(row, decodedContractId, contract) && isCommittedBill(row))
     .map(row => ({
       ...row,
@@ -98,10 +98,22 @@ export default async function ContractDetailPage({ params }: ContractDetailPageP
     }));
   const displayName = valueOf(contract, ["ชื่อเล่น", "ชื่อ-นามสกุล", "id_Contractor"]) || decodedContractId;
   const projectName = valueOf(contract, ["ชื่อ Project", "ID Project"]) || "-";
-  const paid = toAmount(valueOf(contract, ["ยอดเงินจ่าย"]));
+  const paidBills = relatedRows.filter(r => {
+    const st = String(r["สถานะ"] || r.status || "").trim().toLowerCase();
+    return st.includes("เบิกแล้ว") || st === "paid" || st === "withdrawn" || Boolean(r.paid_date) || Boolean(r.paid_at);
+  });
+  const pendingBills = relatedRows.filter(r => !paidBills.includes(r));
+  const calculatedPaid = paidBills.reduce((sum, r) => sum + (toAmount(r["ค่าแรง"]) || toAmount(r["ยอดเงิน"]) || toAmount(r["ยอดโอน"])), 0);
+  const pendingAmount = pendingBills.reduce((sum, r) => sum + (toAmount(r["ค่าแรง"]) || toAmount(r["ยอดเงิน"]) || toAmount(r["ยอดโอน"])), 0);
+
   const total = toAmount(valueOf(contract, ["ยอดเงินจ้าง"]));
-  const remaining = toAmount(valueOf(contract, ["ค่าแรงคงเหลือ"])) || total - paid;
+  const paid = relatedRows.length > 0 ? calculatedPaid : toAmount(valueOf(contract, ["ยอดเงินจ่าย"]));
+  const remaining = total - paid;
   const payPercent = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+
+  // Sync to contract fields for left-hand detail table
+  contract["ยอดเงินจ่าย"] = paid;
+  contract["ค่าแรงคงเหลือ"] = remaining;
 
   return (
     <div className="w-full flex flex-col gap-4 p-4 sm:p-5 max-w-[1400px] mx-auto font-sans text-sm text-slate-800">
@@ -138,7 +150,7 @@ export default async function ContractDetailPage({ params }: ContractDetailPageP
         <div className="border border-slate-200 rounded-xl md:rounded-md p-3 sm:p-4 bg-white shadow-2xs">
           <div className="flex items-center justify-between text-xs text-slate-400 font-medium mb-0.5">
             <span>ยอดจ่ายแล้ว</span>
-            <span className="text-emerald-700 ">{payPercent}%</span>
+            <span className="text-emerald-700 font-medium">{payPercent}%</span>
           </div>
           <div className="text-base sm:text-lg text-emerald-700">{money(paid)}</div>
           <div className="mt-1.5 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
@@ -147,7 +159,12 @@ export default async function ContractDetailPage({ params }: ContractDetailPageP
         </div>
 
         <div className="border border-slate-200 rounded-xl md:rounded-md p-3 sm:p-4 bg-white shadow-2xs">
-          <div className="text-xs text-slate-400 font-medium mb-0.5">ค่าแรงคงเหลือ</div>
+          <div className="flex items-center justify-between text-xs text-slate-400 font-medium mb-0.5">
+            <span>ค่าแรงคงเหลือ</span>
+            {pendingAmount > 0 && (
+              <span className="text-amber-600 font-normal">รอจ่าย {money(pendingAmount)}</span>
+            )}
+          </div>
           <div className={`text-base sm:text-lg ${remaining < 0 ? "text-rose-600" : "text-amber-700"}`}>
             {money(remaining)}
             {remaining < 0 && <span className="text-xs text-rose-500 ml-1">จ่ายเกิน</span>}

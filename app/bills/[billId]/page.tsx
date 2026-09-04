@@ -37,9 +37,19 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
   });
 
   const projectId = text(bill["ID Project"]);
-  const contractId = text(bill["ผู้รับเหมา"]);
+
+  // Hydrate contract rows with real paid amounts, contractor info and calculations
+  const hydratedContractRows = await hydrateContractRows(rawContractRows, {
+    projects: rawProjectRows,
+    contractors: contractorRows,
+    dataRows: rawDataRows,
+  }).catch(() => rawContractRows);
+
   const project = rawProjectRows.filter((row) => text(row["ID Project"] || row.id) === projectId);
-  const contract = contractId ? rawContractRows.filter((row) => text(row.id_Conwork || row.id) === contractId) : [];
+  const contract = findContractsForBill(bill, hydratedContractRows, contractorRows);
+  const matchedContract = contract[0] || null;
+  const contractDisplay = matchedContract ? text(matchedContract.id_Conwork || matchedContract.id) : "";
+  const contractLink = contractDisplay ? `/contract-open/${encodeURIComponent(contractDisplay)}` : "";
 
   // Resolve Requester Name & Link
   const rawRequester = text(bill["ผู้เบิก"]);
@@ -125,6 +135,9 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
       decodedBillId={decodedBillId}
       project={project}
       contract={contract}
+      matchedContract={matchedContract}
+      contractDisplay={contractDisplay}
+      contractLink={contractLink}
       requesterDisplay={requesterDisplay}
       requesterLink={requesterLink}
       createdByDisplay={createdByDisplay}
@@ -133,6 +146,100 @@ export default async function BillDetailPage({ params }: BillDetailPageProps) {
       documentData={documentData}
     />
   );
+}
+
+function findContractsForBill(
+  bill: SheetRow,
+  contracts: SheetRow[],
+  contractors: SheetRow[] = []
+): SheetRow[] {
+  if (!bill || !contracts || contracts.length === 0) return [];
+
+  const contractorMap = new Map<string, SheetRow>();
+  for (const c of contractors) {
+    const id = text(c.id_Contractor || c.id).toLowerCase();
+    if (id) contractorMap.set(id, c);
+  }
+
+  const allRefs = [
+    bill._rawContractor,
+    bill.conwork_id,
+    bill.id_Conwork,
+    bill["id_Conwork"],
+    bill["_rawContractor"],
+    bill["_rawVendor"],
+    bill["สัญญา"],
+    bill["ผู้รับเหมา"],
+    bill["ร้าน/บุคคล"],
+    bill.vendor_or_person,
+    bill["รายละเอียดงาน"],
+    bill["สินค้า/ทำงาน"],
+    bill.description
+  ].map(r => text(r));
+
+  // 1. Explicit CW contract ID in any reference (e.g. "CW1", "CW1002")
+  for (const ref of allRefs) {
+    const match = ref.match(/cw\d+/i);
+    if (match) {
+      const cwId = match[0].toUpperCase();
+      const found = contracts.find(c => text(c.id_Conwork || c.id).toUpperCase() === cwId);
+      if (found) return [found];
+    }
+  }
+
+  // 2. Direct exact match on contract ID
+  for (const ref of allRefs) {
+    if (!ref) continue;
+    const refLower = ref.toLowerCase();
+    const found = contracts.find(c => text(c.id_Conwork || c.id).toLowerCase() === refLower);
+    if (found) return [found];
+  }
+
+  // 3. Match by Project ID + Contractor Name / ID
+  const bProjectId = text(bill["ID Project"] || bill.project_id).toLowerCase();
+  const bContractor = text(bill["ผู้รับเหมา"] || bill["ร้าน/บุคคล"] || bill.vendor_or_person).toLowerCase();
+
+  const isContractorCategory =
+    text(bill["ประเภท"] || bill.category).includes("ค่าแรง") ||
+    text(bill["ร้านค้า/ผู้รับเหมา"]) === "ผู้รับเหมา" ||
+    Boolean(bill["statusค่าแรง"]) ||
+    Number(bill["ค่าแรง"] || 0) > 0;
+
+  if (bContractor || isContractorCategory) {
+    const matched = contracts.filter(c => {
+      const cProjectId = text(c["ID Project"] || c.project_id).toLowerCase();
+      if (bProjectId && cProjectId && bProjectId !== cProjectId) return false;
+
+      const cContractorId = text(c.id_Contractor || c.contractor_id).toLowerCase();
+      const contractor = contractorMap.get(cContractorId);
+      const cNickname = text(c["ชื่อเล่น"] || contractor?.["ชื่อเล่น"]).toLowerCase();
+      const cFullName = text(c["ชื่อ-นามสกุล"] || contractor?.["ชื่อ-นามสกุล"]).toLowerCase();
+      const cWorkDesc = text(c["รายละเอียดงาน"]).toLowerCase();
+      const bWorkDesc = text(bill["รายละเอียดงาน"] || bill["สินค้า/ทำงาน"] || bill.description).toLowerCase();
+
+      const nameMatch = Boolean(
+        (cContractorId && (bContractor === cContractorId || bContractor.includes(cContractorId))) ||
+        (cNickname && (bContractor === cNickname || bContractor.includes(cNickname) || (cNickname.length >= 3 && bContractor.includes(cNickname)))) ||
+        (cFullName && (bContractor === cFullName || bContractor.includes(cFullName)))
+      );
+
+      if (nameMatch) {
+        return true;
+      }
+
+      if (bProjectId && cProjectId === bProjectId && cWorkDesc && bWorkDesc && (cWorkDesc.includes(bWorkDesc) || bWorkDesc.includes(cWorkDesc))) {
+        return true;
+      }
+
+      return false;
+    });
+
+    if (matched.length > 0) {
+      return matched;
+    }
+  }
+
+  return [];
 }
 
 function text(value: unknown) {
