@@ -968,24 +968,31 @@ export function FormModal({
                                 </div>
 
                                 {section.id === "vendor" && isStoreVendor ? (
-                                  isMultiItemMode ? (
+                                  <div className="inline-flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200 shadow-2xs">
                                     <button
                                       type="button"
                                       onClick={disableMultiItemMode}
-                                      className="text-[11px] text-slate-500 hover:text-slate-800 font-normal px-2 py-0.5 rounded-md border border-slate-200 hover:bg-slate-50 transition cursor-pointer"
+                                      className={`h-7 sm:h-8 px-3 rounded-md text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                                        !isMultiItemMode
+                                          ? "bg-white text-slate-900 shadow-2xs border border-slate-200/80 font-semibold"
+                                          : "text-slate-500 hover:text-slate-800 font-medium"
+                                      }`}
                                     >
-                                      รายการเดี่ยว
+                                      <span>รายการเดี่ยว</span>
                                     </button>
-                                  ) : (
                                     <button
                                       type="button"
                                       onClick={enableMultiItemMode}
-                                      className="text-[11px] text-emerald-800 hover:text-emerald-950 font-medium flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs"
+                                      className={`h-7 sm:h-8 px-3 rounded-md text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                        isMultiItemMode
+                                          ? "bg-emerald-600 text-white shadow-2xs font-semibold"
+                                          : "text-emerald-800 hover:text-emerald-950 font-medium hover:bg-emerald-50/60"
+                                      }`}
                                     >
-                                      <span>📦</span>
-                                      <span>+ หลายรายการ</span>
+                                      <span className="text-xs sm:text-sm">📦</span>
+                                      <span>หลายรายการ</span>
                                     </button>
-                                  )
+                                  </div>
                                 ) : null}
                               </div>
                               <div className={sectionGridClass}>

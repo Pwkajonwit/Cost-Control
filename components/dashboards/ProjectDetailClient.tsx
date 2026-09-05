@@ -47,25 +47,45 @@ type ProjectDetailClientProps = {
 };
 
 const PRODUCT_BUDGET_FIELDS: { name: string; field: string }[] = [
-  { name: "เหล็กเส้น", field: "งบไม่เกินเหล็กเส้น" },
-  { name: "เหล็กรูปพรรณ", field: "งบไม่เกินรูปพรรณ" },
-  { name: "คอนกรีต", field: "งบไม่เกินคอนกรีต" },
-  { name: "ไม้แบบ", field: "งบไม่เกินไม้แบบ" },
+  { name: "ปูน/ทราย/หิน", field: "งบไม่เกินปูนทรายหิน" },
+  { name: "เหล็กเส้น/รูปพรรณ", field: "งบไม่เกินเหล็กเส้น" },
+  { name: "คอนกรีตผสมเสร็จ", field: "งบไม่เกินคอนกรีต" },
+  { name: "ไม้แบบ/ไม้อัด", field: "งบไม่เกินไม้แบบ" },
   { name: "วัสดุมุง", field: "งบไม่เกินวัสดุมุง" },
   { name: "ฝ้าผนัง", field: "งบไม่เกินฝ้าผนัง" },
   { name: "ปูพื้น", field: "งบไม่เกินปูพื้น" },
   { name: "กระจก", field: "งบไม่เกินกระจก" },
   { name: "ไฟฟ้า", field: "งบไม่เกินไฟฟ้า" },
   { name: "ประปา", field: "งบไม่เกินประปา" },
-  { name: "อื่นๆ (วัสดุ)", field: "งบไม่เกินอื่นๆ" },
+  { name: "อื่นๆ(วัสดุ)", field: "งบไม่เกินวัสดุอื่นๆ" },
   { name: "สีเคมี", field: "งบไม่เกินสีเคมี" },
   { name: "สุขภัณฑ์", field: "งบไม่เกินสุขภัณฑ์" },
-  { name: "บิวท์อิน", field: "งบไม่เกินบิวอิน" },
+  { name: "บิวอิน", field: "งบไม่เกินบิวอิน" },
   { name: "แอร์", field: "งบไม่เกินแอร์" },
   { name: "ดิน", field: "งบไม่เกินดิน" },
   { name: "หินทราย", field: "งบไม่เกินหินทราย" },
   { name: "เตรียมงาน", field: "งบไม่เกินเตรียมงาน" },
+  { name: "น้ำมัน", field: "งบไม่เกินน้ำมัน" },
+  { name: "ค่าขนส่ง", field: "งบไม่เกินค่าขนส่ง" },
+  { name: "เครื่องจักร", field: "งบไม่เกินเครื่องจักร" },
+  { name: "ดำเนินการ(อื่นๆ)", field: "งบไม่เกินดำเนินการ" },
 ];
+
+function getProductPillarBadge(name: string) {
+  if (name.includes("น้ำมัน")) {
+    return <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-amber-50 text-amber-800 border border-amber-200 shrink-0">น้ำมัน</span>;
+  }
+  if (name.includes("ขนส่ง")) {
+    return <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-cyan-50 text-cyan-800 border border-cyan-200 shrink-0">ขนส่ง</span>;
+  }
+  if (name.includes("เครื่องจักร")) {
+    return <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-indigo-50 text-indigo-800 border border-indigo-200 shrink-0">เครื่องจักร</span>;
+  }
+  if (name.includes("ดำเนินการ")) {
+    return <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-slate-100 text-slate-700 border border-slate-200 shrink-0">ดำเนินการ</span>;
+  }
+  return <span className="text-[10px] px-1.5 py-0.2 rounded font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">ค่าของ</span>;
+}
 
 export function ProjectDetailClient({
   projectId,
@@ -138,7 +158,15 @@ export function ProjectDetailClient({
       let pendingSpent = 0;
       let pendingCount = 0;
       Object.entries(productSpendingMap).forEach(([itemName, data]) => {
-        if (itemName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(itemName.toLowerCase())) {
+        const cleanItem = itemName.replace(/^\d+\s*/, "").trim().toLowerCase();
+        const cleanP = p.name.toLowerCase();
+        const isMatch = 
+          cleanItem === cleanP ||
+          itemName.toLowerCase() === cleanP ||
+          cleanItem.includes(cleanP) ||
+          cleanP.includes(cleanItem);
+
+        if (isMatch) {
           spent += data.spent;
           count += data.count;
           pendingSpent += data.pendingSpent;
@@ -634,8 +662,9 @@ export function ProjectDetailClient({
 
                     return (
                       <tr key={idx} className="hover:bg-slate-50/80 transition">
-                        <td className="py-2.5 px-4 text-slate-800">
-                          {item.name}
+                        <td className="py-2.5 px-4 text-slate-800 flex items-center gap-2">
+                          <span className="font-medium">{item.name}</span>
+                          {getProductPillarBadge(item.name)}
                         </td>
                         <td className="py-2.5 px-4 text-right font-medium text-slate-600">
                           {item.budget > 0 ? money(item.budget) : <span className="text-slate-400 text-xs">-</span>}

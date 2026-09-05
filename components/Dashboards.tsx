@@ -75,18 +75,11 @@ export async function BillFollowDashboard() {
     return rightSeq - leftSeq;
   });
 
+  // ตามบิล จะแสดงเฉพาะบิลที่มี VAT ที่ค้างส่งใบกำกับภาษี/ใบเสร็จ (หัก ณ ที่จ่าย จะไม่แสดงในหน้านี้)
   const vatRows = rows.filter(row => isVatActive(row.vat) && !hasValue(row["วันได้บิล"]));
-  const naturalDeductRows = rows.filter(row =>
-    isDeductActive(row["หัก"]) &&
-    !hasValue(row["วันออก 3%"]) &&
-    !isCompanyLaborStatus(row["statusค่าแรง"])
-  );
-  const companyDeductRows = rows.filter(row =>
-    isDeductActive(row["หัก"]) &&
-    !hasValue(row["วันออก 3%"]) &&
-    isCompanyLaborStatus(row["statusค่าแรง"])
-  );
-  const creditRows = rows.filter(row => isCreditActive(row["เครดิต"]) && !hasValue(row["วันจ่าย"]));
+  const naturalDeductRows: SheetRow[] = [];
+  const companyDeductRows: SheetRow[] = [];
+  const creditRows = rows.filter(row => isVatActive(row.vat) && isCreditActive(row["เครดิต"]) && !hasValue(row["วันจ่าย"]));
 
   return (
     <BillFollowDashboardClient

@@ -82,6 +82,7 @@ export const FORM_SCHEMAS: Record<string, FieldSchema[]> = {
       ],
       inputMode: "buttons"
     },
+    { name: "งบไม่เกินปูนทรายหิน", type: "Number" },
     { name: "งบไม่เกินเหล็กเส้น", type: "Number" },
     { name: "งบไม่เกินรูปพรรณ", type: "Number" },
     { name: "งบไม่เกินคอนกรีต", type: "Number" },

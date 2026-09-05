@@ -50,10 +50,10 @@ type CategoryConfig = {
 type ViewMode = "all" | "chart" | "table";
 
 const DEFAULT_CATEGORY_MAP: CategoryConfig[] = [
-  { field: "งบไม่เกินเหล็กเส้น", label: "1. เหล็กเส้น", group: "หมวดงานโครงสร้าง", icon: "🏗️", matchKeys: ["1", "เหล็กเส้น"] },
-  { field: "งบไม่เกินรูปพรรณ", label: "2. เหล็กรูปพรรณ", group: "หมวดงานโครงสร้าง", icon: "📐", matchKeys: ["2", "รูปพรรณ"] },
-  { field: "งบไม่เกินคอนกรีต", label: "3. คอนกรีต", group: "หมวดงานโครงสร้าง", icon: "🧱", matchKeys: ["3", "คอนกรีต"] },
-  { field: "งบไม่เกินไม้แบบ", label: "4. ไม้แบบ", group: "หมวดงานโครงสร้าง", icon: "🪵", matchKeys: ["4", "ไม้แบบ"] },
+  { field: "งบไม่เกินปูนทรายหิน", label: "1. ปูน/ทราย/หิน", group: "หมวดงานโครงสร้าง", icon: "🧱", matchKeys: ["1", "ปูน/ทราย/หิน", "ปูนซีเมนต์"] },
+  { field: "งบไม่เกินเหล็กเส้น", label: "2. เหล็กเส้น/รูปพรรณ", group: "หมวดงานโครงสร้าง", icon: "🏗️", matchKeys: ["2", "เหล็กเส้น/รูปพรรณ", "เหล็กเส้น", "รูปพรรณ"] },
+  { field: "งบไม่เกินคอนกรีต", label: "3. คอนกรีตผสมเสร็จ", group: "หมวดงานโครงสร้าง", icon: "🚚", matchKeys: ["3", "คอนกรีตผสมเสร็จ", "คอนกรีต"] },
+  { field: "งบไม่เกินไม้แบบ", label: "4. ไม้แบบ/ไม้อัด", group: "หมวดงานโครงสร้าง", icon: "🪵", matchKeys: ["4", "ไม้แบบ/ไม้อัด", "ไม้แบบ", "ไม้อัด"] },
 
   { field: "งบไม่เกินวัสดุมุง", label: "5. วัสดุมุง", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", icon: "🏠", matchKeys: ["5", "วัสดุมุง"] },
   { field: "งบไม่เกินฝ้าผนัง", label: "6. ฝ้าผนัง", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", icon: "🖼️", matchKeys: ["6", "ฝ้าผนัง"] },
@@ -61,7 +61,7 @@ const DEFAULT_CATEGORY_MAP: CategoryConfig[] = [
   { field: "งบไม่เกินกระจก", label: "8. กระจก", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", icon: "🪟", matchKeys: ["8", "กระจก"] },
   { field: "งบไม่เกินสีเคมี", label: "12. สีเคมี", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", icon: "🎨", matchKeys: ["12", "สีเคมี"] },
   { field: "งบไม่เกินสุขภัณฑ์", label: "13. สุขภัณฑ์", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", icon: "🚽", matchKeys: ["13", "สุขภัณฑ์"] },
-  { field: "งบไม่เกินบิวอิน", label: "14. บิวท์อิน", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", icon: "🛋️", matchKeys: ["14", "บิวอิน", "นั่งร้าน"] },
+  { field: "งบไม่เกินบิวอิน", label: "14. บิวอิน", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", icon: "🛋️", matchKeys: ["14", "บิวอิน", "นั่งร้าน"] },
 
   { field: "งบไม่เกินไฟฟ้า", label: "9. ไฟฟ้า", group: "หมวดงานระบบ M&E", icon: "⚡", matchKeys: ["9", "ไฟฟ้า"] },
   { field: "งบไม่เกินประปา", label: "10. ประปา", group: "หมวดงานระบบ M&E", icon: "𚗰", matchKeys: ["10", "ประปา"] },
@@ -70,15 +70,17 @@ const DEFAULT_CATEGORY_MAP: CategoryConfig[] = [
   { field: "งบไม่เกินดิน", label: "16. ดิน", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "🌱", matchKeys: ["16", "ดิน"] },
   { field: "งบไม่เกินหินทราย", label: "17. หินทราย", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "🪨", matchKeys: ["17", "หินทราย"] },
   { field: "งบไม่เกินเตรียมงาน", label: "18. เตรียมงาน", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "🚜", matchKeys: ["18", "เตรียมงาน"] },
-  { field: "งบไม่เกินน้ำมัน", label: "4. น้ำมันเชื้อเพลิง", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "⛽", matchKeys: ["101", "4.น้ำมัน", "น้ำมัน"] },
-  { field: "งบไม่เกินซ่อมรถ", label: "5. ซ่อมแซมยานพาหนะ", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "🔧", matchKeys: ["102", "5.ซ่อมรถ", "ซ่อมรถ"] },
-  { field: "งบไม่เกินเครื่องจักร", label: "6. เครื่องจักร", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "🏗️", matchKeys: ["103", "6.เครื่องจักร", "เครื่องจักร"] },
+  { field: "งบไม่เกินน้ำมัน", label: "101. น้ำมันเชื้อเพลิง", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "⛽", matchKeys: ["101", "4.น้ำมัน", "น้ำมัน"] },
+  { field: "งบไม่เกินค่าขนส่ง", label: "102. ค่าขนส่ง", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "🚚", matchKeys: ["102", "ขนส่ง", "ค่าขนส่ง"] },
+  { field: "งบไม่เกินเครื่องจักร", label: "103. เครื่องจักร", group: "หมวดงานเตรียมดิน & โลจิสติกส์", icon: "🏗️", matchKeys: ["103", "6.เครื่องจักร", "เครื่องจักร"] },
+
+  { field: "งบไม่เกินวัสดุอื่นๆ", label: "11. อื่นๆ(วัสดุ)", group: "หมวดงานทั่วไป & ดำเนินการ", icon: "📦", matchKeys: ["11", "อื่นๆ(วัสดุ)"] },
+  { field: "งบไม่เกินดำเนินการ", label: "200. ดำเนินการ(อื่นๆ)", group: "หมวดงานทั่วไป & ดำเนินการ", icon: "📁", matchKeys: ["200", "ดำเนินการ(อื่นๆ)", "ดำเนินการ"] },
 
   { field: "งบไม่เกินค่าของ", label: "1. ค่าของ (ภาพรวม)", group: "ภาพรวมต้นทุนโครงการ", icon: "📦", matchKeys: ["1.ค่าของ", "ค่าของ"] },
   { field: "งบไม่เกินค่าแรง", label: "2. ค่าแรง (ภาพรวม)", group: "ภาพรวมต้นทุนโครงการ", icon: "👷", matchKeys: ["2.ค่าแรง", "ค่าแรง"] },
   { field: "งบไม่เกินพนักงาน", label: "3. พนักงาน", group: "หมวดงานทั่วไป & ดำเนินการ", icon: "👥", matchKeys: ["3.พนักงาน", "พนักงาน"] },
   { field: "งบไม่เกินเครื่องมือ", label: "7. เครื่องมือช่าง", group: "หมวดงานทั่วไป & ดำเนินการ", icon: "🔨", matchKeys: ["7.เครื่องมือ", "เครื่องมือ"] },
-  { field: "งบไม่เกินอื่นๆ", label: "11. อื่นๆ (วัสดุ)", group: "หมวดงานทั่วไป & ดำเนินการ", icon: "📦", matchKeys: ["11", "อื่นๆ"] },
 ];
 
 function getGroupIcon(groupName: string) {
@@ -160,11 +162,33 @@ export function ProjectBudgetControlMatrix({
       const matchingBills = projectBills.filter((b) => {
         const prod = String(b["สินค้า"] || b["สินค้า/ทำงาน"] || "").trim().toLowerCase();
         const typeCat = String(b["ประเภท"] || "").trim().toLowerCase();
+        const cleanProd = prod.replace(/^\d+\s*/, "").trim();
+
+        // Macro category checks
+        if (cat.field === "งบไม่เกินค่าของ") {
+          return typeCat === "1.ค่าของ" || typeCat === "ค่าของ" || (!typeCat && prod) || toNumber(b["ค่าของ"]) > 0;
+        }
+        if (cat.field === "งบไม่เกินค่าแรง") {
+          return typeCat === "2.ค่าแรง" || typeCat === "ค่าแรง" || toNumber(b["ค่าแรง"]) > 0;
+        }
+        if (cat.field === "งบไม่เกินพนักงาน") {
+          return typeCat === "3.พนักงาน" || typeCat === "พนักงาน" || toNumber(b["พนักงาน"]) > 0;
+        }
 
         return cat.matchKeys.some(key => {
           if (!key) return false;
-          const k = key.toLowerCase();
-          return prod.startsWith(k) || prod.includes(k) || typeCat.includes(k);
+          const k = key.toLowerCase().trim();
+
+          // Numeric code prefix (e.g. "1", "101")
+          if (/^\d+$/.test(k)) {
+            return prod.startsWith(`${k} `) || prod.startsWith(`${k}.`) || prod === k;
+          }
+
+          // Exact or clean name match
+          if (cleanProd === k || prod === k) return true;
+
+          // Word containment
+          return cleanProd.includes(k) || typeCat === k;
         });
       });
 

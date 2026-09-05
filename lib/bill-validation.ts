@@ -5,17 +5,18 @@ import { money, toNumber } from "@/lib/numbers";
 import type { SheetRow } from "@/lib/types";
 
 const PRODUCT_BUDGET_MAP: Record<string, string> = {
-  "1 เหล็กเส้น": "งบไม่เกินเหล็กเส้น",
-  "2 เหล็กรูปพรรณ": "งบไม่เกินรูปพรรณ",
-  "3 คอนกรีต": "งบไม่เกินคอนกรีต",
-  "4 ไม้แบบ": "งบไม่เกินไม้แบบ",
+  // Current Master Data Options (Dropdown values)
+  "1 ปูน/ทราย/หิน": "งบไม่เกินปูนทรายหิน",
+  "2 เหล็กเส้น/รูปพรรณ": "งบไม่เกินเหล็กเส้น",
+  "3 คอนกรีตผสมเสร็จ": "งบไม่เกินคอนกรีต",
+  "4 ไม้แบบ/ไม้อัด": "งบไม่เกินไม้แบบ",
   "5 วัสดุมุง": "งบไม่เกินวัสดุมุง",
   "6 ฝ้าผนัง": "งบไม่เกินฝ้าผนัง",
   "7 ปูพื้น": "งบไม่เกินปูพื้น",
   "8 กระจก": "งบไม่เกินกระจก",
   "9 ไฟฟ้า": "งบไม่เกินไฟฟ้า",
   "10 ประปา": "งบไม่เกินประปา",
-  "11 อื่นๆ(วัสดุ)": "งบไม่เกินอื่นๆ",
+  "11 อื่นๆ(วัสดุ)": "งบไม่เกินวัสดุอื่นๆ",
   "12 สีเคมี": "งบไม่เกินสีเคมี",
   "13 สุขภัณฑ์": "งบไม่เกินสุขภัณฑ์",
   "14 บิวอิน": "งบไม่เกินบิวอิน",
@@ -23,6 +24,44 @@ const PRODUCT_BUDGET_MAP: Record<string, string> = {
   "16 ดิน": "งบไม่เกินดิน",
   "17 หินทราย": "งบไม่เกินหินทราย",
   "18 เตรียมงาน": "งบไม่เกินเตรียมงาน",
+  "101 น้ำมัน": "งบไม่เกินน้ำมัน",
+  "102 ค่าขนส่ง": "งบไม่เกินค่าขนส่ง",
+  "103 เครื่องจักร": "งบไม่เกินเครื่องจักร",
+  "200 ดำเนินการ(อื่นๆ)": "งบไม่เกินดำเนินการ",
+  "ค่าขนส่ง": "งบไม่เกินค่าขนส่ง",
+  "ดำเนินการ(อื่นๆ)": "งบไม่เกินดำเนินการ",
+
+  // Clean names without prefix numbers
+  "ปูน/ทราย/หิน": "งบไม่เกินปูนทรายหิน",
+  "เหล็กเส้น": "งบไม่เกินเหล็กเส้น",
+  "เหล็กรูปพรรณ": "งบไม่เกินรูปพรรณ",
+  "เหล็กเส้น/รูปพรรณ": "งบไม่เกินเหล็กเส้น",
+  "คอนกรีต": "งบไม่เกินคอนกรีต",
+  "คอนกรีตผสมเสร็จ": "งบไม่เกินคอนกรีต",
+  "ไม้แบบ": "งบไม่เกินไม้แบบ",
+  "ไม้แบบ/ไม้อัด": "งบไม่เกินไม้แบบ",
+  "วัสดุมุง": "งบไม่เกินวัสดุมุง",
+  "ฝ้าผนัง": "งบไม่เกินฝ้าผนัง",
+  "ปูพื้น": "งบไม่เกินปูพื้น",
+  "กระจก": "งบไม่เกินกระจก",
+  "ไฟฟ้า": "งบไม่เกินไฟฟ้า",
+  "ประปา": "งบไม่เกินประปา",
+  "อื่นๆ(วัสดุ)": "งบไม่เกินวัสดุอื่นๆ",
+  "สีเคมี": "งบไม่เกินสีเคมี",
+  "สุขภัณฑ์": "งบไม่เกินสุขภัณฑ์",
+  "บิวอิน": "งบไม่เกินบิวอิน",
+  "แอร์": "งบไม่เกินแอร์",
+  "ดิน": "งบไม่เกินดิน",
+  "หินทราย": "งบไม่เกินหินทราย",
+  "เตรียมงาน": "งบไม่เกินเตรียมงาน",
+  "น้ำมัน": "งบไม่เกินน้ำมัน",
+  "เครื่องจักร": "งบไม่เกินเครื่องจักร",
+
+  // Legacy format
+  "1 เหล็กเส้น": "งบไม่เกินเหล็กเส้น",
+  "2 เหล็กรูปพรรณ": "งบไม่เกินรูปพรรณ",
+  "3 คอนกรีต": "งบไม่เกินคอนกรีต",
+  "4 ไม้แบบ": "งบไม่เกินไม้แบบ",
 };
 
 const CATEGORY_BUDGET_MAP: Record<string, string> = {
@@ -33,6 +72,15 @@ const CATEGORY_BUDGET_MAP: Record<string, string> = {
   "5.ซ่อมรถ": "งบไม่เกินซ่อมรถ",
   "6.เครื่องจักร": "งบไม่เกินเครื่องจักร",
   "7.เครื่องมือ": "งบไม่เกินเครื่องมือ",
+  "8.อื่นๆ": "งบไม่เกินอื่นๆ",
+  "ค่าของ": "งบไม่เกินค่าของ",
+  "ค่าแรง": "งบไม่เกินค่าแรง",
+  "พนักงาน": "งบไม่เกินพนักงาน",
+  "น้ำมัน": "งบไม่เกินน้ำมัน",
+  "ซ่อมรถ": "งบไม่เกินซ่อมรถ",
+  "เครื่องจักร": "งบไม่เกินเครื่องจักร",
+  "เครื่องมือ": "งบไม่เกินเครื่องมือ",
+  "อื่นๆ": "งบไม่เกินอื่นๆ",
 };
 
 export type CategoryBudgetCheckResult = {
@@ -97,18 +145,68 @@ export function checkCategoryBudgetCap(
 
   let targetBudgetField = "";
   let categoryLabel = "";
+  let isProductLevel = false;
 
-  if (productVal && PRODUCT_BUDGET_MAP[productVal]) {
-    targetBudgetField = PRODUCT_BUDGET_MAP[productVal];
-    categoryLabel = productVal;
-  } else if (categoryVal && CATEGORY_BUDGET_MAP[categoryVal]) {
-    targetBudgetField = CATEGORY_BUDGET_MAP[categoryVal];
-    categoryLabel = categoryVal;
+  // A. หากผู้ใช้เลือกหมวดที่ไม่ใช่ค่าของ (เช่น "7.เครื่องมือ", "8.อื่นๆ", "4.น้ำมัน", "5.ซ่อมรถ", "6.เครื่องจักร", "2.ค่าแรง", "3.พนักงาน")
+  // ให้คุมงบตามหมวดนั้นทันที โดยไม่ไปเช็กสินค้า (เพราะสินค้าเป็นของหมวดค่าของ)
+  const isNonMaterialCategory = Boolean(
+    categoryVal &&
+    categoryVal !== "1.ค่าของ" &&
+    categoryVal !== "ค่าของ"
+  );
+
+  if (isNonMaterialCategory && CATEGORY_BUDGET_MAP[categoryVal]) {
+    const fieldName = CATEGORY_BUDGET_MAP[categoryVal];
+    const limit = toNumber(project[fieldName]);
+    if (limit > 0) {
+      targetBudgetField = fieldName;
+      categoryLabel = categoryVal;
+      isProductLevel = false;
+    }
+  }
+
+  // หากยังไม่มีวงเงินเฉพาะ ให้ตรวจสอบรายสินค้า หรือถอยกลับมาคุมงบภาพรวมค่าของ
+  if (!targetBudgetField) {
+    // B. ตรวจสอบงบประมาณเฉพาะรายสินค้าก่อน (หากมีการระบุสินค้า)
+    if (productVal) {
+      let matchedField = PRODUCT_BUDGET_MAP[productVal];
+      if (!matchedField) {
+        const cleanProd = productVal.replace(/^\d+\s*/, "").trim();
+        matchedField = PRODUCT_BUDGET_MAP[cleanProd];
+      }
+
+      if (matchedField && toNumber(project[matchedField]) > 0) {
+        targetBudgetField = matchedField;
+        categoryLabel = productVal;
+        isProductLevel = true;
+      }
+    }
+
+    // C. หากไม่ได้ระบุงบเฉพาะสินค้านั้น หรือหมวดไซต์งานไม่ได้ตั้งงบแยก -> Fallback ถอยกลับมาคุมงบภาพรวม "1.ค่าของ"
+    const isMaterialOrSite =
+      !categoryVal ||
+      categoryVal === "1.ค่าของ" ||
+      categoryVal === "ค่าของ" ||
+      categoryVal.includes("ค่าของ") ||
+      categoryVal.includes("น้ำมัน") ||
+      categoryVal.includes("ซ่อมรถ") ||
+      categoryVal.includes("เครื่องจักร") ||
+      categoryVal.includes("เครื่องมือ") ||
+      categoryVal.includes("อื่นๆ") ||
+      Boolean(productVal);
+
+    if (!targetBudgetField && isMaterialOrSite) {
+      if (toNumber(project["งบไม่เกินค่าของ"]) > 0) {
+        targetBudgetField = "งบไม่เกินค่าของ";
+        categoryLabel = "ค่าของ (ภาพรวม)";
+        isProductLevel = false;
+      }
+    }
   }
 
   const defaultResult: CategoryBudgetCheckResult = {
     hasBudgetCap: false,
-    categoryLabel: categoryLabel || "ทั่วไป",
+    categoryLabel: categoryLabel || categoryVal || productVal || "ทั่วไป",
     targetBudgetField: "",
     budgetLimit: 0,
     accumulatedAmount: 0,
@@ -130,7 +228,7 @@ export function checkCategoryBudgetCap(
   const currentProjectId = String(project["ID Project"] || "").trim();
   const currentRowKey = String(row._sheetRow || row["ลำดับ"] || "").trim();
 
-  // Sum up accumulated bills for same project and category
+  // Sum up accumulated bills for same project and category/product
   let accumulatedAmount = 0;
   for (const b of existingBills) {
     const bProjId = String(b["ID Project"] || "").trim();
@@ -142,10 +240,35 @@ export function checkCategoryBudgetCap(
     const bProd = String(b["สินค้า"] || "").trim();
     const bCat = String(b["ประเภท"] || "").trim();
 
-    const matchesProduct = productVal && bProd === productVal;
-    const matchesCategory = !productVal && categoryVal && bCat === categoryVal;
+    let isMatch = false;
+    if (isProductLevel) {
+      isMatch = Boolean(
+        productVal && (
+          bProd === productVal ||
+          bProd.replace(/^\d+\s*/, "").trim() === productVal.replace(/^\d+\s*/, "").trim()
+        )
+      );
+    } else if (targetBudgetField === "งบไม่เกินค่าของ") {
+      isMatch = Boolean(bCat === "1.ค่าของ" || bCat === "ค่าของ" || (!bCat && bProd) || toNumber(b["ค่าของ"]) > 0);
+    } else if (targetBudgetField === "งบไม่เกินค่าแรง") {
+      isMatch = Boolean(bCat === "2.ค่าแรง" || bCat === "ค่าแรง" || toNumber(b["ค่าแรง"]) > 0);
+    } else if (targetBudgetField === "งบไม่เกินพนักงาน") {
+      isMatch = Boolean(bCat === "3.พนักงาน" || bCat === "พนักงาน" || toNumber(b["พนักงาน"]) > 0);
+    } else if (targetBudgetField === "งบไม่เกินน้ำมัน") {
+      isMatch = Boolean(bCat === "4.น้ำมัน" || bCat === "น้ำมัน" || toNumber(b["น้ำมัน"]) > 0);
+    } else if (targetBudgetField === "งบไม่เกินซ่อมรถ") {
+      isMatch = Boolean(bCat === "5.ซ่อมรถ" || bCat === "ซ่อมรถ" || toNumber(b["ซ่อมรถ"]) > 0);
+    } else if (targetBudgetField === "งบไม่เกินเครื่องจักร") {
+      isMatch = Boolean(bCat === "6.เครื่องจักร" || bCat === "เครื่องจักร" || toNumber(b["เครื่องจักร"]) > 0);
+    } else if (targetBudgetField === "งบไม่เกินเครื่องมือ") {
+      isMatch = Boolean(bCat === "7.เครื่องมือ" || bCat === "เครื่องมือ" || toNumber(b["เครื่องมือ"]) > 0);
+    } else if (targetBudgetField === "งบไม่เกินอื่นๆ") {
+      isMatch = Boolean(bCat === "8.อื่นๆ" || bCat === "อื่นๆ" || toNumber(b["อื่นๆ"]) > 0);
+    } else {
+      isMatch = Boolean(categoryVal && (bCat === categoryVal || bCat.replace(/^\d+\.\s*/, "") === categoryVal.replace(/^\d+\.\s*/, "")));
+    }
 
-    if (matchesProduct || matchesCategory) {
+    if (isMatch) {
       const amt = getBillRowAmount(b);
       accumulatedAmount += amt;
     }

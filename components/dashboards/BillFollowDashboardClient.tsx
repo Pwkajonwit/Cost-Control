@@ -32,16 +32,17 @@ import { formatVatDisplay, formatDeductDisplay, formatCreditDisplay } from "@/li
 import { useRealtimeSync } from "@/lib/use-realtime-sync";
 import { exportToCsv } from "@/lib/export-utils";
 import { BillImageThumbnail } from "@/components/BillImageThumbnail";
-import { AttachBillModal } from "@/components/dashboards/AttachBillModal";
 import type { SheetRow } from "@/lib/types";
 
 const PAGE_SIZE_OPTIONS = [20, 40, 60, 100];
 
+export type BillFollowTab = "all" | "vat" | "urgent" | "warning" | "normal" | "credit";
+
 type BillFollowDashboardClientProps = {
   vatRows: SheetRow[];
-  naturalDeductRows: SheetRow[];
-  companyDeductRows: SheetRow[];
-  creditRows: SheetRow[];
+  naturalDeductRows?: SheetRow[];
+  companyDeductRows?: SheetRow[];
+  creditRows?: SheetRow[];
   requesterNames: Record<string, string>;
   peopleRows?: SheetRow[];
   initialRequester?: string;
@@ -111,14 +112,10 @@ export function BillFollowDashboardClient({
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get("search") || "";
 
-  const computedInitialRequester = useMemo(() => {
-    return initialRequester || resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
-  }, [initialRequester, peopleRows, authEmpId, authName]);
-
-  const [activeTab, setActiveTab] = useState<"all" | "vat" | "natural" | "company" | "credit">("all");
+  const [activeTab, setActiveTab] = useState<BillFollowTab>("all");
   const [searchTerm, setSearchTerm] = useState(urlSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
-  const [selectedRequester, setSelectedRequester] = useState(computedInitialRequester);
+  const [selectedRequester, setSelectedRequester] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
@@ -133,16 +130,6 @@ export function BillFollowDashboardClient({
     },
     customEvents: ["bills-data-updated", "data-updated"]
   });
-
-  // Auto-sync user requester once peopleRows are loaded if not yet selected
-  useEffect(() => {
-    if (!selectedRequester) {
-      const resolved = resolveMatchingRequesterKey(peopleRows, authEmpId, authName);
-      if (resolved) {
-        setSelectedRequester(resolved);
-      }
-    }
-  }, [peopleRows, authEmpId, authName]);
 
   useEffect(() => {
     setSearchTerm(urlSearch);
@@ -173,53 +160,52 @@ export function BillFollowDashboardClient({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Bill Document Attachment Modal State
-  const [selectedBillForAttach, setSelectedBillForAttach] = useState<SheetRow | null>(null);
-  const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
-
-  function handleOpenAttachModal(row: SheetRow) {
-    setSelectedBillForAttach(row);
-    setIsAttachModalOpen(true);
-  }
-
-  function handleAttachSuccess(updatedRow: SheetRow, message: string) {
-    const rowId = String(updatedRow["ลำดับ"] || updatedRow._sheetRow || "");
-    if (updatedRow["วันได้บิล"] || updatedRow["วันออก 3%"] || updatedRow["วันจ่าย"]) {
-      setCompletedRowIds((prev) => new Set(prev).add(rowId));
-    }
-    showToast(message);
-    router.refresh();
-  }
+  // Multi-Select & 2-Step Inline Confirmation States (No Modal)
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [confirmingRowId, setConfirmingRowId] = useState<string | null>(null);
+  const [isBatchConfirming, setIsBatchConfirming] = useState(false);
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false);
 
   function showToast(msg: string) {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   }
 
-  // Combine rows according to active tab
-  const allPendingRows = useMemo(() => {
-    const map = new Map<string, SheetRow>();
-    [...vatRows, ...naturalDeductRows, ...companyDeductRows, ...creditRows].forEach((row) => {
-      const key = String(row._sheetRow || row["ลำดับ"] || Math.random());
-      map.set(key, row);
+  // VAT Aging buckets (คำนวณจำนวนวันค้างส่งบิล VAT)
+  const urgentVatRows = useMemo(() => {
+    return vatRows.filter((r) => calculateDaysElapsed(r["ว/ด/ป"]) >= 15);
+  }, [vatRows]);
+
+  const warningVatRows = useMemo(() => {
+    return vatRows.filter((r) => {
+      const days = calculateDaysElapsed(r["ว/ด/ป"]);
+      return days >= 8 && days < 15;
     });
-    return Array.from(map.values());
-  }, [vatRows, naturalDeductRows, companyDeductRows, creditRows]);
+  }, [vatRows]);
+
+  const normalVatRows = useMemo(() => {
+    return vatRows.filter((r) => calculateDaysElapsed(r["ว/ด/ป"]) < 8);
+  }, [vatRows]);
+
+  // ตามบิล แสดงเฉพาะบิลที่มี VAT ที่ค้างส่งใบกำกับภาษี/ใบเสร็จ (หัก ณ ที่จ่าย จะไม่แสดงในหน้านี้)
+  const allPendingRows = useMemo(() => vatRows, [vatRows]);
 
   const activeCategoryRows = useMemo(() => {
     switch (activeTab) {
-      case "vat":
-        return vatRows;
-      case "natural":
-        return naturalDeductRows;
-      case "company":
-        return companyDeductRows;
+      case "urgent":
+        return urgentVatRows;
+      case "warning":
+        return warningVatRows;
+      case "normal":
+        return normalVatRows;
       case "credit":
-        return creditRows;
+        return creditRows || [];
+      case "all":
+      case "vat":
       default:
-        return allPendingRows;
+        return vatRows;
     }
-  }, [activeTab, vatRows, naturalDeductRows, companyDeductRows, creditRows, allPendingRows]);
+  }, [activeTab, urgentVatRows, warningVatRows, normalVatRows, creditRows, vatRows]);
 
   // Filtered rows by requester, date, and search term
   const filteredRows = useMemo(() => {
@@ -269,11 +255,12 @@ export function BillFollowDashboardClient({
   }, [activeCategoryRows, selectedRequester, selectedDate, debouncedSearch]);
 
   // Financial totals
-  const allPendingTotal = useMemo(() => allPendingRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [allPendingRows]);
-  const vatTotal = useMemo(() => vatRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [vatRows]);
-  const naturalTotal = useMemo(() => naturalDeductRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [naturalDeductRows]);
-  const companyTotal = useMemo(() => companyDeductRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [companyDeductRows]);
-  const creditTotal = useMemo(() => creditRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [creditRows]);
+  const allPendingTotal = useMemo(() => vatRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [vatRows]);
+  const vatTotal = allPendingTotal;
+  const urgentTotal = useMemo(() => urgentVatRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [urgentVatRows]);
+  const warningTotal = useMemo(() => warningVatRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [warningVatRows]);
+  const normalTotal = useMemo(() => normalVatRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [normalVatRows]);
+  const creditTotal = useMemo(() => (creditRows || []).reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0), [creditRows]);
 
   // Pagination calculation
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -285,42 +272,76 @@ export function BillFollowDashboardClient({
     return filteredRows.slice(start, start + pageSize);
   }, [filteredRows, currentPage, pageSize]);
 
-  const handleTabChange = (tab: "all" | "vat" | "natural" | "company" | "credit") => {
+  const handleTabChange = (tab: BillFollowTab) => {
     setActiveTab(tab);
     setPage(1);
   };
 
-  // Quick Action: Mark Received / Completed
-  async function handleMarkReceived(row: SheetRow, targetType: "vat" | "deduct" | "credit" | "all") {
-    const sheetRow = row._sheetRow ?? row.id ?? row["ลำดับ"];
+  // Multi-Select & Batch Approval Computations
+  const selectedRows = useMemo(() => {
+    const idSet = new Set(selectedIds);
+    return allPendingRows.filter((r) => idSet.has(String(r["ลำดับ"] || r._sheetRow || "")));
+  }, [selectedIds, allPendingRows]);
+
+  const selectedTotalAmount = useMemo(() => {
+    return selectedRows.reduce((sum, r) => sum + toNumber(r["ยอดเงิน"]), 0);
+  }, [selectedRows]);
+
+  const selectablePaginatedRows = useMemo(() => {
+    return paginatedRows.filter((r) => {
+      const bId = String(r["ลำดับ"] || r._sheetRow || "");
+      const isComp = completedRowIds.has(bId) || Boolean(r["วันได้บิล"]);
+      return !isComp;
+    });
+  }, [paginatedRows, completedRowIds]);
+
+  const isAllPaginatedSelected = useMemo(() => {
+    return (
+      selectablePaginatedRows.length > 0 &&
+      selectablePaginatedRows.every((r) => selectedIds.includes(String(r["ลำดับ"] || r._sheetRow || "")))
+    );
+  }, [selectablePaginatedRows, selectedIds]);
+
+  function handleToggleSelectAll() {
+    if (isAllPaginatedSelected) {
+      const pageIds = new Set(selectablePaginatedRows.map((r) => String(r["ลำดับ"] || r._sheetRow || "")));
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.has(id)));
+    } else {
+      const pageIds = selectablePaginatedRows.map((r) => String(r["ลำดับ"] || r._sheetRow || ""));
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  }
+
+  function handleToggleRow(billId: string) {
+    setSelectedIds((prev) => {
+      if (prev.includes(billId)) {
+        return prev.filter((id) => id !== billId);
+      } else {
+        return [...prev, billId];
+      }
+    });
+  }
+
+  // 2-Step Inline Confirmation Execution Handlers (Single and Batch - No Modal)
+  async function handleExecuteSingleRow(row: SheetRow) {
     const rowId = String(row["ลำดับ"] || row._sheetRow || "");
-    if (!sheetRow) return;
+    const sheetRow = row._sheetRow ?? row.id ?? row["ลำดับ"];
+    setSavingRowId(rowId);
 
     const todayStr = getTodayDateIso();
-    const updateValues: SheetRow = {};
 
-    if (targetType === "vat" || (targetType === "all" && row.vat && !row["วันได้บิล"])) {
-      updateValues["วันได้บิล"] = todayStr;
-    }
-    if (targetType === "deduct" || (targetType === "all" && row["หัก"] && !row["วันออก 3%"])) {
-      updateValues["วันออก 3%"] = todayStr;
-    }
-    if (targetType === "credit" || (targetType === "all" && row["เครดิต"] && !row["วันจ่าย"])) {
-      updateValues["วันจ่าย"] = todayStr;
-    }
-
-    if (!Object.keys(updateValues).length) {
-      updateValues["วันได้บิล"] = todayStr;
-    }
-    if (rowId) {
-      updateValues["ลำดับ"] = rowId;
-    }
-
-    setSavingRowId(rowId);
-    // ⚡ Optimistic UI Update: Mark row as completed immediately (< 20ms)
-    setCompletedRowIds((prev) => new Set(prev).add(rowId));
+    // ⚡ Optimistic UI Update: Mark row completed immediately (< 20ms)
+    setCompletedRowIds((prev) => new Set([...prev, rowId]));
+    setConfirmingRowId(null);
 
     try {
+      const updateValues: SheetRow = {
+        "วันได้บิล": todayStr,
+      };
+      if (rowId) {
+        updateValues["ลำดับ"] = rowId;
+      }
+
       const res = await fetch("/api/rows", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -334,7 +355,15 @@ export function BillFollowDashboardClient({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Update failed");
 
-      showToast(`บันทึกได้รับบิลรายการ #${rowId} เรียบร้อยแล้ว`);
+      showToast(`อนุมัติได้รับบิล #${rowId} เรียบร้อยแล้ว`);
+
+      // Remove from selectedIds if selected
+      setSelectedIds((prev) => prev.filter((id) => id !== rowId));
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("bills-data-updated"));
+        window.dispatchEvent(new CustomEvent("data-updated", { detail: { tableName: "Data" } }));
+      }
       router.refresh();
     } catch (err: any) {
       // 🔄 Rollback optimistic change on error
@@ -343,9 +372,72 @@ export function BillFollowDashboardClient({
         next.delete(rowId);
         return next;
       });
-      showToast(`เกิดข้อผิดพลาดในการบันทึกสถานะบิล: ${err?.message || "กรุณาลองใหม่อีกครั้ง"}`);
+      showToast(`เกิดข้อผิดพลาดในการอนุมัติบิล: ${err?.message || "กรุณาลองใหม่อีกครั้ง"}`);
     } finally {
       setSavingRowId(null);
+    }
+  }
+
+  async function handleExecuteBatch() {
+    if (!selectedRows.length) return;
+    setIsProcessingBatch(true);
+
+    const todayStr = getTodayDateIso();
+    const rowIds = selectedRows.map((r) => String(r["ลำดับ"] || r._sheetRow || ""));
+
+    // ⚡ Optimistic UI Update
+    setCompletedRowIds((prev) => {
+      const next = new Set(prev);
+      rowIds.forEach((id) => next.add(id));
+      return next;
+    });
+    setIsBatchConfirming(false);
+
+    try {
+      const patches = selectedRows.map((row) => {
+        const sheetRow = row._sheetRow ?? row.id ?? row["ลำดับ"];
+        const rowId = String(row["ลำดับ"] || row._sheetRow || "");
+        const updateValues: SheetRow = {
+          "วันได้บิล": todayStr,
+        };
+        if (rowId) {
+          updateValues["ลำดับ"] = rowId;
+        }
+        return {
+          sheetRow,
+          values: updateValues,
+        };
+      });
+
+      const res = await fetch("/api/rows", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tableName: "Data",
+          patches,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Batch update failed");
+
+      showToast(`อนุมัติได้รับบิลทั้งหมด ${selectedRows.length} รายการ เรียบร้อยแล้ว`);
+      setSelectedIds([]);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("bills-data-updated"));
+        window.dispatchEvent(new CustomEvent("data-updated", { detail: { tableName: "Data" } }));
+      }
+      router.refresh();
+    } catch (err: any) {
+      setCompletedRowIds((prev) => {
+        const next = new Set(prev);
+        rowIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      showToast(`เกิดข้อผิดพลาดในการอนุมัติบิล: ${err?.message || "กรุณาลองใหม่อีกครั้ง"}`);
+    } finally {
+      setIsProcessingBatch(false);
     }
   }
 
@@ -363,9 +455,8 @@ export function BillFollowDashboardClient({
 
     const conditions = [];
     if (row.vat && !row["วันได้บิล"]) conditions.push(`ใบกำกับภาษี ${formatVatDisplay(row.vat)}`);
-    if (row["หัก"] && !row["วันออก 3%"]) conditions.push(`หนังสือ${formatDeductDisplay(row["หัก"])}`);
     if (row["เครดิต"] && !row["วันจ่าย"]) conditions.push(`บิล${formatCreditDisplay(row["เครดิต"])}`);
-    const condStr = conditions.join(" / ") || "บิลสินค้า";
+    const condStr = conditions.join(" / ") || "ใบกำกับภาษี / ใบเสร็จรับเงิน";
 
     return `📢 แจ้งติดตามเอกสารบิล/ใบเสร็จรับเงิน
 ----------------------------------
@@ -415,13 +506,14 @@ export function BillFollowDashboardClient({
   function handleExportCsv() {
     if (!filteredRows.length) return;
     const tabNameMap: Record<string, string> = {
-      all: "ทั้งหมด",
+      all: "ตาม_VAT_ทั้งหมด",
       vat: "ตาม_VAT",
-      natural: "หัก3%_บุคคล",
-      company: "หัก3%_บริษัท",
+      urgent: "ค้างเกิน15วัน_ด่วน",
+      warning: "ค้าง8_14วัน_เตือน",
+      normal: "ค้าง1_7วัน_ปกติ",
       credit: "ตาม_เครดิต"
     };
-    const filename = `รายงานตามบิล_${tabNameMap[activeTab] || "บิล"}_${new Date().toISOString().slice(0, 10)}`;
+    const filename = `รายงานตามบิลVAT_${tabNameMap[activeTab] || "VAT"}_${new Date().toISOString().slice(0, 10)}`;
     const headers = [
       "ลำดับ",
       "ว/ด/ป",
@@ -474,106 +566,108 @@ export function BillFollowDashboardClient({
       )}
 
       {/* 1. EXECUTIVE SUMMARY KPI CARDS (Horizontal Scrollable Tabs on Mobile, Grid on Desktop) */}
-      <div className="flex sm:grid sm:grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3 overflow-x-auto no-scrollbar pb-1">
-        {/* Card 1: All Bills Total Card */}
+      <div className={`flex sm:grid ${(creditRows?.length || 0) > 0 ? "sm:grid-cols-2 md:grid-cols-5" : "sm:grid-cols-2 md:grid-cols-4"} gap-2 sm:gap-3 overflow-x-auto no-scrollbar pb-1`}>
+        {/* Card 1: All VAT Bills Total Card */}
         <div
           onClick={() => handleTabChange("all")}
           className={`min-w-[140px] sm:min-w-0 flex-1 rounded-xl p-2.5 sm:p-3 border transition cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
-            activeTab === "all"
+            activeTab === "all" || activeTab === "vat"
               ? "border-2 border-[#0b3531] bg-[#f2f9f6] shadow-sm"
               : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
           }`}
         >
           <div className="flex items-center justify-between text-xs sm:text-xs">
-            <span className={`truncate ${activeTab === "all" ? "text-[#0b3531]" : "text-slate-700"}`}>ทั้งหมด</span>
+            <span className={`truncate ${activeTab === "all" || activeTab === "vat" ? "text-[#0b3531] font-semibold" : "text-slate-700"}`}>ตาม VAT ทั้งหมด</span>
             <span className={`shrink-0 ml-1 font-mono text-xs px-1.5 py-0.2 rounded-full ${
-              activeTab === "all" ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"
-            }`}>{allPendingRows.length}</span>
-          </div>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className={`text-sm sm:text-lg truncate ${activeTab === "all" ? "text-[#0b3531]" : "text-slate-900"}`}>{money(allPendingTotal)}</span>
-          </div>
-        </div>
-
-        {/* Card 2: Vat Card */}
-        <div
-          onClick={() => handleTabChange("vat")}
-          className={`min-w-[140px] sm:min-w-0 flex-1 rounded-xl p-2.5 sm:p-3 border transition cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
-            activeTab === "vat"
-              ? "border-2 border-[#0b3531] bg-[#f2f9f6] shadow-sm"
-              : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
-          }`}
-        >
-          <div className="flex items-center justify-between text-xs sm:text-xs">
-            <span className={`truncate ${activeTab === "vat" ? "text-[#0b3531]" : "text-slate-700"}`}>ตาม VAT</span>
-            <span className={`shrink-0 ml-1 font-mono text-xs px-1.5 py-0.2 rounded-full ${
-              activeTab === "vat" ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"
+              activeTab === "all" || activeTab === "vat" ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"
             }`}>{vatRows.length}</span>
           </div>
           <div className="flex items-baseline justify-between mt-1">
-            <span className={`text-sm sm:text-lg truncate ${activeTab === "vat" ? "text-[#0b3531]" : "text-slate-900"}`}>{money(vatTotal)}</span>
+            <span className={`text-sm sm:text-lg truncate ${activeTab === "all" || activeTab === "vat" ? "text-[#0b3531] font-bold" : "text-slate-900"}`}>{money(vatTotal)}</span>
           </div>
         </div>
 
-        {/* Card 3: Natural Deduct 3% Card */}
+        {/* Card 2: Normal (1 - 7 Days) */}
         <div
-          onClick={() => handleTabChange("natural")}
+          onClick={() => handleTabChange("normal")}
           className={`min-w-[140px] sm:min-w-0 flex-1 rounded-xl p-2.5 sm:p-3 border transition cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
-            activeTab === "natural"
-              ? "border-2 border-[#0b3531] bg-[#f2f9f6] shadow-sm"
+            activeTab === "normal"
+              ? "border-2 border-emerald-600 bg-emerald-50/60 shadow-sm"
               : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
           }`}
         >
           <div className="flex items-center justify-between text-xs sm:text-xs">
-            <span className={`truncate ${activeTab === "natural" ? "text-[#0b3531]" : "text-slate-700"}`}>หัก 3% บุคคล</span>
+            <span className={`truncate ${activeTab === "normal" ? "text-emerald-800 font-semibold" : "text-slate-700"}`}>ค้าง 1 - 7 วัน</span>
             <span className={`shrink-0 ml-1 font-mono text-xs px-1.5 py-0.2 rounded-full ${
-              activeTab === "natural" ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"
-            }`}>{naturalDeductRows.length}</span>
+              activeTab === "normal" ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-500"
+            }`}>{normalVatRows.length}</span>
           </div>
           <div className="flex items-baseline justify-between mt-1">
-            <span className={`text-sm sm:text-lg truncate ${activeTab === "natural" ? "text-[#0b3531]" : "text-slate-900"}`}>{money(naturalTotal)}</span>
+            <span className={`text-sm sm:text-lg truncate ${activeTab === "normal" ? "text-emerald-900 font-bold" : "text-slate-900"}`}>{money(normalTotal)}</span>
           </div>
         </div>
 
-        {/* Card 4: Company Deduct 3% Card */}
+        {/* Card 3: Warning (8 - 14 Days) */}
         <div
-          onClick={() => handleTabChange("company")}
+          onClick={() => handleTabChange("warning")}
           className={`min-w-[140px] sm:min-w-0 flex-1 rounded-xl p-2.5 sm:p-3 border transition cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
-            activeTab === "company"
-              ? "border-2 border-[#0b3531] bg-[#f2f9f6] shadow-sm"
+            activeTab === "warning"
+              ? "border-2 border-amber-500 bg-amber-50/60 shadow-sm"
               : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
           }`}
         >
           <div className="flex items-center justify-between text-xs sm:text-xs">
-            <span className={`truncate ${activeTab === "company" ? "text-[#0b3531]" : "text-slate-700"}`}>หัก 3% บริษัท</span>
+            <span className={`truncate ${activeTab === "warning" ? "text-amber-800 font-semibold" : "text-slate-700"}`}>ค้าง 8 - 14 วัน</span>
             <span className={`shrink-0 ml-1 font-mono text-xs px-1.5 py-0.2 rounded-full ${
-              activeTab === "company" ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"
-            }`}>{companyDeductRows.length}</span>
+              activeTab === "warning" ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-700"
+            }`}>{warningVatRows.length}</span>
           </div>
           <div className="flex items-baseline justify-between mt-1">
-            <span className={`text-sm sm:text-lg truncate ${activeTab === "company" ? "text-[#0b3531]" : "text-slate-900"}`}>{money(companyTotal)}</span>
+            <span className={`text-sm sm:text-lg truncate ${activeTab === "warning" ? "text-amber-900 font-bold" : "text-slate-900"}`}>{money(warningTotal)}</span>
           </div>
         </div>
 
-        {/* Card 5: Credit Card */}
+        {/* Card 4: Urgent (>= 15 Days) */}
         <div
-          onClick={() => handleTabChange("credit")}
+          onClick={() => handleTabChange("urgent")}
           className={`min-w-[140px] sm:min-w-0 flex-1 rounded-xl p-2.5 sm:p-3 border transition cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
-            activeTab === "credit"
-              ? "border-2 border-[#0b3531] bg-[#f2f9f6] shadow-sm"
+            activeTab === "urgent"
+              ? "border-2 border-rose-500 bg-rose-50/60 shadow-sm"
               : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
           }`}
         >
           <div className="flex items-center justify-between text-xs sm:text-xs">
-            <span className={`truncate ${activeTab === "credit" ? "text-[#0b3531]" : "text-slate-700"}`}>ตาม เครดิต</span>
+            <span className={`truncate ${activeTab === "urgent" ? "text-rose-800 font-semibold" : "text-slate-700"}`}>ค้างเกิน 15 วัน (ด่วน)</span>
             <span className={`shrink-0 ml-1 font-mono text-xs px-1.5 py-0.2 rounded-full ${
-              activeTab === "credit" ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"
-            }`}>{creditRows.length}</span>
+              activeTab === "urgent" ? "bg-rose-600 text-white" : "bg-rose-100 text-rose-700"
+            }`}>{urgentVatRows.length}</span>
           </div>
           <div className="flex items-baseline justify-between mt-1">
-            <span className={`text-sm sm:text-lg truncate ${activeTab === "credit" ? "text-[#0b3531]" : "text-slate-900"}`}>{money(creditTotal)}</span>
+            <span className={`text-sm sm:text-lg truncate ${activeTab === "urgent" ? "text-rose-900 font-bold" : "text-slate-900"}`}>{money(urgentTotal)}</span>
           </div>
         </div>
+
+        {/* Card 5: Credit (Optional, only shown if credit bills with VAT exist) */}
+        {(creditRows?.length || 0) > 0 && (
+          <div
+            onClick={() => handleTabChange("credit")}
+            className={`min-w-[140px] sm:min-w-0 flex-1 rounded-xl p-2.5 sm:p-3 border transition cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
+              activeTab === "credit"
+                ? "border-2 border-[#0b3531] bg-[#f2f9f6] shadow-sm"
+                : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
+            }`}
+          >
+            <div className="flex items-center justify-between text-xs sm:text-xs">
+              <span className={`truncate ${activeTab === "credit" ? "text-[#0b3531] font-semibold" : "text-slate-700"}`}>ตาม เครดิต</span>
+              <span className={`shrink-0 ml-1 font-mono text-xs px-1.5 py-0.2 rounded-full ${
+                activeTab === "credit" ? "bg-[#0b3531] text-[#d4f54e]" : "bg-slate-100 text-slate-500"
+              }`}>{creditRows?.length || 0}</span>
+            </div>
+            <div className="flex items-baseline justify-between mt-1">
+              <span className={`text-sm sm:text-lg truncate ${activeTab === "credit" ? "text-[#0b3531] font-bold" : "text-slate-900"}`}>{money(creditTotal)}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2. FILTER & ACTION TOOLBAR (Clean High-Efficiency Layout) */}
@@ -627,6 +721,18 @@ export function BillFollowDashboardClient({
                 title="คัดลอกข้อความสรุปบิลค้างทั้งหมดของผู้เบิกรายนี้"
               >
                 <span>LINE ({filteredRows.length})</span>
+              </button>
+            )}
+
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsBatchConfirming(true)}
+                className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs rounded-lg transition cursor-pointer shrink-0 flex items-center gap-1.5 shadow-2xs active:scale-95 font-medium animate-in fade-in"
+                title="อนุมัติบิลที่เลือกทั้งหมด"
+              >
+                <CheckCircle2 size={13} />
+                <span>อนุมัติที่เลือก ({selectedIds.length})</span>
               </button>
             )}
 
@@ -713,7 +819,7 @@ export function BillFollowDashboardClient({
 
               const isSaving = savingRowId === billId;
               const isCopied = copiedId === billId;
-              const isCompleted = completedRowIds.has(billId) || (hasVat && Boolean(row["วันได้บิล"])) || (hasDeduct && Boolean(row["วันออก 3%"])) || (hasCredit && Boolean(row["วันจ่าย"]));
+              const isCompleted = completedRowIds.has(billId) || (hasVat && Boolean(row["วันได้บิล"])) || (hasCredit && Boolean(row["วันจ่าย"]));
 
               // Card aging border highlight
               const agingBorderClass =
@@ -728,9 +834,18 @@ export function BillFollowDashboardClient({
                   key={`mob-bill-follow-${billId}-${index}`}
                   className={`bg-white rounded-xl border border-slate-200 p-2.5 shadow-2xs space-y-1.5 transition ${agingBorderClass}`}
                 >
-                  {/* Row 1: Bill ID + Project Name ── Amount */}
+                  {/* Row 1: Checkbox + Bill ID + Project Name ── Amount */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
+                      {!isCompleted && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(billId)}
+                          onChange={() => handleToggleRow(billId)}
+                          className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
+                          title="เลือกรายการนี้"
+                        />
+                      )}
                       <Link
                         href={`/bills/${encodeURIComponent(billId)}`}
                         className="text-xs bg-slate-900 text-white px-1.5 py-0.2 rounded shrink-0 hover:bg-slate-800 active:scale-95 transition"
@@ -782,11 +897,6 @@ export function BillFollowDashboardClient({
                           {formatVatDisplay(row.vat)}
                         </span>
                       )}
-                      {hasDeduct && (
-                        <span className="px-1.5 py-0.2 rounded text-xs bg-purple-50 text-purple-700 border border-purple-200">
-                          {formatDeductDisplay(row["หัก"])} {isCompany ? "(บ.)" : "(บุคคล)"}
-                        </span>
-                      )}
                       {hasCredit && (
                         <span className="px-1.5 py-0.2 rounded text-xs bg-orange-50 text-orange-700 border border-orange-200">
                           {formatCreditDisplay(row["เครดิต"])}
@@ -810,23 +920,49 @@ export function BillFollowDashboardClient({
                       </button>
 
                       {isCompleted ? (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenAttachModal(row)}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-lg border border-slate-200 transition cursor-pointer flex items-center gap-1"
-                          title="คลิกเพื่อดูหรือแนบเอกสารเพิ่มเติม"
+                        <div
+                          className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-lg border border-emerald-200 flex items-center gap-1 select-none font-medium"
+                          title="อนุมัติได้รับบิลเรียบร้อยแล้ว"
                         >
                           <CheckCircle2 size={12} className="text-emerald-600" />
                           <span>ได้บิลแล้ว</span>
-                        </button>
+                        </div>
+                      ) : confirmingRowId === billId ? (
+                        <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
+                          <button
+                            type="button"
+                            disabled={savingRowId === billId}
+                            onClick={() => handleExecuteSingleRow(row)}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold rounded-lg flex items-center gap-1 shadow-xs transition cursor-pointer disabled:opacity-50"
+                            title="ยืนยันอนุมัติได้รับบิลนี้"
+                          >
+                            {savingRowId === billId ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Check size={12} strokeWidth={3} />
+                            )}
+                            <span>ยืนยัน</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={savingRowId === billId}
+                            onClick={() => setConfirmingRowId(null)}
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg flex items-center gap-0.5 border border-slate-300 transition cursor-pointer disabled:opacity-50"
+                            title="ยกเลิก"
+                          >
+                            <X size={12} />
+                            <span>ยกเลิก</span>
+                          </button>
+                        </div>
                       ) : (
                         <button
                           type="button"
-                          disabled={isSaving}
-                          onClick={() => handleOpenAttachModal(row)}
-                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs rounded-lg transition cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs flex items-center gap-1"
-                          title="กดเพื่อแนบเอกสารหรือบันทึกได้บิลแล้ว"
+                          disabled={isProcessingBatch || savingRowId !== null}
+                          onClick={() => setConfirmingRowId(billId)}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-lg transition cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs flex items-center gap-1"
+                          title="กดเพื่อยืนยันอนุมัติได้รับบิล"
                         >
+                          <Check size={12} strokeWidth={2.5} />
                           <span>ได้บิลแล้ว</span>
                         </button>
                       )}
@@ -843,6 +979,16 @@ export function BillFollowDashboardClient({
           <table className="w-full text-left text-xs text-slate-700 border-collapse font-sans">
             <thead>
               <tr className="bg-slate-100 text-slate-800 border-b border-slate-200 text-xs">
+                <th className="py-2.5 px-3 border-r border-slate-200 text-center w-10">
+                  <input
+                    type="checkbox"
+                    checked={isAllPaginatedSelected}
+                    disabled={selectablePaginatedRows.length === 0}
+                    onChange={handleToggleSelectAll}
+                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer disabled:opacity-40"
+                    title={isAllPaginatedSelected ? "ยกเลิกเลือกทั้งหมดในหน้านี้" : "เลือกทั้งหมดในหน้านี้"}
+                  />
+                </th>
                 <th className="py-2.5 px-3 border-r border-slate-200">ลำดับ</th>
                 <th className="py-2.5 px-3 border-r border-slate-200">ร้าน/บุคคล</th>
                 <th className="py-2.5 px-3 border-r border-slate-200">Project</th>
@@ -875,9 +1021,25 @@ export function BillFollowDashboardClient({
 
                 const isSaving = savingRowId === billId;
                 const isCopied = copiedId === billId;
+                const isCompleted = completedRowIds.has(billId) || (hasVat && Boolean(row["วันได้บิล"])) || (hasCredit && Boolean(row["วันจ่าย"]));
 
                 return (
                   <tr key={`${billId}-${index}`} className="hover:bg-slate-50 transition-colors">
+                    {/* Checkbox */}
+                    <td className="py-2 px-3 text-center border-r border-slate-100 w-10">
+                      {isCompleted ? (
+                        <span className="text-slate-300 font-mono text-xs select-none">-</span>
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(billId)}
+                          onChange={() => handleToggleRow(billId)}
+                          className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          title="เลือกรายการนี้"
+                        />
+                      )}
+                    </td>
+
                     {/* Sequence */}
                     <td className="py-2 px-3 text-slate-800 border-r border-slate-100">
                       <Link
@@ -936,13 +1098,8 @@ export function BillFollowDashboardClient({
                     <td className="py-2 px-3 text-center border-r border-slate-100">
                       <div className="flex flex-wrap items-center justify-center gap-1">
                         {hasVat && (
-                          <span className="px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-700 border border-slate-200">
+                          <span className="px-1.5 py-0.5 rounded text-xs bg-sky-50 text-sky-700 border border-sky-200 font-medium">
                             {formatVatDisplay(row.vat)}
-                          </span>
-                        )}
-                        {hasDeduct && (
-                          <span className="px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-700 border border-slate-200">
-                            {formatDeductDisplay(row["หัก"])} {isCompany ? "(บ.)" : "(บุคคล)"}
                           </span>
                         )}
                         {hasCredit && (
@@ -967,24 +1124,50 @@ export function BillFollowDashboardClient({
                     {/* Actions: Single Unified Button & LINE Copy */}
                     <td className="py-2 px-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        {completedRowIds.has(billId) || (hasVat && Boolean(row["วันได้บิล"])) || (hasDeduct && Boolean(row["วันออก 3%"])) || (hasCredit && Boolean(row["วันจ่าย"])) ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenAttachModal(row)}
-                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded border border-slate-200 transition cursor-pointer flex items-center gap-1"
-                            title="คลิกเพื่อดูหรือแนบเอกสารเพิ่มเติม"
+                        {completedRowIds.has(billId) || (hasVat && Boolean(row["วันได้บิล"])) || (hasCredit && Boolean(row["วันจ่าย"])) ? (
+                          <div
+                            className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs rounded border border-emerald-200 flex items-center gap-1 select-none font-medium"
+                            title="อนุมัติได้รับบิลเรียบร้อยแล้ว"
                           >
-                            <CheckCircle2 size={12} className="text-emerald-600" />
+                            <CheckCircle2 size={13} className="text-emerald-600" />
                             <span>ได้บิลแล้ว</span>
-                          </button>
+                          </div>
+                        ) : confirmingRowId === billId ? (
+                          <div className="flex items-center justify-center gap-1 animate-in fade-in zoom-in-95 duration-150">
+                            <button
+                              type="button"
+                              disabled={savingRowId === billId}
+                              onClick={() => handleExecuteSingleRow(row)}
+                              className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-semibold rounded flex items-center gap-1 shadow-xs transition cursor-pointer disabled:opacity-50"
+                              title="ยืนยันอนุมัติได้รับบิลนี้"
+                            >
+                              {savingRowId === billId ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <Check size={12} strokeWidth={3} />
+                              )}
+                              <span>ยืนยัน</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={savingRowId === billId}
+                              onClick={() => setConfirmingRowId(null)}
+                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 text-xs font-medium rounded flex items-center gap-0.5 border border-slate-300 transition cursor-pointer disabled:opacity-50"
+                              title="ยกเลิก"
+                            >
+                              <X size={12} />
+                              <span>ยกเลิก</span>
+                            </button>
+                          </div>
                         ) : (
                           <button
                             type="button"
-                            disabled={isSaving}
-                            onClick={() => handleOpenAttachModal(row)}
-                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs rounded transition cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs flex items-center gap-1"
-                            title="กดเพื่อแนบเอกสารหรือบันทึกได้บิลแล้ว"
+                            disabled={isProcessingBatch || isSaving}
+                            onClick={() => setConfirmingRowId(billId)}
+                            className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded transition cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs flex items-center gap-1.5"
+                            title="กดเพื่อยืนยันอนุมัติได้รับบิล"
                           >
+                            <Check size={13} strokeWidth={2.5} />
                             <span>ได้บิลแล้ว</span>
                           </button>
                         )}
@@ -1009,7 +1192,7 @@ export function BillFollowDashboardClient({
 
               {!paginatedRows.length && (
                 <tr>
-                  <td colSpan={11} className="py-8 text-center text-slate-400 text-xs font-medium">
+                  <td colSpan={12} className="py-8 text-center text-slate-400 text-xs font-medium">
                     ไม่พบรายการตามบิลที่ค้นหา
                   </td>
                 </tr>
@@ -1111,21 +1294,73 @@ export function BillFollowDashboardClient({
         )}
       </div>
 
-      {/* Attach Bill Document Modal */}
-      <AttachBillModal
-        isOpen={isAttachModalOpen}
-        onClose={() => {
-          setIsAttachModalOpen(false);
-          setSelectedBillForAttach(null);
-        }}
-        row={selectedBillForAttach}
-        requesterName={
-          selectedBillForAttach
-            ? requesterNames[String(selectedBillForAttach["ผู้เบิก"] || "").trim()] || String(selectedBillForAttach["ผู้เบิก"] || "")
-            : ""
-        }
-        onSuccess={handleAttachSuccess}
-      />
+      {/* Floating Bottom Batch Action Bar */}
+      {selectedIds.length > 0 && (
+        <aside
+          aria-label="แถบจัดการหลายรายการ"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-2xl bg-[#0b3531]/95 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/30 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-5 duration-200"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-bold text-sm">
+              {selectedIds.length}
+            </div>
+            <div>
+              <div className="text-xs text-emerald-200/90 font-medium">
+                เลือกแล้ว <span className="text-white font-bold">{selectedIds.length}</span> รายการ
+              </div>
+              <div className="text-sm font-bold text-white tracking-tight">
+                ยอดรวม: <span className="text-emerald-300 font-mono">฿{money(selectedTotalAmount)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isBatchConfirming ? (
+              <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  type="button"
+                  disabled={isProcessingBatch}
+                  onClick={() => setIsBatchConfirming(false)}
+                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg transition cursor-pointer disabled:opacity-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  disabled={isProcessingBatch}
+                  onClick={handleExecuteBatch}
+                  className="px-3.5 py-1.5 text-xs md:text-sm font-semibold rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 active:scale-95"
+                >
+                  {isProcessingBatch ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <Check size={15} strokeWidth={3} />
+                  )}
+                  <span>ยืนยันอนุมัติ ({selectedIds.length})</span>
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition cursor-pointer active:scale-95"
+                >
+                  ยกเลิกทั้งหมด
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBatchConfirming(true)}
+                  className="px-4 py-2 text-xs md:text-sm font-semibold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                >
+                  <CheckCircle2 size={16} className="text-white" />
+                  <span>อนุมัติได้รับบิล ({selectedIds.length})</span>
+                </button>
+              </>
+            )}
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

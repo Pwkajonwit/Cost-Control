@@ -261,7 +261,7 @@ export async function listRefOptions(tableName: string, options: {
       label: (tableName === "BANK" || tableName === "ธนาคาร" || tableName === "banks")
         ? String(row["ชื่อธนาคาร"] || row.name || row[labelColumn] || row[keyColumn])
         : row[labelColumn] ? String(row[labelColumn]) : String(row[keyColumn]),
-      row: pick(row, rowColumns)
+      row: isProjectTable ? row : pick(row, rowColumns)
     }));
 }
 

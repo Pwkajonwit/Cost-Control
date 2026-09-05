@@ -1,5 +1,5 @@
 import { cached, clearCache } from "@/lib/cache";
-import { TABLE_KEYS } from "@/lib/config";
+import { TABLE_KEYS, TABLES } from "@/lib/config";
 import type { RefOption, SheetRow } from "@/lib/types";
 import {
   deleteRowFromSupabase,
@@ -67,6 +67,7 @@ export async function listRefOptions(tableName: string, options: {
 
   const keyColumn = options.keyColumn || TABLE_KEYS[tableName] || "_RowNumber";
   const labelColumn = options.labelColumn || keyColumn;
+  const isProjectTable = tableName === TABLES.PROJECT || tableName === "Project" || tableName === "projects";
   const rowColumns = unique([keyColumn, labelColumn, "image", "image_url", ...(options.rowColumns || [])]);
 
   return rows
@@ -77,7 +78,7 @@ export async function listRefOptions(tableName: string, options: {
       label: (tableName === "BANK" || tableName === "ธนาคาร" || tableName === "banks")
         ? String(row["ชื่อธนาคาร"] || row.name || row[labelColumn] || row[keyColumn])
         : row[labelColumn] ? `${row[keyColumn]} - ${row[labelColumn]}` : String(row[keyColumn]),
-      row: pick(row, rowColumns)
+      row: isProjectTable ? row : pick(row, rowColumns)
     }));
 }
 

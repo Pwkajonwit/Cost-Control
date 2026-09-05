@@ -30,11 +30,11 @@ export function ProjectDetailEditor({ fields, project, customerDisplay, companyD
       Object.keys(draft)
         .filter(field => !readonlyField(field))
         .filter(field => {
-          const draftVal = (draft[field] ?? "").trim();
+          const draftVal = stringify(draft[field]).trim();
           const rawVal = stringify(rawObj[field]).trim();
           return draftVal !== rawVal;
         })
-        .map(field => [field, draft[field] ?? ""])
+        .map(field => [field, stringify(draft[field])])
     );
   }, [draft, project]);
 
@@ -192,11 +192,12 @@ export function ProjectDetailEditor({ fields, project, customerDisplay, companyD
     </section>
   );
 
-  function setDraftValue(field: string, value: string) {
+  function setDraftValue(field: string, value: any) {
+    const strVal = stringify(value);
     setDraft(current => {
-      const next = { ...current, [field]: value };
+      const next = { ...current, [field]: strVal };
       if (field === "ยอดงาน") {
-        const workNum = toNumber(value);
+        const workNum = toNumber(strVal);
         if (workNum > 0 && (!current["ยอดรวม vat"] || toNumber(current["ยอดรวม vat"]) === 0)) {
           next["ยอดรวม vat"] = String(Math.round(workNum * 1.07));
         }
@@ -204,7 +205,7 @@ export function ProjectDetailEditor({ fields, project, customerDisplay, companyD
           next["งบไม่เกิน"] = String(workNum);
         }
       } else if (field === "ยอดรวม vat") {
-        const vatNum = toNumber(value);
+        const vatNum = toNumber(strVal);
         if (vatNum > 0 && (!current["ยอดงาน"] || toNumber(current["ยอดงาน"]) === 0)) {
           next["ยอดงาน"] = String(Math.round(vatNum / 1.07));
         }

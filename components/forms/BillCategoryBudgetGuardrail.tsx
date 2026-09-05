@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, ShieldAlert, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, ShieldAlert, ShieldCheck } from "lucide-react";
 import { checkCategoryBudgetCap, type CategoryBudgetCheckResult } from "@/lib/bill-validation";
 import { money } from "@/lib/numbers";
 import type { SheetRow } from "@/lib/types";
@@ -24,9 +24,19 @@ export function BillCategoryBudgetGuardrail({ values, projectRows = [] }: BillCa
       return;
     }
 
-    const matchedProject = projectRows.find(
-      p => String(p["ID Project"] || "").trim() === selectedProjectId
-    );
+    const matchedProject = projectRows.find(p => {
+      const projId = String(p["ID Project"] || p.id || "").trim();
+      const projName = String(p["ชื่อ Project"] || p.name || "").trim();
+      if (!projId && !projName) return false;
+      return (
+        projId === selectedProjectId ||
+        projName === selectedProjectId ||
+        selectedProjectId.startsWith(`${projId} `) ||
+        selectedProjectId.startsWith(`${projId} -`) ||
+        selectedProjectId === `${projId} - ${projName}` ||
+        (projId && selectedProjectId.includes(projId))
+      );
+    });
 
     if (!matchedProject) {
       setBudgetStatus(null);
@@ -37,8 +47,23 @@ export function BillCategoryBudgetGuardrail({ values, projectRows = [] }: BillCa
     setBudgetStatus(status);
   }, [selectedProjectId, selectedProduct, selectedCategory, values, projectRows]);
 
-  if (!budgetStatus || !budgetStatus.hasBudgetCap) {
+  if (!budgetStatus) {
     return null;
+  }
+
+  if (!budgetStatus.hasBudgetCap) {
+    const label = budgetStatus.categoryLabel || selectedCategory || selectedProduct || "หมวดนี้";
+    return (
+      <div className="w-full min-w-0 max-w-full h-10 sm:h-9 px-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-slate-500 text-xs font-sans flex items-center justify-between gap-2 shadow-2xs">
+        <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <Info size={14} className="text-slate-400 shrink-0" />
+          <span className="truncate">หมวด '{label}': ไม่ได้ตั้งวงเงินคุมงบ</span>
+        </div>
+        <span className="text-[11px] text-slate-400 shrink-0 bg-slate-200/60 px-1.5 py-0.5 rounded">
+          ไม่คุมงบ
+        </span>
+      </div>
+    );
   }
 
   const {
