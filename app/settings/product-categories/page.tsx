@@ -19,7 +19,8 @@ import {
   Truck,
   FolderKanban,
   Settings2,
-  X
+  X,
+  Fuel
 } from "lucide-react";
 import { showConfirm, showToast } from "@/components/ToastProvider";
 
@@ -42,13 +43,13 @@ const DEFAULT_GROUPS = [
 
 const DEFAULT_PRODUCT_CATEGORIES: ProductCategoryItem[] = [
   // 1. หมวดงานโครงสร้าง
-  { id: "1", code: "1", name: "เหล็กเส้น", group: "หมวดงานโครงสร้าง", description: "เหล็กเส้น DB, RB ทุกขนาด", active: true },
-  { id: "2", code: "2", name: "เหล็กรูปพรรณ", group: "หมวดงานโครงสร้าง", description: "เหล็กกล่อง, H-Beam, C-Channel", active: true },
-  { id: "3", code: "3", name: "คอนกรีต", group: "หมวดงานโครงสร้าง", description: "คอนกรีตผสมเสร็จ, คอนกรีตหล่อสำเร็จ", active: true },
-  { id: "4", code: "4", name: "ไม้แบบ", group: "หมวดงานโครงสร้าง", description: "ไม้แบบอัด, ไม้แปรรูป, ยูคล้อง", active: true },
+  { id: "1", code: "1", name: "ปูน/ทราย/หิน", group: "หมวดงานโครงสร้าง", description: "ปูนซีเมนต์, ทรายหยาบ/ละเอียด, หินผสม", active: true },
+  { id: "2", code: "2", name: "เหล็กเส้น/รูปพรรณ", group: "หมวดงานโครงสร้าง", description: "เหล็กเส้น DB, RB, เหล็กกล่อง, H-Beam, C-Channel", active: true },
+  { id: "3", code: "3", name: "คอนกรีตผสมเสร็จ", group: "หมวดงานโครงสร้าง", description: "คอนกรีตผสมเสร็จ, คอนกรีตหล่อสำเร็จ", active: true },
+  { id: "4", code: "4", name: "ไม้แบบ/ไม้อัด", group: "หมวดงานโครงสร้าง", description: "ไม้แบบอัด, ไม้แปรรูป, ยูคล้อง", active: true },
 
   // 2. หมวดงานสถาปัตย์ & ตกแต่ง
-  { id: "5", code: "5", name: "วัสดุมุง", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", description: "กระเบื้องหลังกา, เมทัลชีท", active: true },
+  { id: "5", code: "5", name: "วัสดุมุง", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", description: "กระเบื้องหลังคา, เมทัลชีท", active: true },
   { id: "6", code: "6", name: "ฝ้าผนัง", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", description: "แผ่นยิปซัม, สมาร์ทบอร์ด, อิฐก่อ", active: true },
   { id: "7", code: "7", name: "ปูพื้น", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", description: "กระเบื้องยาง, แกรนิตโต้, ไม้ลามิเนต", active: true },
   { id: "8", code: "8", name: "กระจก", group: "หมวดงานสถาปัตยกรรม & ตกแต่ง", description: "กระจกอลูมิเนียม, กระจกเทมเปอร์", active: true },
@@ -63,7 +64,7 @@ const DEFAULT_PRODUCT_CATEGORIES: ProductCategoryItem[] = [
 
   // 4. หมวดงานเตรียมดิน & โลจิสติกส์
   { id: "16", code: "16", name: "ดิน", group: "หมวดงานเตรียมดิน & โลจิสติกส์", description: "ดินถม, ดินลูกรัง", active: true },
-  { id: "17", code: "17", name: "หินทราย", group: "หมวดงานเตรียมดิน & โลจิสติกส์", description: "หิน 1-2, ทรายหยาบ/ละเอียด", active: true },
+  { id: "17", code: "17", name: "หินทราย", group: "หมวดงานเตรียมดิน & โลจิสติกส์", description: "หิน 1-2, ทรายถม", active: true },
   { id: "18", code: "18", name: "เตรียมงาน", group: "หมวดงานเตรียมดิน & โลจิสติกส์", description: "ป้ายโครงการ, นั่งร้าน, รั้วชั่วคราว", active: true },
   { id: "101", code: "101", name: "น้ำมัน", group: "หมวดงานเตรียมดิน & โลจิสติกส์", description: "น้ำมันดีเซล/เบนซิน เครื่องจักรและยานพาหนะ", active: true },
   { id: "102", code: "102", name: "ค่าขนส่ง", group: "หมวดงานเตรียมดิน & โลจิสติกส์", description: "ค่าขนส่งสินค้า, ค่ารถสิบล้อ", active: true },
@@ -80,6 +81,47 @@ function getGroupIcon(groupName: string) {
   if (groupName.includes("ระบบ")) return <Zap size={13} className="text-cyan-600 shrink-0" />;
   if (groupName.includes("เตรียมดิน") || groupName.includes("โลจิสติกส์")) return <Truck size={13} className="text-emerald-600 shrink-0" />;
   return <Package size={13} className="text-slate-600 shrink-0" />;
+}
+
+function getCostControlPillarBadge(code: string, name: string) {
+  if (code === "101" || name.includes("น้ำมัน")) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+        <Fuel size={11} className="text-amber-600" />
+        <span>น้ำมัน (Site Ops)</span>
+      </span>
+    );
+  }
+  if (code === "102" || name.includes("ขนส่ง")) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-cyan-50 text-cyan-800 border border-cyan-200">
+        <Truck size={11} className="text-cyan-600" />
+        <span>โลจิสติกส์ & ขนส่ง</span>
+      </span>
+    );
+  }
+  if (code === "103" || name.includes("เครื่องจักร")) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-50 text-indigo-800 border border-indigo-200">
+        <Building2 size={11} className="text-indigo-600" />
+        <span>เครื่องจักร (Equipment)</span>
+      </span>
+    );
+  }
+  if (code === "200" || name.includes("ดำเนินการ")) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+        <FolderKanban size={11} className="text-slate-600" />
+        <span>ดำเนินการ & โสหุ้ย</span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+      <Package size={11} className="text-emerald-600" />
+      <span>ค่าของ (Materials)</span>
+    </span>
+  );
 }
 
 export default function ProductCategoryMasterPage() {
@@ -395,6 +437,7 @@ export default function ProductCategoryMasterPage() {
               <tr className="bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-700">
                 <th className="py-2.5 px-3 w-20 text-center border-r border-slate-200">รหัส (Code)</th>
                 <th className="py-2.5 px-3 border-r border-slate-200">ชื่อหมวดสินค้า (Name)</th>
+                <th className="py-2.5 px-3 border-r border-slate-200">ประเภทควบคุมต้นทุน (Pillar)</th>
                 <th className="py-2.5 px-3 border-r border-slate-200">กลุ่มประเภทงาน (Group)</th>
                 <th className="py-2.5 px-3 border-r border-slate-200">คำอธิบายขอบเขตงาน</th>
                 <th className="py-2.5 px-3 w-24 text-center">จัดการ</th>
@@ -403,14 +446,14 @@ export default function ProductCategoryMasterPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
+                  <td colSpan={6} className="py-6 text-center text-slate-400 text-xs">
                     <RefreshCw size={16} className="animate-spin mx-auto mb-1 text-slate-500" />
                     <span>กำลังโหลดข้อมูลหมวดสินค้า...</span>
                   </td>
                 </tr>
               ) : filteredCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
+                  <td colSpan={6} className="py-6 text-center text-slate-400 text-xs">
                     ไม่พบหมวดสินค้าที่ตรงกับคำค้นหา
                   </td>
                 </tr>
@@ -422,6 +465,9 @@ export default function ProductCategoryMasterPage() {
                     </td>
                     <td className="py-2 px-3 font-medium text-slate-900 border-r border-slate-100">
                       {cat.name}
+                    </td>
+                    <td className="py-2 px-3 border-r border-slate-100">
+                      {getCostControlPillarBadge(cat.code, cat.name)}
                     </td>
                     <td className="py-2 px-3 border-r border-slate-100">
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700 border border-slate-200">

@@ -366,6 +366,7 @@ export async function PATCH(request: NextRequest) {
       revalidatePath("/documents");
       revalidatePath("/dashboards");
       revalidatePath("/contract-open");
+      revalidatePath("/bill-follow");
       revalidatePath("/", "layout");
     } catch {}
     return NextResponse.json({ ok: true, row });
