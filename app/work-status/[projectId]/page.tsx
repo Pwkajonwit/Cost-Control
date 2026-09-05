@@ -1,5 +1,5 @@
 import { ProjectDetailClient } from "@/components/dashboards/ProjectDetailClient";
-import { isCommittedBill } from "@/lib/bill-status";
+import { isCommittedBill, isPaidBill } from "@/lib/bill-status";
 import { TABLES } from "@/lib/config";
 import { toNumber } from "@/lib/numbers";
 import { getRows } from "@/lib/db";
@@ -76,7 +76,10 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
     "ผู้เบิก": resolveRequesterName(row["ผู้เบิก"], peopleRows)
   }));
   const { project: hydratedProject, totals } = hydrateProjectSummary(project, relatedRows);
-  const expenseBreakdown = buildExpenseBreakdown(summaryRows);
+  const paidRows = summaryRows.filter(isPaidBill);
+  const pendingRows = summaryRows.filter((r) => !isPaidBill(r));
+  const expenseBreakdown = buildExpenseBreakdown(paidRows);
+  const pendingBreakdown = buildExpenseBreakdown(pendingRows);
 
   const projectName = displayValue(valueOf(hydratedProject, ["ชื่อ Project"])) || `Project ${decodedProjectId}`;
 
@@ -110,6 +113,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
       totals={totals}
       summaryRows={summaryRows}
       expenseBreakdown={expenseBreakdown}
+      pendingBreakdown={pendingBreakdown}
       detailFields={DETAIL_FIELDS}
       relatedColumns={RELATED_COLUMNS}
       expenseCategories={EXPENSE_CATEGORIES}
