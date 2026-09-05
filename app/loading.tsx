@@ -1,9 +1,11 @@
-import { LoadingState } from "@/components/LoadingState";
+import { DashboardSkeleton } from "@/components/skeletons";
 
-export default function Loading() {
+export default function RootLoading() {
   return (
-    <div className="p-4 sm:p-6 max-w-[1600px] mx-auto min-h-[65vh] flex items-center justify-center">
-      <LoadingState title="กำลังโหลดข้อมูล..." message="ระบบกำลังประมวลผลและจัดเตรียมข้อมูลสำหรับคุณ" />
-    </div>
+    <DashboardSkeleton
+      searchPlaceholder="ค้นหา..."
+      primaryButtonLabel="เพิ่มข้อมูล"
+      loadingMessage="กำลังโหลดข้อมูล..."
+    />
   );
 }
