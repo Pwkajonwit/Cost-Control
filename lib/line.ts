@@ -2510,6 +2510,166 @@ export async function getContractWorkMap(forceRefresh = false): Promise<Map<stri
   return contractMap;
 }
 
+export type ProjectBudgetLookupInfo = {
+  budget: number;
+  spent: number;
+  name: string;
+  catBudgets?: Record<string, number>;
+  catSpent?: Record<string, number>;
+};
+
+const EXPENSE_CATEGORIES_LIST = [
+  "ค่าของ",
+  "ค่าแรง",
+  "พนักงาน",
+  "น้ำมัน",
+  "ซ่อมรถ",
+  "เครื่องจักร",
+  "เครื่องมือ",
+  "อื่นๆ"
+];
+
+export function resolveBillExpenseCategory(b: Record<string, any>): string {
+  const rawCat = String(b["ประเภท"] || b.category || b.data?.["ประเภท"] || "").trim();
+  for (const cat of EXPENSE_CATEGORIES_LIST) {
+    if (rawCat.includes(cat)) return cat;
+  }
+
+  const rawItems = b.items || b.data?.items;
+  let lineItems: any[] = [];
+  if (Array.isArray(rawItems)) {
+    lineItems = rawItems;
+  } else if (typeof rawItems === "string" && rawItems.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(rawItems);
+      if (Array.isArray(parsed)) lineItems = parsed;
+    } catch {}
+  }
+
+  for (const it of lineItems) {
+    const itCat = String(it.categoryType || it.category || "").trim();
+    for (const cat of EXPENSE_CATEGORIES_LIST) {
+      if (itCat.includes(cat)) return cat;
+    }
+  }
+
+  for (const cat of EXPENSE_CATEGORIES_LIST) {
+    if (Number(b[cat] || b.data?.[cat] || 0) > 0) return cat;
+  }
+
+  return "";
+}
+
+let cachedProjectBudgetMap: Map<string, ProjectBudgetLookupInfo> | null = null;
+let cachedProjectBudgetMapTime = 0;
+
+export async function getProjectBudgetMap(forceRefresh = false): Promise<Map<string, ProjectBudgetLookupInfo>> {
+  const now = Date.now();
+  if (!forceRefresh && cachedProjectBudgetMap && (now - cachedProjectBudgetMapTime < CACHE_TTL_MS)) {
+    return cachedProjectBudgetMap;
+  }
+
+  const pMap = new Map<string, ProjectBudgetLookupInfo>();
+  try {
+    const [{ data: projects }, { data: bills }, { data: allocOpt }] = await Promise.all([
+      supabaseAdmin.from("projects").select("id, name, budget, data"),
+      supabaseAdmin.from("bills").select("project_id, project_name, amount, status, data"),
+      supabaseAdmin.from("system_options").select("data").eq("id", "project_budget_allocations").maybeSingle()
+    ]);
+
+    const budgetAllocations: Record<string, Record<string, any>> = (allocOpt?.data && typeof allocOpt.data === "object") ? allocOpt.data : {};
+
+    const spentByProject = new Map<string, number>();
+    const catSpentByProject = new Map<string, Record<string, number>>();
+
+    if (bills && bills.length > 0) {
+      for (const b of bills) {
+        const d = (b.data && typeof b.data === "object") ? b.data : {};
+        const innerData = (d.data && typeof d.data === "object") ? d.data : {};
+        const st = String(b.status || d.status || d["สถานะ"] || innerData["สถานะ"] || "").trim();
+        if (st === "ยกเลิก" || st === "ไม่อนุมัติ") continue;
+
+        const pId = String(b.project_id || d.project_id || d["ID Project"] || innerData["ID Project"] || "").trim();
+        const pName = String(b.project_name || d.project_name || d["ชื่อ Project"] || innerData["ชื่อ Project"] || "").trim();
+        const amt = Number(b.amount || d.amount || d["ยอดเงิน"] || innerData["ยอดเงิน"] || 0);
+
+        const primaryKey = pId || pName;
+        if (!primaryKey) continue;
+
+        spentByProject.set(primaryKey, (spentByProject.get(primaryKey) || 0) + amt);
+
+        if (!catSpentByProject.has(primaryKey)) {
+          catSpentByProject.set(primaryKey, { ค่าของ: 0, ค่าแรง: 0, พนักงาน: 0, น้ำมัน: 0, ซ่อมรถ: 0, เครื่องจักร: 0, เครื่องมือ: 0, อื่นๆ: 0 });
+        }
+        const cs = catSpentByProject.get(primaryKey)!;
+
+        for (const cat of EXPENSE_CATEGORIES_LIST) {
+          const directAmt = Number((b as any)[cat] || d[cat] || innerData[cat] || 0);
+          if (directAmt > 0) {
+            cs[cat] += directAmt;
+          } else {
+            const rawCat = String((b as any).category || d["ประเภท"] || innerData["ประเภท"] || "").trim();
+            if (rawCat.includes(cat)) {
+              cs[cat] += amt;
+            }
+          }
+        }
+      }
+    }
+
+    if (projects && projects.length > 0) {
+      for (const p of projects) {
+        const id = String(p.id).trim();
+        const name = String(p.name).trim();
+        const alloc = (budgetAllocations && (budgetAllocations[id] || budgetAllocations[name])) || {};
+        const d = { ...(p.data || {}), ...alloc };
+
+        // 1. Calculate 8 category budgets
+        const catBudgets: Record<string, number> = {};
+        for (const cat of EXPENSE_CATEGORIES_LIST) {
+          const budgetKey = `งบไม่เกิน${cat}`;
+          let bVal = Number(d[budgetKey] || (p as any)[budgetKey] || 0);
+          if (cat === "ค่าของ" && bVal === 0) {
+            const productSum = Object.keys(d)
+              .filter(k => k.startsWith("งบไม่เกิน") && k !== "งบไม่เกิน" && k !== "งบไม่เกินค่าของ" && k !== "งบไม่เกินค่าแรง")
+              .reduce((sum, k) => sum + Number(d[k] || 0), 0);
+            if (productSum > 0) bVal = productSum;
+          }
+          catBudgets[cat] = bVal;
+        }
+
+        const totalCatBudgetSum = Object.values(catBudgets).reduce((sum, v) => sum + v, 0);
+        let budget = Number(p.budget ?? d.budget ?? d["งบไม่เกิน"] ?? 0);
+        if (budget <= 0 && totalCatBudgetSum > 0) {
+          budget = totalCatBudgetSum;
+        }
+        if (budget <= 0 && Number(d["ยอดงาน"] || (p as any).work_amount || 0) > 0) {
+          budget = Number(d["ยอดงาน"] || (p as any).work_amount || 0);
+        }
+
+        const spent = (id ? spentByProject.get(id) : 0) || (name ? spentByProject.get(name) : 0) || 0;
+        const catSpent = (id ? catSpentByProject.get(id) : null) || (name ? catSpentByProject.get(name) : null) || { ค่าของ: 0, ค่าแรง: 0, พนักงาน: 0, น้ำมัน: 0, ซ่อมรถ: 0, เครื่องจักร: 0, เครื่องมือ: 0, อื่นๆ: 0 };
+
+        const info: ProjectBudgetLookupInfo = { budget, spent, name, catBudgets, catSpent };
+        if (id) {
+          pMap.set(id, info);
+          pMap.set(id.toLowerCase(), info);
+        }
+        if (name) {
+          pMap.set(name, info);
+          pMap.set(name.toLowerCase(), info);
+        }
+      }
+    }
+    cachedProjectBudgetMap = pMap;
+    cachedProjectBudgetMapTime = now;
+  } catch (err) {
+    console.warn("⚠️ Failed to build project budget map:", err);
+  }
+
+  return pMap;
+}
+
 export function resolveBankInfo(
   bill: any,
   bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>
@@ -2806,7 +2966,8 @@ export function createMultiBillFlex(
   options: MultiBillFlexOptions,
   peopleMap?: Map<string, string> | Record<string, string>,
   bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
-  contractMap?: Map<string, any> | Record<string, any>
+  contractMap?: Map<string, any> | Record<string, any>,
+  projectBudgetMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = Array.isArray(billsInput) ? billsInput : [billsInput];
   if (bills.length === 0) {
@@ -3027,6 +3188,54 @@ export function createMultiBillFlex(
         paidNum = Number(matchedContract.paid_amount || matchedContract["ยอดเงินจ่าย"]);
       }
 
+      let derivedContractTotal = contractTotal;
+      if (derivedContractTotal <= 0 && remainingLabor.includes("จาก")) {
+        const parts = remainingLabor.split("จาก").map(p => p.trim());
+        const totalNum = Number(parts[1].replace(/,/g, ""));
+        if (!isNaN(totalNum) && totalNum > 0) {
+          derivedContractTotal = totalNum;
+        }
+      }
+
+      let budgetSummaryText = "";
+      let percentUsed = 0;
+
+      if (derivedContractTotal > 0) {
+        // 1. Contractor Contract Budget
+        const totalUsed = paidNum + grossAmt;
+        percentUsed = Math.round((totalUsed / derivedContractTotal) * 100);
+        budgetSummaryText = `งบ   ฿${derivedContractTotal.toLocaleString("th-TH")} / ใช้ไป ฿${totalUsed.toLocaleString("th-TH")} (${percentUsed}%)`;
+      } else {
+        // 2. General Store Bill / Bill without contract -> Category Budget or Project Budget Control
+        const activeProjectMap = projectBudgetMap || cachedProjectBudgetMap;
+        if (activeProjectMap) {
+          const pId = String(b["ID Project"] || b.project_id || b.data?.project_id || b.data?.["ID Project"] || "").trim();
+          const pName = String(b["ชื่อ Project"] || b.project_name || b.data?.project_name || b.data?.["ชื่อ Project"] || "").trim();
+
+          const projInfo = (activeProjectMap instanceof Map)
+            ? (activeProjectMap.get(pId) || activeProjectMap.get(pId.toLowerCase()) || activeProjectMap.get(pName) || activeProjectMap.get(pName.toLowerCase()))
+            : (activeProjectMap[pId] || activeProjectMap[pName]);
+
+          if (projInfo) {
+            const billCategory = resolveBillExpenseCategory(b);
+            const catBudget = billCategory && projInfo.catBudgets ? Number(projInfo.catBudgets[billCategory] || 0) : 0;
+
+            if (catBudget > 0) {
+              // Priority 1: Show Specific Category Budget (e.g. งบค่าของ ฿63,000 / ใช้ไป ฿1,500 (2%))
+              const catSpent = Math.max(Number(projInfo.catSpent?.[billCategory] || 0), grossAmt);
+              percentUsed = Math.round((catSpent / catBudget) * 100);
+              budgetSummaryText = `งบ${billCategory}   ฿${catBudget.toLocaleString("th-TH")} / ใช้ไป ฿${catSpent.toLocaleString("th-TH")} (${percentUsed}%)`;
+            } else if (Number(projInfo.budget) > 0) {
+              // Priority 2: Fallback to Overall Project Budget (e.g. งบโครงการ ฿90,000 / ใช้ไป ฿1,500 (2%))
+              const pBudget = Number(projInfo.budget);
+              const pSpent = Math.max(Number(projInfo.spent || 0), grossAmt);
+              percentUsed = Math.round((pSpent / pBudget) * 100);
+              budgetSummaryText = `งบโครงการ   ฿${pBudget.toLocaleString("th-TH")} / ใช้ไป ฿${pSpent.toLocaleString("th-TH")} (${percentUsed}%)`;
+            }
+          }
+        }
+      }
+
       const paidText = `จ่ายแล้ว ${paidNum > 0 ? `฿${paidNum.toLocaleString("th-TH")}` : "0"}`;
       const drawText = `เบิก ฿${grossAmt.toLocaleString("th-TH")}${cleanPercent ? ` (${cleanPercent}%)` : ""}`;
       const contractorSummaryText = `${paidText}   |   ${drawText}`;
@@ -3070,7 +3279,7 @@ export function createMultiBillFlex(
               { type: "text", text: `${vendorLabel}: ${vendorName}`, size: "xxs", color: "#1E293B", weight: "bold", wrap: true }
             ]
           },
-          // Row 3 (Contractor): Single Combined Line (e.g. จ่ายแล้ว 0 | เบิก ฿2,500 (3%))
+          // Row 3 (Contractor): Combined Line (e.g. จ่ายแล้ว 0 | เบิก ฿7,000 (3%))
           ...(isContractor || hasDeduct ? [
             {
               type: "box",
@@ -3082,6 +3291,24 @@ export function createMultiBillFlex(
                   text: contractorSummaryText,
                   size: "xxs",
                   color: "#D97706",
+                  weight: "bold",
+                  wrap: true
+                }
+              ]
+            }
+          ] : []),
+          // Row 3.1 (Contractor Budget): (e.g. งบ ฿20,000 / ใช้ไป ฿7,000 (35%))
+          ...(budgetSummaryText ? [
+            {
+              type: "box",
+              layout: "horizontal",
+              margin: "none",
+              contents: [
+                {
+                  type: "text",
+                  text: budgetSummaryText,
+                  size: "xxs",
+                  color: percentUsed > 100 ? "#DC2626" : "#D97706",
                   weight: "bold",
                   wrap: true
                 }
@@ -3436,7 +3663,8 @@ export function createWithdrawRequesterFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   peopleMap?: Map<string, string> | Record<string, string>,
   bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
-  contractMap?: Map<string, any> | Record<string, any>
+  contractMap?: Map<string, any> | Record<string, any>,
+  projectBudgetMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = (Array.isArray(billsInput) ? billsInput : [billsInput]).map(b => ({
     ...b,
@@ -3446,14 +3674,15 @@ export function createWithdrawRequesterFlex(
   return createMultiBillFlex(bills, {
     title: "📄 แจ้งเตือนรายการตั้งเบิกเงิน",
     mode: "requester"
-  }, peopleMap, bankInfoMap, contractMap);
+  }, peopleMap, bankInfoMap, contractMap, projectBudgetMap);
 }
 
 export function createWithdrawOwnerFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   peopleMap?: Map<string, string> | Record<string, string>,
   bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
-  contractMap?: Map<string, any> | Record<string, any>
+  contractMap?: Map<string, any> | Record<string, any>,
+  projectBudgetMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = (Array.isArray(billsInput) ? billsInput : [billsInput]).map(b => ({
     ...b,
@@ -3463,14 +3692,15 @@ export function createWithdrawOwnerFlex(
   return createMultiBillFlex(bills, {
     title: "📋 คำขออนุมัติเบิกเงิน (ส่งจากผู้เบิก)",
     mode: "owner"
-  }, peopleMap, bankInfoMap, contractMap);
+  }, peopleMap, bankInfoMap, contractMap, projectBudgetMap);
 }
 
 export function createWithdrawApproverFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   peopleMap?: Map<string, string> | Record<string, string>,
   bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
-  contractMap?: Map<string, any> | Record<string, any>
+  contractMap?: Map<string, any> | Record<string, any>,
+  projectBudgetMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = (Array.isArray(billsInput) ? billsInput : [billsInput]).map(b => ({
     ...b,
@@ -3480,14 +3710,15 @@ export function createWithdrawApproverFlex(
   return createMultiBillFlex(bills, {
     title: "✅ รายการอนุมัติสำเร็จ (รอปิดงาน)",
     mode: "approver"
-  }, peopleMap, bankInfoMap, contractMap);
+  }, peopleMap, bankInfoMap, contractMap, projectBudgetMap);
 }
 
 export function createWithdrawCompletedRequesterFlex(
   billsInput: Record<string, any> | Array<Record<string, any>>,
   peopleMap?: Map<string, string> | Record<string, string>,
   bankInfoMap?: Map<string, BankLookupInfo> | Record<string, BankLookupInfo>,
-  contractMap?: Map<string, any> | Record<string, any>
+  contractMap?: Map<string, any> | Record<string, any>,
+  projectBudgetMap?: Map<string, any> | Record<string, any>
 ): Record<string, any> {
   const bills = (Array.isArray(billsInput) ? billsInput : [billsInput]).map(b => ({
     ...b,
@@ -3497,7 +3728,7 @@ export function createWithdrawCompletedRequesterFlex(
   return createMultiBillFlex(bills, {
     title: "🎉 รายการเบิกเงินสำเร็จเรียบร้อย (ปิดงาน)",
     mode: "completed"
-  }, peopleMap, bankInfoMap, contractMap);
+  }, peopleMap, bankInfoMap, contractMap, projectBudgetMap);
 }
 
 export async function getLineQuotaInfo() {
