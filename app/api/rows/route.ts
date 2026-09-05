@@ -11,6 +11,7 @@ import { isVatActive, parseDeductPercent, parseCreditDays } from "@/lib/project-
 import { appendAuditLog, appendRow, bulkAppendRows, deleteRows, getRows, getSystemOptions, invalidateTableCache, updateRow } from "@/lib/db";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getNextBillSequence, syncContractWorkPaidAmount } from "@/lib/supabase-db";
+import { extractMemberPermissions } from "@/lib/user-permissions";
 import type { SheetRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -26,12 +27,9 @@ const NO_CACHE_HEADERS = {
 
 async function verifyDeletePermission(request: NextRequest): Promise<boolean> {
   const empId = request.cookies.get("auth_employee_id")?.value;
-  const canDeleteCookie = request.cookies.get("auth_can_delete")?.value;
+  if (!empId) return false;
 
-  // 1. If explicit cookie set to false or missing employee ID, deny immediately
-  if (canDeleteCookie === "false" || !empId) return false;
-
-  // 2. Direct server-side verification in master_members table
+  // 1. Direct server-side verification in master_members table (Source of Truth)
   try {
     const { data: member } = await supabaseAdmin
       .from("master_members")
@@ -40,13 +38,10 @@ async function verifyDeletePermission(request: NextRequest): Promise<boolean> {
       .maybeSingle();
 
     if (member) {
-      const d = (member.data && typeof member.data === "object") ? member.data : {};
-      const isOwner = member.is_owner ?? d.is_owner ?? (member.role === "Owner" || member.system_role === "Owner");
-      if (isOwner) return true;
-      if (member.can_delete !== undefined && member.can_delete !== null) return Boolean(member.can_delete);
-      if (d.can_delete !== undefined) return Boolean(d.can_delete);
-      const role = member.system_role || member.role || d.role;
-      if (role === "Admin" || role === "Owner") return true;
+      const perms = extractMemberPermissions(member);
+      if (perms.canDelete || perms.isOwner || perms.role === "Owner" || perms.role === "Admin") {
+        return true;
+      }
       return false;
     }
   } catch (e) {

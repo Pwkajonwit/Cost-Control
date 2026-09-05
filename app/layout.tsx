@@ -9,6 +9,8 @@ import { cookies } from "next/headers";
 import { ToastProvider } from "@/components/ToastProvider";
 import { LineAuthProvider } from "@/components/LineAuthProvider";
 import { TopProgressBar } from "@/components/TopProgressBar";
+import { UserPermissionSync } from "@/components/UserPermissionSync";
+import { extractMemberPermissions, findMemberInPeopleRows } from "@/lib/user-permissions";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -51,7 +53,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const role = cookieStore.get("auth_role")?.value;
   const pictureUrl = cookieStore.get("auth_picture_url")?.value;
 
-  const currentUser = employeeId
+  const currentUser: {
+    id: string;
+    name: string;
+    role: string;
+    pictureUrl: string;
+    isOwner?: boolean;
+    canApprove?: boolean;
+    canCloseBill?: boolean;
+    canDelete?: boolean;
+  } | null = employeeId
     ? { id: employeeId, name: name || "", role: role || "User", pictureUrl: pictureUrl || "" }
     : null;
 
@@ -59,6 +70,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (currentUser) {
     try {
       peopleRows = await getRows(TABLES.PEOPLE);
+      if (peopleRows.length > 0) {
+        const matched = findMemberInPeopleRows(peopleRows, currentUser.id);
+        if (matched) {
+          const perms = extractMemberPermissions(matched);
+          currentUser.role = perms.role;
+          currentUser.isOwner = perms.isOwner;
+          currentUser.canApprove = perms.canApprove;
+          currentUser.canCloseBill = perms.canCloseBill;
+          currentUser.canDelete = perms.canDelete;
+          if (perms.displayName) currentUser.name = perms.displayName;
+          if (perms.pictureUrl) currentUser.pictureUrl = perms.pictureUrl;
+        }
+      }
     } catch (e) {
       // Ignore error if people table can't be fetched
     }
@@ -75,6 +99,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <LoginScreen />
             ) : (
               <AppShell peopleRows={peopleRows} currentUser={currentUser}>
+                <UserPermissionSync currentRole={currentUser.role} employeeId={currentUser.id} />
                 {children}
               </AppShell>
             )}

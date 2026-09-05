@@ -4,6 +4,7 @@ import { hydrateBillRows } from "@/lib/formulas";
 import { getRows } from "@/lib/db";
 import { cookies } from "next/headers";
 import { formatBillConditions } from "@/lib/bill-status";
+import { extractMemberPermissions, findMemberInPeopleRows } from "@/lib/user-permissions";
 import type { SheetRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,13 @@ export default async function BillsPage({ searchParams }: BillsPageProps) {
     safeRows(TABLES.PEOPLE),
   ]);
 
+  const matchedUser = findMemberInPeopleRows(peopleRows, authEmpId);
+  const userPerms = matchedUser ? extractMemberPermissions(matchedUser) : null;
+  const effectiveRole = userPerms ? userPerms.role : role;
+  const effectiveCanDelete = userPerms
+    ? (userPerms.canDelete || userPerms.isOwner || effectiveRole === "Owner" || effectiveRole === "Admin")
+    : (canDeleteCookie === "true" || (canDeleteCookie !== "false" && role !== "User" && Boolean(role)));
+
   const sortedRows = sortBillRows(allRows, sort || "latest");
   const rows = nonEmptyRows(sortedRows, columns);
 
@@ -55,10 +63,10 @@ export default async function BillsPage({ searchParams }: BillsPageProps) {
     <BillsDashboardClient
       columns={columns}
       initialRows={rows}
-      isAdmin={canDelete}
+      isAdmin={effectiveCanDelete}
       peopleRows={peopleRows}
       authEmpId={authEmpId}
-      authName={authName}
+      authName={userPerms?.displayName || authName}
       search={search}
       page={page}
       pageSize={pageSize}
