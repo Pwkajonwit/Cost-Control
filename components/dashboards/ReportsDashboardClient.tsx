@@ -31,6 +31,7 @@ import {
   isLaborRow,
   isMaterialOrExpenseRow,
 } from "@/lib/reports";
+import { isPaidBill, isCommittedBill } from "@/lib/bill-status";
 
 type ReportsDashboardClientProps = {
   initialDataRows: SheetRow[];
@@ -625,6 +626,22 @@ export function ReportsDashboardClient({
   }, [storeRows]);
 
   // Overall Financial Totals
+  const paidRows = useMemo(() => {
+    return searchFilteredRows.filter(isPaidBill);
+  }, [searchFilteredRows]);
+
+  const pendingRows = useMemo(() => {
+    return searchFilteredRows.filter((r) => !isPaidBill(r) && isCommittedBill(r));
+  }, [searchFilteredRows]);
+
+  const totalPaidTransferAll = useMemo(() => {
+    return paidRows.reduce((sum, r) => sum + getRowTransferAmount(r), 0);
+  }, [paidRows]);
+
+  const totalPendingTransferAll = useMemo(() => {
+    return pendingRows.reduce((sum, r) => sum + getRowTransferAmount(r), 0);
+  }, [pendingRows]);
+
   const totalTransferAll = useMemo(() => {
     return searchFilteredRows.reduce((sum, r) => sum + getRowTransferAmount(r), 0);
   }, [searchFilteredRows]);
@@ -645,12 +662,12 @@ export function ReportsDashboardClient({
   // Entrepreneur Project Margin Computations
   const projectMarginResults = useMemo(() => {
     const contract = parseFloat(calcContractValue) || 0;
-    const spent = totalTransferAll;
+    const spent = totalPaidTransferAll;
     const remaining = contract - spent;
     const burnRate = contract > 0 ? (spent / contract) * 100 : 0;
     const estimatedMargin = contract > 0 ? ((contract - spent) / contract) * 100 : 0;
     return { contract, spent, remaining, burnRate, estimatedMargin };
-  }, [calcContractValue, totalTransferAll]);
+  }, [calcContractValue, totalPaidTransferAll]);
 
   async function refreshData() {
     setRefreshing(true);
@@ -763,16 +780,21 @@ export function ReportsDashboardClient({
         {/* Card 1: Net Transfer */}
         <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-emerald-800 font-medium">ยอดโอนเงินสุทธิ (Net Paid)</span>
+            <span className="text-xs text-emerald-800 font-medium">ยอดโอนเงินจริง (Net Paid)</span>
             <div className="w-6 h-6 rounded-md bg-emerald-200/80 text-emerald-800 flex items-center justify-center">
               <Wallet size={14} />
             </div>
           </div>
           <div className="text-lg sm:text-xl font-bold text-emerald-950 mt-1">
-            {money(totalTransferAll)}
+            {money(totalPaidTransferAll)}
           </div>
           <div className="text-[11px] text-emerald-700 mt-0.5">
-            รวม {searchFilteredRows.length} รายการบิล
+            เบิกแล้ว {paidRows.length} รายการ
+            {pendingRows.length > 0 && (
+              <span className="text-amber-700 font-normal ml-1">
+                (รอเบิก {money(totalPendingTransferAll)})
+              </span>
+            )}
           </div>
         </div>
 
@@ -909,8 +931,13 @@ export function ReportsDashboardClient({
                 </div>
                 <div className="flex-1">
                   <label className="text-xs text-slate-500 block mb-1">เบิกจ่ายจริงแล้วสะสม</label>
-                  <div className="w-full bg-white border border-slate-200 text-emerald-700 text-xs font-medium px-2.5 py-1.5 rounded-lg">
-                    {money(projectMarginResults.spent)}
+                  <div className="w-full bg-white border border-slate-200 text-emerald-700 text-xs font-medium px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+                    <span>{money(projectMarginResults.spent)}</span>
+                    {totalPendingTransferAll > 0 && (
+                      <span className="text-[10px] text-amber-600 font-normal">
+                        (รอเบิก {money(totalPendingTransferAll)})
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

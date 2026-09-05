@@ -2513,9 +2513,12 @@ export async function getContractWorkMap(forceRefresh = false): Promise<Map<stri
 export type ProjectBudgetLookupInfo = {
   budget: number;
   spent: number;
+  paidSpent: number;
   name: string;
   catBudgets?: Record<string, number>;
   catSpent?: Record<string, number>;
+  catPaidSpent?: Record<string, number>;
+  paidBillIds?: Set<string>;
 };
 
 const EXPENSE_CATEGORIES_LIST = [
@@ -2573,21 +2576,26 @@ export async function getProjectBudgetMap(forceRefresh = false): Promise<Map<str
   try {
     const [{ data: projects }, { data: bills }, { data: allocOpt }] = await Promise.all([
       supabaseAdmin.from("projects").select("id, name, budget, data"),
-      supabaseAdmin.from("bills").select("project_id, project_name, amount, status, data"),
+      supabaseAdmin.from("bills").select("id, project_id, project_name, amount, status, data"),
       supabaseAdmin.from("system_options").select("data").eq("id", "project_budget_allocations").maybeSingle()
     ]);
 
     const budgetAllocations: Record<string, Record<string, any>> = (allocOpt?.data && typeof allocOpt.data === "object") ? allocOpt.data : {};
 
     const spentByProject = new Map<string, number>();
+    const paidByProject = new Map<string, number>();
     const catSpentByProject = new Map<string, Record<string, number>>();
+    const catPaidByProject = new Map<string, Record<string, number>>();
+    const paidBillIdsByProject = new Map<string, Set<string>>();
 
     if (bills && bills.length > 0) {
       for (const b of bills) {
         const d = (b.data && typeof b.data === "object") ? b.data : {};
         const innerData = (d.data && typeof d.data === "object") ? d.data : {};
-        const st = String(b.status || d.status || d["สถานะ"] || innerData["สถานะ"] || "").trim();
+        const st = String(b.status || d.status || d["สถานะ"] || innerData["สถานะ"] || "").trim().toLowerCase();
         if (st === "ยกเลิก" || st === "ไม่อนุมัติ") continue;
+
+        const isPaid = st.includes("เบิกแล้ว") || st === "paid" || st === "withdrawn";
 
         const pId = String(b.project_id || d.project_id || d["ID Project"] || innerData["ID Project"] || "").trim();
         const pName = String(b.project_name || d.project_name || d["ชื่อ Project"] || innerData["ชื่อ Project"] || "").trim();
@@ -2596,21 +2604,39 @@ export async function getProjectBudgetMap(forceRefresh = false): Promise<Map<str
         const primaryKey = pId || pName;
         if (!primaryKey) continue;
 
-        spentByProject.set(primaryKey, (spentByProject.get(primaryKey) || 0) + amt);
+        const billKey = String(b.id || d.id || d["ลำดับ"] || innerData["ลำดับ"] || "").trim();
+        const targetKeys = Array.from(new Set([pId, pName].filter(Boolean)));
 
-        if (!catSpentByProject.has(primaryKey)) {
-          catSpentByProject.set(primaryKey, { ค่าของ: 0, ค่าแรง: 0, พนักงาน: 0, น้ำมัน: 0, ซ่อมรถ: 0, เครื่องจักร: 0, เครื่องมือ: 0, อื่นๆ: 0 });
-        }
-        const cs = catSpentByProject.get(primaryKey)!;
+        for (const k of targetKeys) {
+          spentByProject.set(k, (spentByProject.get(k) || 0) + amt);
+          if (isPaid) {
+            paidByProject.set(k, (paidByProject.get(k) || 0) + amt);
+            if (!paidBillIdsByProject.has(k)) {
+              paidBillIdsByProject.set(k, new Set<string>());
+            }
+            if (billKey) paidBillIdsByProject.get(k)!.add(billKey);
+          }
 
-        for (const cat of EXPENSE_CATEGORIES_LIST) {
-          const directAmt = Number((b as any)[cat] || d[cat] || innerData[cat] || 0);
-          if (directAmt > 0) {
-            cs[cat] += directAmt;
-          } else {
-            const rawCat = String((b as any).category || d["ประเภท"] || innerData["ประเภท"] || "").trim();
-            if (rawCat.includes(cat)) {
-              cs[cat] += amt;
+          if (!catSpentByProject.has(k)) {
+            catSpentByProject.set(k, { ค่าของ: 0, ค่าแรง: 0, พนักงาน: 0, น้ำมัน: 0, ซ่อมรถ: 0, เครื่องจักร: 0, เครื่องมือ: 0, อื่นๆ: 0 });
+          }
+          if (!catPaidByProject.has(k)) {
+            catPaidByProject.set(k, { ค่าของ: 0, ค่าแรง: 0, พนักงาน: 0, น้ำมัน: 0, ซ่อมรถ: 0, เครื่องจักร: 0, เครื่องมือ: 0, อื่นๆ: 0 });
+          }
+          const cs = catSpentByProject.get(k)!;
+          const cp = catPaidByProject.get(k)!;
+
+          for (const cat of EXPENSE_CATEGORIES_LIST) {
+            const directAmt = Number((b as any)[cat] || d[cat] || innerData[cat] || 0);
+            if (directAmt > 0) {
+              cs[cat] += directAmt;
+              if (isPaid) cp[cat] += directAmt;
+            } else {
+              const rawCat = String((b as any).category || d["ประเภท"] || innerData["ประเภท"] || "").trim();
+              if (rawCat.includes(cat)) {
+                cs[cat] += amt;
+                if (isPaid) cp[cat] += amt;
+              }
             }
           }
         }
@@ -2648,9 +2674,12 @@ export async function getProjectBudgetMap(forceRefresh = false): Promise<Map<str
         }
 
         const spent = (id ? spentByProject.get(id) : 0) || (name ? spentByProject.get(name) : 0) || 0;
+        const paidSpent = (id ? paidByProject.get(id) : 0) || (name ? paidByProject.get(name) : 0) || 0;
         const catSpent = (id ? catSpentByProject.get(id) : null) || (name ? catSpentByProject.get(name) : null) || { ค่าของ: 0, ค่าแรง: 0, พนักงาน: 0, น้ำมัน: 0, ซ่อมรถ: 0, เครื่องจักร: 0, เครื่องมือ: 0, อื่นๆ: 0 };
+        const catPaidSpent = (id ? catPaidByProject.get(id) : null) || (name ? catPaidByProject.get(name) : null) || { ค่าของ: 0, ค่าแรง: 0, พนักงาน: 0, น้ำมัน: 0, ซ่อมรถ: 0, เครื่องจักร: 0, เครื่องมือ: 0, อื่นๆ: 0 };
+        const paidBillIds = (id ? paidBillIdsByProject.get(id) : null) || (name ? paidBillIdsByProject.get(name) : null) || new Set<string>();
 
-        const info: ProjectBudgetLookupInfo = { budget, spent, name, catBudgets, catSpent };
+        const info: ProjectBudgetLookupInfo = { budget, spent, paidSpent, name, catBudgets, catSpent, catPaidSpent, paidBillIds };
         if (id) {
           pMap.set(id, info);
           pMap.set(id.toLowerCase(), info);
@@ -3220,17 +3249,28 @@ export function createMultiBillFlex(
             const billCategory = resolveBillExpenseCategory(b);
             const catBudget = billCategory && projInfo.catBudgets ? Number(projInfo.catBudgets[billCategory] || 0) : 0;
 
+            const bStatus = String(b["สถานะ"] || b.status || b.data?.["สถานะ"] || b.data?.status || "").trim().toLowerCase();
+            const isBillPaid = mode === "completed" || bStatus.includes("เบิกแล้ว") || bStatus === "paid" || bStatus === "withdrawn";
+            const billKey = String(b.id || b._sheetRow || b["ลำดับ"] || b.data?.id || b.data?.["ลำดับ"] || "").trim();
+            const alreadyCountedInPaid = Boolean(billKey && projInfo.paidBillIds && projInfo.paidBillIds.has(billKey));
+
             if (catBudget > 0) {
-              // Priority 1: Show Specific Category Budget (e.g. งบค่าของ ฿63,000 / ใช้ไป ฿1,500 (2%))
-              const catSpent = Math.max(Number(projInfo.catSpent?.[billCategory] || 0), grossAmt);
-              percentUsed = Math.round((catSpent / catBudget) * 100);
-              budgetSummaryText = `งบ${billCategory}   ฿${catBudget.toLocaleString("th-TH")} / ใช้ไป ฿${catSpent.toLocaleString("th-TH")} (${percentUsed}%)`;
+              // Priority 1: Show Specific Category Budget (e.g. งบค่าของ ฿63,000 / เบิกแล้ว ฿0 (0%))
+              let catPaid = Number(projInfo.catPaidSpent?.[billCategory] || 0);
+              if (isBillPaid && !alreadyCountedInPaid) {
+                catPaid += grossAmt;
+              }
+              percentUsed = Math.round((catPaid / catBudget) * 100);
+              budgetSummaryText = `งบ${billCategory}   ฿${catBudget.toLocaleString("th-TH")} / เบิกแล้ว ฿${catPaid.toLocaleString("th-TH")} (${percentUsed}%)`;
             } else if (Number(projInfo.budget) > 0) {
-              // Priority 2: Fallback to Overall Project Budget (e.g. งบโครงการ ฿90,000 / ใช้ไป ฿1,500 (2%))
+              // Priority 2: Fallback to Overall Project Budget (e.g. งบโครงการ ฿90,000 / เบิกแล้ว ฿0 (0%))
               const pBudget = Number(projInfo.budget);
-              const pSpent = Math.max(Number(projInfo.spent || 0), grossAmt);
-              percentUsed = Math.round((pSpent / pBudget) * 100);
-              budgetSummaryText = `งบโครงการ   ฿${pBudget.toLocaleString("th-TH")} / ใช้ไป ฿${pSpent.toLocaleString("th-TH")} (${percentUsed}%)`;
+              let pPaid = Number(projInfo.paidSpent || 0);
+              if (isBillPaid && !alreadyCountedInPaid) {
+                pPaid += grossAmt;
+              }
+              percentUsed = Math.round((pPaid / pBudget) * 100);
+              budgetSummaryText = `งบโครงการ   ฿${pBudget.toLocaleString("th-TH")} / เบิกแล้ว ฿${pPaid.toLocaleString("th-TH")} (${percentUsed}%)`;
             }
           }
         }

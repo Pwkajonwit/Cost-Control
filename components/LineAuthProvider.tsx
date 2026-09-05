@@ -323,18 +323,18 @@ export function LineAuthProvider({
               </p>
             </div>
 
-            <form onSubmit={handleRegisterSubmit} className="space-y-3">
+            <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
               <div>
-                <label className="text-xs text-slate-700 block mb-1.5 flex items-center gap-1">
-                  <Phone size={13} className="text-slate-500" />
+                <label className="text-sm font-bold text-slate-800 block mb-1.5 flex items-center gap-1.5">
+                  <Phone size={16} className="text-emerald-700" />
                   <span>เบอร์โทรศัพท์ *</span>
                 </label>
                 <input
                   type="tel"
-                  placeholder="เช่น 0812345678"
+                  placeholder="ระบุเบอร์โทรศัพท์ เช่น 0812345678"
                   value={phoneInput}
                   onChange={e => setPhoneInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
+                  className="w-full px-4 py-3 bg-slate-50/80 border-2 border-slate-300 rounded-xl text-base sm:text-lg font-mono font-bold tracking-wider text-slate-900 placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-600 transition-all shadow-inner"
                   required
                   autoFocus
                 />

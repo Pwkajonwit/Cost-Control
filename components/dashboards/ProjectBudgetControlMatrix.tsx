@@ -30,6 +30,7 @@ import {
 import { money, toNumber } from "@/lib/numbers";
 import type { SheetRow } from "@/lib/types";
 import { getRowAmount, getRowTransferAmount } from "@/lib/reports";
+import { isPaidBill, isCommittedBill } from "@/lib/bill-status";
 
 export type ProjectBudgetControlMatrixProps = {
   projectRows: SheetRow[];
@@ -167,23 +168,30 @@ export function ProjectBudgetControlMatrix({
         });
       });
 
-      const actualSpent = matchingBills.reduce((sum, b) => sum + getRowTransferAmount(b), 0);
+      const paidMatchingBills = matchingBills.filter(isPaidBill);
+      const pendingMatchingBills = matchingBills.filter((b) => !isPaidBill(b) && isCommittedBill(b));
+
+      const actualSpent = paidMatchingBills.reduce((sum, b) => sum + getRowTransferAmount(b), 0);
+      const pendingSpent = pendingMatchingBills.reduce((sum, b) => sum + getRowTransferAmount(b), 0);
       const remaining = budgetCap > 0 ? budgetCap - actualSpent : 0;
       const usagePercent = budgetCap > 0 ? Number(((actualSpent / budgetCap) * 100).toFixed(1)) : 0;
       const isOver = budgetCap > 0 && actualSpent > budgetCap;
-      const isWarning = budgetCap > 0 && !isOver && usagePercent >= 85;
+      const isWarning = budgetCap > 0 && !isOver && (usagePercent >= 85 || (actualSpent + pendingSpent) > budgetCap);
 
       return {
         ...cat,
         budgetCap,
         actualSpent,
+        pendingSpent,
         remaining,
         usagePercent,
         isOver,
         isWarning,
-        matchingBills
+        matchingBills,
+        paidMatchingBills,
+        pendingMatchingBills,
       };
-    }).filter(c => c.budgetCap > 0 || c.actualSpent > 0);
+    }).filter(c => c.budgetCap > 0 || c.actualSpent > 0 || c.pendingSpent > 0);
   }, [selectedProject, projectBills, categoryMap]);
 
   const filteredCategoryAnalysis = useMemo(() => {
@@ -239,7 +247,10 @@ export function ProjectBudgetControlMatrix({
 
   const totalProjectCap = selectedProject ? toNumber(selectedProject["งบไม่เกิน"] || selectedProject["ยอดงาน"]) : 0;
   const totalCategoryCapAllocated = categoryAnalysis.reduce((sum, c) => sum + c.budgetCap, 0);
-  const totalActualSpent = projectBills.reduce((sum, b) => sum + getRowTransferAmount(b), 0);
+  const paidProjectBills = useMemo(() => projectBills.filter(isPaidBill), [projectBills]);
+  const pendingProjectBills = useMemo(() => projectBills.filter(b => !isPaidBill(b) && isCommittedBill(b)), [projectBills]);
+  const totalActualSpent = useMemo(() => paidProjectBills.reduce((sum, b) => sum + getRowTransferAmount(b), 0), [paidProjectBills]);
+  const totalPendingSpent = useMemo(() => pendingProjectBills.reduce((sum, b) => sum + getRowTransferAmount(b), 0), [pendingProjectBills]);
   const overallUsagePercent = totalProjectCap > 0 ? Number(((totalActualSpent / totalProjectCap) * 100).toFixed(1)) : 0;
 
   return (
@@ -358,7 +369,12 @@ export function ProjectBudgetControlMatrix({
           </div>
           <div>
             <div className="text-xl font-normal text-emerald-800">{money(totalActualSpent)} ฿</div>
-            <div className="text-xs text-slate-500 mt-0.5 font-normal">จากรายการบิลตั้งเบิก {projectBills.length} บิล</div>
+            <div className="text-xs text-slate-500 mt-0.5 font-normal">
+              จากบิลเบิกแล้ว {paidProjectBills.length} บิล
+              {totalPendingSpent > 0 && (
+                <span className="text-amber-600 ml-1">(รอเบิก {money(totalPendingSpent)} ฿)</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -674,7 +690,12 @@ export function ProjectBudgetControlMatrix({
 
                           {/* Actual Spend */}
                           <td className="py-2.5 px-3.5 text-right font-normal text-emerald-800">
-                            {cat.actualSpent > 0 ? `${money(cat.actualSpent)} ฿` : "0 ฿"}
+                            <div>{cat.actualSpent > 0 ? `${money(cat.actualSpent)} ฿` : "0 ฿"}</div>
+                            {cat.pendingSpent > 0 && (
+                              <div className="text-[10px] text-amber-600 font-normal">
+                                (รอเบิก {money(cat.pendingSpent)} ฿)
+                              </div>
+                            )}
                           </td>
 
                           {/* Remaining / Over */}

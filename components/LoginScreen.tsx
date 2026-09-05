@@ -21,7 +21,7 @@ export function LoginScreen() {
     if (cached) {
       try {
         setCompanySettings((prev) => ({ ...prev, ...JSON.parse(cached) }));
-      } catch (e) {}
+      } catch (e) { }
     }
 
     fetch("/api/company-settings")
@@ -31,7 +31,7 @@ export function LoginScreen() {
           setCompanySettings((prev) => ({ ...prev, ...json.settings }));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,7 +69,7 @@ export function LoginScreen() {
   return (
     <div className="min-h-screen bg-[#062e2b] flex items-center justify-center p-4 font-sans text-xs">
       {/* Compact Clean Card */}
-      <div className="w-full max-w-sm bg-white rounded-lg p-6 shadow-2xl space-y-5 border border-slate-100">
+      <div className="w-full max-w-[420px] bg-white rounded-2xl p-6 sm:p-7 shadow-2xl space-y-5 border border-slate-100">
         {/* Header Branding */}
         <div className="text-center space-y-2">
           <div className="mx-auto w-12 h-12 flex items-center justify-center">
@@ -86,24 +86,24 @@ export function LoginScreen() {
             )}
           </div>
           <div>
-            <h1 className="text-lg text-slate-900 leading-tight">
+            <h1 className="text-xl font-extrabold text-slate-900 leading-tight">
               {companySettings.companyName || "CostLab Executive"}
             </h1>
-            <p className="text-xs text-slate-500 font-medium">
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
               {companySettings.companySubTitle || "ระบบบริหารและติดตามงบประมาณก่อสร้าง"}
             </p>
           </div>
         </div>
 
         {/* Form Input */}
-        <form onSubmit={handleSubmit} className="space-y-3.5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="phoneNumber" className="block text-xs text-slate-700 mb-1">
+            <label htmlFor="phoneNumber" className="block text-sm text-slate-800 mb-1.5">
               เบอร์โทรศัพท์ (Phone Number)
             </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                <Phone size={15} />
+              <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none text-slate-400">
+                <Phone size={20} />
               </div>
               <input
                 id="phoneNumber"
@@ -116,16 +116,17 @@ export function LoginScreen() {
                   setPhoneNumber(e.target.value);
                   if (error) setError("");
                 }}
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono focus:outline-none focus:bg-white focus:border-[#0b3531] text-xs transition"
-                placeholder="ระบุเบอร์โทรศัพท์..."
+                className="w-full pl-11 pr-4 py-2 bg-slate-50/90 border-2 border-slate-300 rounded-xl text-slate-900 font-mono text-lg sm:text-lg font-normal tracking-wider placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-[#0b3531] focus:ring-4 focus:ring-emerald-500/15 shadow-inner transition-all"
+                placeholder="ระบุเบอร์โทรศัพท์ เช่น 0812345678"
+                autoFocus
               />
             </div>
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs flex items-center gap-1.5">
-              <AlertCircle size={14} className="text-rose-600 shrink-0" />
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-medium flex items-center gap-2">
+              <AlertCircle size={16} className="text-rose-600 shrink-0" />
               <span>{error}</span>
             </div>
           )}
@@ -134,16 +135,16 @@ export function LoginScreen() {
           <button
             type="submit"
             disabled={loading || !phoneNumber.trim()}
-            className="w-full py-2 px-4 bg-[#0b3531] hover:bg-[#062e2b] text-white rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs shadow-sm"
+            className="w-full py-3 px-5 bg-[#0b3531] hover:bg-[#062e2b] text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 text-sm shadow-md hover:shadow-lg active:scale-[0.99]"
           >
             {loading ? (
               <>
-                <RefreshCw size={14} className="animate-spin text-[#d4f54e]" />
+                <RefreshCw size={16} className="animate-spin text-[#d4f54e]" />
                 <span>กำลังเข้าสู่ระบบ...</span>
               </>
             ) : (
               <>
-                <LogIn size={14} className="text-[#d4f54e]" />
+                <LogIn size={16} className="text-[#d4f54e]" />
                 <span>เข้าสู่ระบบ</span>
               </>
             )}
@@ -174,11 +175,7 @@ export function LoginScreen() {
           💡 เข้าใช้งานครั้งแรก ป๊อปอัปจะแสดงข้อมูลโปรไฟล์ LINE ของคุณ และให้ระบุเบอร์โทรศัพท์เพียงครั้งเดียวเพื่อผูกเข้ากับบัญชีในระบบ
         </p>
 
-        {/* Footer Security Note */}
-        <div className="pt-1 text-center text-xs text-slate-400 flex items-center justify-center gap-1">
-          <ShieldCheck size={12} className="text-emerald-600" />
-          <span>ระบบยืนยันตัวตนพนักงาน (6. ชื่อพนักงาน)</span>
-        </div>
+
       </div>
     </div>
   );

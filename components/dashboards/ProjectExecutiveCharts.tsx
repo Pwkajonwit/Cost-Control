@@ -5,6 +5,7 @@ import { BarChart3, LineChart, PieChart, TrendingUp } from "lucide-react";
 import { money, toNumber } from "@/lib/numbers";
 import type { SheetRow } from "@/lib/types";
 import { getRowAmount, getRowCategory, getRowCategoryAmount } from "@/lib/reports";
+import { isPaidBill } from "@/lib/bill-status";
 
 type ProjectExecutiveChartsProps = {
   projectRows: SheetRow[];
@@ -68,14 +69,18 @@ export function ProjectExecutiveCharts({
     return rows;
   }, [dataRows, selectedProjectId, selectedCategory]);
 
+  const paidBills = useMemo(() => {
+    return activeBills.filter(isPaidBill);
+  }, [activeBills]);
+
   // 2. Compute 8 Real Categories: Budget vs Actual Spending
   const categoryStats = useMemo(() => {
     const totalBudgetCap = activeProjects.reduce((sum, p) => sum + (Number(p["งบไม่เกิน"]) || 0), 0);
-    const totalSpentAll = activeBills.reduce((sum, r) => sum + getRowAmount(r), 0);
+    const totalSpentAll = paidBills.reduce((sum, r) => sum + getRowAmount(r), 0);
 
     return REAL_8_CATEGORIES.map((cat) => {
-      // Calculate exact actual spent from bills in this category
-      const spent = activeBills.reduce((sum, r) => sum + getRowCategoryAmount(r, cat.shortLabel), 0);
+      // Calculate exact actual spent from paid bills in this category
+      const spent = paidBills.reduce((sum, r) => sum + getRowCategoryAmount(r, cat.shortLabel), 0);
 
       // Extract specific budget cap from project table if available
       let budget = activeProjects.reduce((sum, p) => {
@@ -111,7 +116,7 @@ export function ProjectExecutiveCharts({
         percentOfTotal,
       };
     });
-  }, [activeProjects, activeBills]);
+  }, [activeProjects, paidBills]);
 
   // Max value for 8 Categories Chart Y-Axis
   const maxCategoryValue = useMemo(() => {
@@ -142,15 +147,15 @@ export function ProjectExecutiveCharts({
   }, [categoryStats]);
 
   const totalSpentAmount = useMemo(() => {
-    return activeBills.reduce((sum, r) => sum + getRowAmount(r), 0);
-  }, [activeBills]);
+    return paidBills.reduce((sum, r) => sum + getRowAmount(r), 0);
+  }, [paidBills]);
 
   // 4. Compute Monthly S-Curve Cumulative Spending
   const monthlySCurveData = useMemo(() => {
     const monthsMap: Record<number, number> = {};
     for (let i = 0; i < 12; i++) monthsMap[i] = 0;
 
-    activeBills.forEach((r) => {
+    paidBills.forEach((r) => {
       const dateStr = String(r["ว/ด/ป"] || r["วันที่"] || "").trim();
       const match = dateStr.match(/^(\d{4})[-/.](0?[1-9]|1[0-2])/);
       if (match) {
@@ -185,14 +190,14 @@ export function ProjectExecutiveCharts({
         planCumulative: cumulativePlan,
       };
     });
-  }, [activeBills, activeProjects]);
+  }, [paidBills, activeProjects]);
 
   const maxSCurveValue = useMemo(() => {
     const totalBudget = activeProjects.reduce((sum, p) => sum + (Number(p["งบไม่เกิน"]) || 0), 0);
-    const totalSpent = activeBills.reduce((sum, r) => sum + getRowAmount(r), 0);
+    const totalSpent = paidBills.reduce((sum, r) => sum + getRowAmount(r), 0);
     const maxVal = Math.max(totalBudget, totalSpent, 100000);
     return Math.ceil(maxVal / 100000) * 100000;
-  }, [activeProjects, activeBills]);
+  }, [activeProjects, paidBills]);
 
   return (
     <div className="space-y-4 font-sans">

@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { money, toNumber } from "@/lib/numbers";
 import type { SheetRow } from "@/lib/types";
+import { isPaidBill, isCommittedBill } from "@/lib/bill-status";
 import {
   filterBillsByProject,
   getRowAmount,
@@ -243,13 +244,17 @@ export function ProjectAnalyticsDashboardClient({
       const pRows = dataRows.filter(r => String(r["ID Project"] || "").trim() === id);
 
       const budgetCap = Number(p["งบไม่เกิน"]) || 0;
-      const spent = pRows.reduce((sum, r) => sum + getRowAmount(r), 0);
-      const transfer = pRows.reduce((sum, r) => sum + getRowTransferAmount(r), 0);
+      const paidRows = pRows.filter(isPaidBill);
+      const pendingRows = pRows.filter((r) => !isPaidBill(r) && isCommittedBill(r));
+      const spent = paidRows.reduce((sum, r) => sum + getRowAmount(r), 0);
+      const pendingSpent = pendingRows.reduce((sum, r) => sum + getRowAmount(r), 0);
+      const totalCommitted = spent + pendingSpent;
+      const transfer = paidRows.reduce((sum, r) => sum + getRowTransferAmount(r), 0);
       const remaining = budgetCap - spent;
       const burnRate = budgetCap > 0 ? (spent / budgetCap) * 100 : 0;
 
-      const mat = pRows.filter(r => getRowCategory(r).includes("ค่าของ")).reduce((sum, r) => sum + getRowAmount(r), 0);
-      const lab = pRows.filter(r => getRowCategory(r).includes("ค่าแรง")).reduce((sum, r) => sum + getRowAmount(r), 0);
+      const mat = paidRows.filter(r => getRowCategory(r).includes("ค่าของ")).reduce((sum, r) => sum + getRowAmount(r), 0);
+      const lab = paidRows.filter(r => getRowCategory(r).includes("ค่าแรง")).reduce((sum, r) => sum + getRowAmount(r), 0);
       const oth = spent - (mat + lab);
 
       return {
@@ -258,6 +263,8 @@ export function ProjectAnalyticsDashboardClient({
         displayName: name ? `${id} - ${name}` : id,
         budgetCap,
         spent,
+        pendingSpent,
+        totalCommitted,
         transfer,
         remaining,
         burnRate,
@@ -265,6 +272,7 @@ export function ProjectAnalyticsDashboardClient({
         lab,
         oth,
         billCount: pRows.length,
+        paidBillCount: paidRows.length,
         rows: pRows,
       };
     }).sort((a, b) => b.budgetCap - a.budgetCap);
@@ -361,9 +369,9 @@ export function ProjectAnalyticsDashboardClient({
   }
 
   function handleExportCSV() {
-    let csvContent = "\uFEFFรหัสโครงการ,ชื่อโครงการ,งบประมาณตั้งไว้,ค่าของ,ค่าแรง,เบิกจ่ายจริง,งบคงเหลือ,Burn Rate (%)\n";
+    let csvContent = "\uFEFFรหัสโครงการ,ชื่อโครงการ,งบประมาณตั้งไว้,ค่าของ(เบิกแล้ว),ค่าแรง(เบิกแล้ว),เบิกจ่ายจริง,รอเบิก,งบคงเหลือ,Burn Rate (%)\n";
     projectBreakdown.forEach((p) => {
-      csvContent += `"${p.id}","${p.name}",${p.budgetCap},${p.mat},${p.lab},${p.spent},${p.remaining},${p.burnRate.toFixed(1)}%\n`;
+      csvContent += `"${p.id}","${p.name}",${p.budgetCap},${p.mat},${p.lab},${p.spent},${p.pendingSpent},${p.remaining},${p.burnRate.toFixed(1)}%\n`;
     });
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -755,7 +763,7 @@ export function ProjectAnalyticsDashboardClient({
                       <th className="py-2.5 px-3.5 text-right border-r border-slate-200">งบประมาณตั้งไว้</th>
                       <th className="py-2.5 px-3.5 text-right border-r border-slate-200 text-emerald-900 bg-emerald-50/60">ค่าของ</th>
                       <th className="py-2.5 px-3.5 text-right border-r border-slate-200 text-indigo-900 bg-indigo-50/60">ค่าแรง</th>
-                      <th className="py-2.5 px-3.5 text-right border-r border-slate-200">เบิกจ่ายรวม</th>
+                      <th className="py-2.5 px-3.5 text-right border-r border-slate-200">เบิกจ่ายจริง</th>
                       <th className="py-2.5 px-3.5 text-right border-r border-slate-200">งบคงเหลือ</th>
                       <th className="py-2.5 px-3.5 text-center border-r border-slate-200">% Burn Rate</th>
                       <th className="py-2.5 px-3.5 text-center border-r border-slate-200">สถานะ</th>
@@ -777,7 +785,12 @@ export function ProjectAnalyticsDashboardClient({
                           {money(p.lab)}
                         </td>
                         <td className="py-2.5 px-3.5 text-right font-mono font-semibold text-slate-900 border-r border-slate-200">
-                          {money(p.spent)}
+                          <div>{money(p.spent)}</div>
+                          {p.pendingSpent > 0 && (
+                            <div className="text-[10px] text-amber-600 font-normal">
+                              (รอเบิก {money(p.pendingSpent)})
+                            </div>
+                          )}
                         </td>
                         <td className={`py-2.5 px-3.5 text-right font-mono font-semibold border-r border-slate-200 ${
                           p.remaining >= 0 ? "text-emerald-700" : "text-rose-600"

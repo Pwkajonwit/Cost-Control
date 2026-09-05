@@ -96,6 +96,14 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
     return projects.reduce((sum, p) => sum + toNumber(p["งบไม่เกิน"]), 0);
   }, [projects]);
 
+  const totalPaid = useMemo(() => {
+    return projects.reduce((sum, p) => sum + toNumber(p["เงินจ่ายแล้ว"]), 0);
+  }, [projects]);
+
+  const totalPending = useMemo(() => {
+    return projects.reduce((sum, p) => sum + toNumber(p["หนี้สินรอจ่าย"]), 0);
+  }, [projects]);
+
   const totalSpent = useMemo(() => {
     return projects.reduce((sum, p) => sum + toNumber(p["รวม ALL"]), 0);
   }, [projects]);
@@ -153,16 +161,21 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
             </div>
           </div>
 
-          {/* Total Spent vs Budget */}
+          {/* Total Paid vs Budget */}
           <div className="col-span-2 sm:col-span-1 flex items-center gap-2 pt-2 lg:pt-0 border-t sm:border-t-0 border-slate-100">
             <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
               <Wallet size={15} />
             </span>
             <div className="min-w-0">
-              <div className="text-xs text-indigo-600 truncate">ยอดเบิกจ่ายรวม</div>
+              <div className="text-xs text-indigo-600 truncate">ยอดเบิกจ่ายจริง</div>
               <div className="text-sm sm:text-base text-slate-900 truncate">
-                {money(totalSpent)} <span className="text-xs font-normal text-slate-400">/ {money(totalBudget)}</span>
+                {money(totalPaid)} <span className="text-xs font-normal text-slate-400">/ {money(totalBudget)}</span>
               </div>
+              {totalPending > 0 && (
+                <div className="text-[10px] text-amber-600 truncate">
+                  (รอเบิก {money(totalPending)})
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -246,13 +259,14 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
             const company = String(p["บริษัท"] || p.company || "-");
             const owner = String(p["รับผิดชอบ"] || p.responsible_person || "-");
 
-            const spent = toNumber(p["รวม ALL"]);
+            const paid = toNumber(p["เงินจ่ายแล้ว"]);
+            const pending = toNumber(p["หนี้สินรอจ่าย"]);
             const budget = toNumber(p["งบไม่เกิน"]);
-            const remaining = budget - spent;
+            const remaining = budget - paid;
             const revenue = toNumber(p["ยอดงาน"]) || budget;
-            const profit = toNumber(p["กำไรขั้นต้น"]) || (revenue - spent);
+            const profit = toNumber(p["กำไรขั้นต้น"]) || (revenue - paid);
             const margin = toNumber(p["อัตรากำไร"]) || (revenue > 0 ? (profit / revenue) * 100 : 0);
-            const percentUsed = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
+            const percentUsed = budget > 0 ? Math.min(100, Math.round((paid / budget) * 100)) : 0;
 
             const colorInfo = getProjectColorInfo(p.color);
 
@@ -289,7 +303,14 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
                 {/* Financial Progress Strip */}
                 <div className="bg-slate-50 p-2 rounded-lg space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">เบิกแล้ว: <strong className="text-slate-900">{money(spent)}</strong></span>
+                    <span className="text-slate-500">
+                      เบิกแล้ว: <strong className="text-slate-900">{money(paid)}</strong>
+                      {pending > 0 && (
+                        <span className="text-[10px] text-amber-600 font-normal ml-1">
+                          (รอเบิก {money(pending)})
+                        </span>
+                      )}
+                    </span>
                     <span className="text-slate-400">งบ: <strong>{money(budget)}</strong></span>
                   </div>
                   {budget > 0 && (
@@ -339,7 +360,7 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
                     <th className="py-3 px-3.5">บริษัท</th>
                     <th className="py-3 px-3.5">ผู้รับผิดชอบ</th>
                     <th className="py-3 px-3.5 w-36 text-center">สถานะ (Color)</th>
-                    <th className="py-3 px-3.5 text-right">ยอดเบิกจ่ายรวม</th>
+                    <th className="py-3 px-3.5 text-right">ยอดเบิกจ่ายจริง</th>
                     <th className="py-3 px-3.5 text-right">งบไม่เกิน</th>
                     <th className="py-3 px-3.5 text-right">คงเหลือ</th>
                   </tr>
@@ -352,9 +373,10 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
                     const company = String(p["บริษัท"] || p.company || "-");
                     const owner = String(p["รับผิดชอบ"] || p.responsible_person || "-");
 
-                    const spent = toNumber(p["รวม ALL"]);
+                    const paid = toNumber(p["เงินจ่ายแล้ว"]);
+                    const pending = toNumber(p["หนี้สินรอจ่าย"]);
                     const budget = toNumber(p["งบไม่เกิน"]);
-                    const remaining = budget - spent;
+                    const remaining = budget - paid;
 
                     const colorInfo = getProjectColorInfo(p.color);
 
@@ -390,9 +412,14 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
                           </span>
                         </td>
 
-                        {/* Spent */}
+                        {/* Paid Amount */}
                         <td className="py-2.5 px-3.5 text-right text-slate-900">
-                          {money(spent)}
+                          <div>{money(paid)}</div>
+                          {pending > 0 && (
+                            <div className="text-[10px] text-amber-600 font-normal">
+                              (รอเบิก {money(pending)})
+                            </div>
+                          )}
                         </td>
 
                         {/* Budget */}
@@ -433,7 +460,8 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
             const company = String(p["บริษัท"] || p.company || "-");
             const owner = String(p["รับผิดชอบ"] || p.responsible_person || "-");
 
-            const spent = toNumber(p["รวม ALL"]);
+            const paid = toNumber(p["เงินจ่ายแล้ว"]);
+            const pending = toNumber(p["หนี้สินรอจ่าย"]);
             const budget = toNumber(p["งบไม่เกิน"]);
 
             const colorInfo = getProjectColorInfo(p.color);
@@ -469,8 +497,15 @@ export function WorkStatusDashboardClient({ projects }: WorkStatusDashboardClien
                 </div>
 
                 <div className="bg-slate-50 p-2.5 rounded-xl flex items-center justify-between text-xs mt-1">
-                  <span className="text-slate-400 text-xs">ยอดเบิกจ่าย</span>
-                  <span className="text-slate-900">{money(spent)}</span>
+                  <span className="text-slate-400 text-xs">เบิกจ่ายจริง</span>
+                  <div className="text-right">
+                    <span className="text-slate-900 font-semibold">{money(paid)}</span>
+                    {pending > 0 && (
+                      <span className="block text-[10px] text-amber-600 font-normal">
+                        (รอเบิก {money(pending)})
+                      </span>
+                    )}
+                  </div>
                 </div>
               </Link>
             );

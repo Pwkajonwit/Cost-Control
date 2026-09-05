@@ -40,7 +40,12 @@ export function isCommittedBill(row: SheetRow) {
 }
 
 export function isUnpaidBill(row: SheetRow) {
-  return normalizeBillStatus(row["สถานะ"]) !== "เบิกแล้ว";
+  return normalizeBillStatus(row["สถานะ"] ?? row.status) !== "เบิกแล้ว";
+}
+
+export function isPaidBill(row: SheetRow) {
+  if (!row) return false;
+  return normalizeBillStatus(row["สถานะ"] ?? row.status) === "เบิกแล้ว";
 }
 
 export function normalizeBillStatus(value: unknown) {
