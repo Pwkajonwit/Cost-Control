@@ -9,6 +9,7 @@ import { toNumber } from "@/lib/numbers";
 import { getRows, getWithdrawBills, getBillFollowBills } from "@/lib/db";
 import { getUsersListFromSupabase } from "@/lib/supabase-db";
 import { cookies } from "next/headers";
+import { extractMemberPermissions, findMemberInPeopleRows } from "@/lib/user-permissions";
 import type { SheetRow } from "@/lib/types";
 
 export async function MainDashboard() {
@@ -23,9 +24,13 @@ export async function WithdrawDashboard({ filters = {} }: { filters?: WithdrawFi
     getUsersListFromSupabase()
   ]);
   const cookieStore = await cookies();
-  const isAdmin = cookieStore.get("auth_role")?.value === "Admin";
   const authEmpId = cookieStore.get("auth_employee_id")?.value || "";
   const authName = cookieStore.get("auth_name")?.value || "";
+
+  const matchedUser = findMemberInPeopleRows(peopleRows, authEmpId) || (Array.isArray(usersList) ? usersList.find((u: any) => u.id === authEmpId || u.username === authEmpId) : null);
+  const userPerms = matchedUser ? extractMemberPermissions(matchedUser) : null;
+  const effectiveRole = userPerms ? userPerms.role : (cookieStore.get("auth_role")?.value || "");
+  const isAdmin = Boolean(userPerms?.isOwner || effectiveRole === "Owner" || effectiveRole === "Admin");
 
   // If requester is not explicitly provided, default to the logged-in user
   let effectiveFilters = { ...filters };

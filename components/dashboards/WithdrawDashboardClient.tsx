@@ -40,7 +40,7 @@ export function WithdrawDashboardClient({ rows, peopleRows, usersList = [], init
     if (typeof document !== "undefined") {
       const match = document.cookie.match(/auth_role=([^;]+)/);
       const role = match ? decodeURIComponent(match[1]) : "";
-      if (role === "Admin" || isAdmin) {
+      if (role === "Admin" || role === "Owner" || isAdmin) {
         setEffectiveIsAdmin(true);
       }
     }
