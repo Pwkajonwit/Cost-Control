@@ -230,6 +230,18 @@ export async function PATCH(request: NextRequest) {
           );
           if (!existing) return null;
           const values = { ...existing, ...patch };
+          if (patch["LINE"] !== undefined || patch["LINE User ID"] !== undefined || patch["line_user_id"] !== undefined || patch["Line"] !== undefined) {
+            const lineVal = String(
+              (patch["LINE User ID"] !== undefined ? patch["LINE User ID"] : undefined) ??
+              (patch["line_user_id"] !== undefined ? patch["line_user_id"] : undefined) ??
+              (patch["LINE"] !== undefined ? patch["LINE"] : undefined) ??
+              (patch["Line"] !== undefined ? patch["Line"] : "")
+            ).trim();
+            values.line_user_id = lineVal;
+            values["LINE User ID"] = lineVal;
+            values["LINE"] = lineVal;
+            values["Line"] = lineVal;
+          }
           const originalTarget = (keyCol && existing[keyCol] ? existing[keyCol] : undefined) || existing.id || targetIdentifier || existing._sheetRow;
           return updateRow(tableName, originalTarget, values);
         })
@@ -254,21 +266,25 @@ export async function PATCH(request: NextRequest) {
     const existingRows = await getRows(tableName);
     const keyCol = TABLE_KEYS[tableName] || "";
     const existing = existingRows.find((row: SheetRow) =>
+      (row.id !== undefined && String(row.id).trim() === String(targetRowKey).trim()) ||
+      (keyCol && String(row[keyCol]).trim() === String(targetRowKey).trim()) ||
+      (row["รหัสพนักงาน"] !== undefined && String(row["รหัสพนักงาน"]).trim() === String(targetRowKey).trim()) ||
+      (row.id_Conwork !== undefined && String(row.id_Conwork).trim() === String(targetRowKey).trim()) ||
+      (row.id_bank !== undefined && String(row.id_bank).trim() === String(targetRowKey).trim()) ||
+      (row.id_store !== undefined && String(row.id_store).trim() === String(targetRowKey).trim()) ||
+      (row.id_Contractor !== undefined && String(row.id_Contractor).trim() === String(targetRowKey).trim()) ||
+      (row.id_car !== undefined && String(row.id_car).trim() === String(targetRowKey).trim()) ||
+      (row.id_cus !== undefined && String(row.id_cus).trim() === String(targetRowKey).trim()) ||
+      (row.id_Company !== undefined && String(row.id_Company).trim() === String(targetRowKey).trim()) ||
       Number(row._sheetRow) === Number(targetRowKey) ||
-      String(row._sheetRow) === String(targetRowKey) ||
-      (keyCol && String(row[keyCol]) === String(targetRowKey)) ||
-      (row.id !== undefined && String(row.id) === String(targetRowKey)) ||
-      (row["รหัสพนักงาน"] !== undefined && String(row["รหัสพนักงาน"]) === String(targetRowKey)) ||
-      (row.id_Conwork !== undefined && String(row.id_Conwork) === String(targetRowKey)) ||
-      (row.id_bank !== undefined && String(row.id_bank) === String(targetRowKey)) ||
-      (row.id_store !== undefined && String(row.id_store) === String(targetRowKey)) ||
-      (row.id_Contractor !== undefined && String(row.id_Contractor) === String(targetRowKey)) ||
-      (row.id_car !== undefined && String(row.id_car) === String(targetRowKey)) ||
-      (row.id_cus !== undefined && String(row.id_cus) === String(targetRowKey)) ||
-      (row.id_Company !== undefined && String(row.id_Company) === String(targetRowKey))
+      String(row._sheetRow) === String(targetRowKey)
     );
     if (!existing) throw new Error("ไม่พบข้อมูลที่ต้องการแก้ไข");
-    const values = { ...existing, ...patch };
+    const cleanExisting = { ...existing };
+    delete cleanExisting.data;
+    const cleanPatch = { ...patch };
+    delete cleanPatch.data;
+    const values = { ...cleanExisting, ...cleanPatch };
     if (patch["รหัสพนักงาน"] !== undefined && String(patch["รหัสพนักงาน"]).trim() !== "") {
       values.id = String(patch["รหัสพนักงาน"]).trim();
     } else if (patch["id_Contractor"] !== undefined && String(patch["id_Contractor"]).trim() !== "") {
@@ -302,10 +318,17 @@ export async function PATCH(request: NextRequest) {
       values.can_delete = hasDelete;
     }
 
-    if (patch["LINE"] !== undefined) {
-      values.line_user_id = patch["LINE"];
-      values["LINE User ID"] = patch["LINE"];
-      values["LINE"] = patch["LINE"];
+    if (patch["LINE"] !== undefined || patch["LINE User ID"] !== undefined || patch["line_user_id"] !== undefined || patch["Line"] !== undefined) {
+      const lineVal = String(
+        (patch["LINE User ID"] !== undefined ? patch["LINE User ID"] : undefined) ??
+        (patch["line_user_id"] !== undefined ? patch["line_user_id"] : undefined) ??
+        (patch["LINE"] !== undefined ? patch["LINE"] : undefined) ??
+        (patch["Line"] !== undefined ? patch["Line"] : "")
+      ).trim();
+      values.line_user_id = lineVal;
+      values["LINE User ID"] = lineVal;
+      values["LINE"] = lineVal;
+      values["Line"] = lineVal;
     }
     const patchKeys = Object.keys(patch).filter(key => key !== "_sheetRow");
     const isFollowUpOrStatusPatch = tableName === TABLES.DATA && patchKeys.length > 0 && patchKeys.every(key =>
