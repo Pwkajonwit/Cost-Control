@@ -11,17 +11,29 @@ export async function GET() {
     const empId = cookieStore.get("auth_employee_id")?.value;
 
     if (!empId) {
-      return NextResponse.json({ success: false, error: "Not logged in" }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Not logged in" }, { status: 200 });
     }
 
-    const { data: member, error } = await supabaseAdmin
+    let { data: member, error } = await supabaseAdmin
       .from("master_members")
       .select("*")
       .eq("id", empId)
       .maybeSingle();
 
-    if (error || !member) {
-      return NextResponse.json({ success: false, error: error?.message || "User not found" }, { status: 404 });
+    if (!member) {
+      // Fallback: search by phone, nickname, or line_user_id if employee code was changed
+      const { data: altMember } = await supabaseAdmin
+        .from("master_members")
+        .select("*")
+        .or(`phone.eq.${empId},nickname.eq.${empId},line_user_id.eq.${empId}`)
+        .maybeSingle();
+      if (altMember) {
+        member = altMember;
+      }
+    }
+
+    if (!member) {
+      return NextResponse.json({ success: false, error: error?.message || "User not found" }, { status: 200 });
     }
 
     const perms = extractMemberPermissions(member);
