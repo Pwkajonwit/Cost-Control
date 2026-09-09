@@ -14,7 +14,6 @@
     "@line/liff": "^2.30.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
-    "googleapis": "^140.0.1",
     "lucide-react": "^1.17.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
